@@ -71,14 +71,36 @@ impl client::Handler for Client {
 /// Fehler-Präfix, auf das das Frontend mit einer Rückfrage reagiert: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>`.
 pub const HOSTKEY_UNKNOWN: &str = "HOSTKEY_UNKNOWN:";
 
-/// Nur ed25519: klein genug für jeden Tresor (Windows: max. 2560 Byte pro Eintrag).
-pub fn check_private_key(pem: &str) -> Result<(), String> {
-    let k = keys::PrivateKey::from_openssh(pem).map_err(|_| "Kein gültiger privater Schlüssel im OpenSSH-Format".to_string())?;
-    if k.algorithm() != keys::Algorithm::Ed25519 {
+/// Windows speichert Geheimnisse als UTF-16 mit höchstens 2560 Byte, also 1280 Zeichen.
+const VAULT_MAX_CHARS: usize = 1280;
+
+/// ed25519 oder ECDSA im OpenSSH- oder PuTTY-Format (.ppk v2/v3), klein genug für jeden Tresor.
+/// RSA passt ab 2048 Bit nicht mehr in die Windows-Anmeldeinformationsverwaltung.
+pub fn check_private_key(text: &str) -> Result<(), String> {
+    let t = text.trim();
+    let algorithm = if let Some(rest) = t.strip_prefix("PuTTY-User-Key-File-") {
+        // Kopfzeile «PuTTY-User-Key-File-3: ssh-ed25519». Verschlüsselte Dateien lassen sich ohne
+        // Passphrase nicht ganz prüfen; das geschieht beim Verbinden (Passphrase = Passwort).
+        let (version, alg) = rest.lines().next().and_then(|l| l.split_once(": ")).ok_or("Ungültige PuTTY-Schlüsseldatei")?;
+        if !["2", "3"].contains(&version) {
+            return Err(format!("PuTTY-Schlüsseldatei Version {version} wird nicht unterstützt (nur 2 und 3)"));
+        }
+        if t.contains("\nEncryption: none") {
+            keys::PrivateKey::from_ppk(t, None).map_err(|e| format!("PuTTY-Schlüsseldatei nicht lesbar: {e}"))?;
+        }
+        alg.parse::<keys::Algorithm>().map_err(|_| format!("Unbekannter Schlüsseltyp {alg}"))?
+    } else {
+        keys::PrivateKey::from_openssh(t)
+            .map_err(|_| "Kein gültiger privater Schlüssel (OpenSSH-Format oder PuTTY .ppk)".to_string())?
+            .algorithm()
+    };
+    if !matches!(algorithm, keys::Algorithm::Ed25519 | keys::Algorithm::Ecdsa { .. }) {
         return Err(format!(
-            "Nur ed25519-Schlüssel werden unterstützt ({} ist zu gross für den Tresor). Neuen Schlüssel erzeugen: ssh-keygen -t ed25519",
-            k.algorithm()
+            "Nur ed25519- und ECDSA-Schlüssel werden unterstützt ({algorithm} ist zu gross für den Tresor). Neuen Schlüssel erzeugen: ssh-keygen -t ed25519"
         ));
+    }
+    if text.encode_utf16().count() > VAULT_MAX_CHARS {
+        return Err("Schlüssel ist zu gross für den Tresor (höchstens 1280 Zeichen)".into());
     }
     Ok(())
 }
@@ -288,10 +310,64 @@ AgMEBQ==
 -----END OPENSSH PRIVATE KEY-----
 ";
 
+    // PuTTY-Testschlüssel aus den Beispielen von `ssh-key` (Passphrase «123»).
+    const PPK_ED25519: &str = "PuTTY-User-Key-File-3: ssh-ed25519
+Encryption: none
+Comment: user@example.com
+Public-Lines: 2
+AAAAC3NzaC1lZDI1NTE5AAAAILM+rvN+ot98qgEN796jTiQfZfG1KaT0PtFDJ/XF
+Sqti
+Private-Lines: 1
+AAAAILYGwiLRDBba4WxwpNRRc0cuxhfgXGVpINJuVsCPtZHt
+Private-MAC: 94140d0344fad6aa1bf7b71e9c93db11ccac8a232f8a51e11c024869d608c82d
+";
+    const PPK_ED25519_ENC: &str = "PuTTY-User-Key-File-3: ssh-ed25519
+Encryption: aes256-cbc
+Comment: user@example.com
+Public-Lines: 2
+AAAAC3NzaC1lZDI1NTE5AAAAILM+rvN+ot98qgEN796jTiQfZfG1KaT0PtFDJ/XF
+Sqti
+Key-Derivation: Argon2id
+Argon2-Memory: 8192
+Argon2-Passes: 34
+Argon2-Parallelism: 1
+Argon2-Salt: 63d1d43f7bf7700720496646a2f5ec17
+Private-Lines: 1
+DyWtExZ3dxFutnb12tIwXBC6kWdozrvP+r6faHKBGDb4+qEar9XBiC0BmGySMHUi
+Private-MAC: 52fd00d4ef47ebc506e4e709486c0c6bc0606e24fe2c6cb1b3d168f4da238a66
+";
+    const PPK_ECDSA: &str = "PuTTY-User-Key-File-3: ecdsa-sha2-nistp256
+Encryption: none
+Comment: user@example.com
+Public-Lines: 3
+AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBHwf2HMM5TRX
+vo2SQJjsNkiDD5KqiiNjrGVv3UUh+mMT5RHxiRtOnlqvjhQtBq0VpmpCV/PwUdhO
+ig4vkbqAcEc=
+Private-Lines: 1
+AAAAIQDKeKZHdL+uNxIyJJN/A5iWAYlwesoKhkXOtDWcQjugeQ==
+Private-MAC: 4df1d2227cb63bbbaf0821816cb82afffc2c97163d22afb114f68621a55b07c7
+";
+
     #[test]
-    fn accepts_only_ed25519() {
-        assert!(check_private_key(ED25519).is_ok(), "{:?}", check_private_key(ED25519));
-        assert!(check_private_key(ECDSA).unwrap_err().contains("Nur ed25519"));
+    fn accepted_keys() {
+        for k in [ED25519, ECDSA, PPK_ED25519, PPK_ED25519_ENC, PPK_ECDSA] {
+            assert!(check_private_key(k).is_ok(), "{:?}", check_private_key(k));
+        }
+        let rsa = "PuTTY-User-Key-File-3: ssh-rsa\nEncryption: aes256-cbc\n";
+        assert!(check_private_key(rsa).unwrap_err().contains("Nur ed25519- und ECDSA"));
+        assert!(check_private_key("PuTTY-User-Key-File-1: ssh-ed25519\n").unwrap_err().contains("Version 1"));
+        let broken = PPK_ED25519.replace("Private-MAC: 9", "Private-MAC: 8");
+        assert!(check_private_key(&broken).is_err());
         assert!(check_private_key("kein Schlüssel").is_err());
+        assert!(check_private_key(&format!("{ED25519}{}", " ".repeat(1300))).unwrap_err().contains("zu gross"));
+    }
+
+    #[test]
+    fn ppk_decodes_for_login() {
+        // So liest `authenticate` den Schlüssel: erst ohne, dann mit Passwort als Passphrase.
+        assert_eq!(keys::decode_secret_key(PPK_ED25519, None).unwrap().algorithm(), keys::Algorithm::Ed25519);
+        assert!(keys::decode_secret_key(PPK_ED25519_ENC, None).is_err());
+        assert_eq!(keys::decode_secret_key(PPK_ED25519_ENC, Some("123")).unwrap().algorithm(), keys::Algorithm::Ed25519);
+        assert!(keys::decode_secret_key(PPK_ECDSA, None).unwrap().algorithm().is_ecdsa());
     }
 }

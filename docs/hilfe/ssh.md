@@ -25,7 +25,9 @@ sudo ufw allow 22/tcp
 
 ## Mit Schlüssel statt Passwort anmelden
 
-Sesam nimmt **ed25519-Schlüssel**. Auf diesem Computer erzeugen:
+Sesam nimmt **ed25519- und ECDSA-Schlüssel**, im OpenSSH-Format oder als PuTTY-Datei (`.ppk`, Version 2 und 3).
+RSA passt nicht in den Tresor von Windows. Ist der Schlüssel mit einer Passphrase geschützt, gilt das
+Passwort der Verbindung als Passphrase. Auf diesem Computer erzeugen:
 
 ```
 ssh-keygen -t ed25519
@@ -41,7 +43,7 @@ Unter Windows ohne `ssh-copy-id` den Inhalt von `%USERPROFILE%\.ssh\id_ed25519.p
 Server ans Ende von `~/.ssh/authorized_keys` anfügen.
 
 **In Sesam:** im Sheet bei «SSH-Schlüssel» «Schlüssel importieren …» wählen und den Inhalt von
-`id_ed25519` (ohne `.pub`) einfügen. Der Schlüssel liegt danach im Tresor.
+`id_ed25519` (ohne `.pub`) oder der `.ppk`-Datei einfügen. Der Schlüssel liegt danach im Tresor.
 
 ## Beim ersten Verbinden
 
