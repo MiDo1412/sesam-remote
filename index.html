@@ -81,12 +81,16 @@
         </label>
 
         <h3 class="sec span">Anmeldung</h3>
-        <label data-tip="Benutzername auf dem Zielrechner. Bei RDP mit GNOME: der Benutzername aus «grdctl … set-credentials», nicht dein Ubuntu-Konto. Bei macOS: der Kurzname des Kontos.">Benutzername<input name="user" autocomplete="off" /></label>
-        <label data-tip="Gilt für alle Dienste dieser Verbindung. Wird verschlüsselt im Schlüsselbund des Betriebssystems gespeichert. Leer lassen, um ein gespeichertes Passwort zu behalten.">Passwort
+        <label class="span" data-tip="«Eigene» gelten nur für diese Verbindung. Gespeicherte Zugangsdaten verwaltest du unter Einstellungen › Zugangsdaten und kannst sie mehreren Verbindungen zuweisen.">Zugangsdaten
+          <select name="credentialId"><option value="">Eigene für diese Verbindung</option></select>
+          <span class="hint"><button type="button" class="link" id="cred-adopt" hidden>Als gespeicherte Zugangsdaten sichern …</button></span>
+        </label>
+        <label class="own-cred" data-tip="Benutzername auf dem Zielrechner. Bei RDP mit GNOME: der Benutzername aus «grdctl … set-credentials», nicht dein Ubuntu-Konto. Bei macOS: der Kurzname des Kontos.">Benutzername<input name="user" autocomplete="off" /></label>
+        <label class="own-cred" data-tip="Gilt für alle Dienste dieser Verbindung. Wird verschlüsselt im Schlüsselbund des Betriebssystems gespeichert. Leer lassen, um ein gespeichertes Passwort zu behalten.">Passwort
           <input name="password" type="password" autocomplete="new-password" />
           <span class="hint"><small id="pw-hint"></small><button type="button" class="link" id="pw-clear" hidden>Entfernen</button></span>
         </label>
-        <label class="span" data-tip="Nur für SSH. Mit Schlüssel meldet sich Sesam ohne Passwort an (ed25519, OpenSSH-Format). Ein Passwort oben dient dann als Passphrase des Schlüssels.">SSH-Schlüssel
+        <label class="span own-cred" data-tip="Nur für SSH. Mit Schlüssel meldet sich Sesam ohne Passwort an (ed25519, OpenSSH-Format). Ein Passwort oben dient dann als Passphrase des Schlüssels.">SSH-Schlüssel
           <select name="keyMode">
             <option value="keep">Unverändert</option>
             <option value="none">Keiner, nur Passwort</option>
@@ -207,12 +211,25 @@
       </form>
     </dialog>
 
+    <dialog id="cred-dlg" aria-labelledby="cred-title">
+      <form id="cred-form" class="sheet" method="dialog">
+        <h2 id="cred-title">Zugangsdaten</h2>
+        <label class="span">Name<input name="name" required placeholder="z. B. Büro-Konto" /></label>
+        <label>Benutzername<input name="user" autocomplete="off" /></label>
+        <label>Passwort<input name="password" type="password" autocomplete="new-password" /><small id="cred-pw-hint"></small></label>
+        <label class="span">Privater SSH-Schlüssel (optional, OpenSSH-Format)<textarea name="key" rows="3" class="mono" spellcheck="false" placeholder="leer = unverändert"></textarea></label>
+        <p id="cred-error" class="error span" role="alert"></p>
+        <div class="row actions"><span></span><button type="button" id="cred-cancel">Abbrechen</button><button type="submit" class="primary">Sichern</button></div>
+      </form>
+    </dialog>
+
     <dialog id="settings" aria-label="Einstellungen">
       <div class="settings">
         <nav class="settings-nav" role="tablist" aria-label="Bereiche">
           <button type="button" role="tab" data-pane="general">Allgemein</button>
           <button type="button" role="tab" data-pane="shell">Shell</button>
           <button type="button" role="tab" data-pane="security">Sicherheit</button>
+          <button type="button" role="tab" data-pane="creds">Zugangsdaten</button>
           <button type="button" role="tab" data-pane="about">Über Sesam</button>
         </nav>
         <section class="settings-pane" id="settings-general">
@@ -240,6 +257,12 @@
           <div id="settings-certs" class="certs"></div>
           <h3>SSH-Server</h3>
           <p class="note">Bestätigte SSH-Server stehen in <code>~/.ssh/known_hosts</code>, wie bei OpenSSH.</p>
+        </section>
+        <section class="settings-pane" id="settings-creds" hidden>
+          <h2>Zugangsdaten</h2>
+          <p class="note">Benutzername mit Passwort und/oder SSH-Schlüssel, einmal angelegt und mehreren Verbindungen zugewiesen. Die Geheimnisse liegen verschlüsselt im Schlüsselbund des Betriebssystems.</p>
+          <div id="settings-cred-list" class="certs"></div>
+          <div><button type="button" id="cred-new">Neue Zugangsdaten …</button></div>
         </section>
         <section class="settings-pane about" id="settings-about" hidden>
           <img src="/sesam-icon.svg" alt="" width="72" height="72" />

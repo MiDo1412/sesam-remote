@@ -10,6 +10,7 @@ import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
 import { initFieldHelp } from "./fieldhelp";
 import { forgetThumb, renderThumb } from "./thumbs";
+import { adoptFromConnection, initCreds } from "./creds";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrent as deepLinkCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { openMenu } from "./menu";
@@ -23,6 +24,35 @@ function thumbEl(c: Connection, kind: string) {
   renderThumb(t, c);
   return t;
 }
+const credSelect = (document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("credentialId") as HTMLSelectElement;
+const credMenu = enhanceSelect(credSelect);
+/** Auswahl «Zugangsdaten» füllen; bei gespeicherten Daten eigene Felder ausblenden. */
+async function fillCreds(selectedId: string | null) {
+  const list = await api.credsList().catch(() => []);
+  credSelect.replaceChildren(
+    new Option("Eigene für diese Verbindung", ""),
+    ...list.map(([c]) => new Option(`${c.name}${c.user ? ` (${c.user})` : ""}`, c.id)),
+  );
+  credSelect.value = selectedId ?? "";
+  credMenu.sync();
+  syncCredFields();
+}
+function syncCredFields() {
+  document.getElementById("editor-form")!.classList.toggle("uses-cred", credSelect.value !== "");
+  document.getElementById("cred-adopt")!.hidden = credSelect.value !== "" || !editing || !(editing.hasPassword || editing.hasKey) || !items.some((x) => x.id === editing!.id);
+}
+credSelect.addEventListener("change", syncCredFields);
+initCreds();
+addEventListener("sesam:creds-changed", () => editing && fillCreds(credSelect.value || null));
+document.getElementById("cred-adopt")!.onclick = async () => {
+  if (!editing) return;
+  const c = await adoptFromConnection(editing.id, editing.user ? `${editing.user} (${editing.name})` : editing.name);
+  if (c) {
+    editing.credentialId = c.id;
+    await fillCreds(c.id);
+    reload();
+  }
+};
 const osMenu = enhanceSelect((document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("os") as HTMLSelectElement);
 const keyModeMenu = enhanceSelect((document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("keyMode") as HTMLSelectElement);
 
@@ -244,6 +274,7 @@ const blank = (): Connection => ({
   playAudio: true,
   os: "",
   customThumb: false,
+  credentialId: null,
   sharedFolder: "",
   skipCertCheck: false,
   fitToWindow: true,
@@ -288,6 +319,7 @@ function edit(c: Connection | null, asNew = false) {
   f.sharedFolder.value = editing.sharedFolder;
   f.skipCertCheck.checked = editing.skipCertCheck;
   (form.elements.namedItem("os") as HTMLSelectElement).value = editing.os ?? "";
+  fillCreds(editing.credentialId ?? null);
   osMenu.sync();
   pendingThumb = null;
   clearThumb = false;
@@ -378,6 +410,7 @@ form.onsubmit = async (ev) => {
     sharedFolder: s("sharedFolder"),
     skipCertCheck: fd.get("skipCertCheck") !== null,
     os: s("os") as Connection["os"],
+    credentialId: s("credentialId") || null,
     customThumb: pendingThumb ? true : clearThumb ? false : editing.customThumb,
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],

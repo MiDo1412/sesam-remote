@@ -4,6 +4,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings } from "./termthemes";
 import { ask } from "./ui";
+import { renderCredList } from "./creds";
 
 export type Appearance = "auto" | "light" | "dark";
 const KEY = "sesam.app";
@@ -38,6 +39,7 @@ export async function openSettings(tab = "general") {
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.setAttribute("aria-selected", String(b.dataset.pane === t));
     for (const p of dlg.querySelectorAll<HTMLElement>(".settings-pane")) p.hidden = p.id !== `settings-${t}`;
     if (t === "security") renderCerts();
+    if (t === "creds") renderCredList();
   };
   for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.onclick = () => show(b.dataset.pane!);
 

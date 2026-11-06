@@ -1,4 +1,5 @@
 mod clipshare;
+mod creds;
 mod diag;
 mod library;
 mod rdp;
@@ -112,7 +113,120 @@ fn find(path: &LibraryPath, id: &str) -> Result<Connection, String> {
     if id.starts_with("quick-") {
         return QUICK.lock().unwrap().iter().find(|c| c.id == id).cloned().ok_or_else(|| "Schnelle Verbindung nicht mehr vorhanden".into());
     }
+    let mut c = find_raw(path, id)?;
+    // Gespeicherte Zugangsdaten: Benutzername von dort (Geheimnisse über login_secret).
+    if let Some(cid) = &c.credential_id {
+        let cred = creds::load(&creds_path(path))?.into_iter().find(|x| &x.id == cid).ok_or("Zugewiesene Zugangsdaten gibt es nicht mehr")?;
+        c.user = cred.user;
+    }
+    Ok(c)
+}
+
+fn creds_path(path: &LibraryPath) -> PathBuf {
+    path.0.with_file_name("credentials.json")
+}
+
+#[tauri::command]
+fn creds_list(path: State<LibraryPath>) -> Result<Vec<(creds::Cred, usize)>, String> {
+    let lib = library::load(&path.0)?;
+    Ok(creds::load(&creds_path(&path))?
+        .into_iter()
+        .map(|c| {
+            let uses = lib.iter().filter(|x| x.credential_id.as_deref() == Some(c.id.as_str())).count();
+            (c, uses)
+        })
+        .collect())
+}
+
+/// Anlegen/ändern. `password`/`ssh_key`: None = unverändert, "" = löschen.
+#[tauri::command]
+fn cred_save(path: State<LibraryPath>, mut cred: creds::Cred, password: Option<String>, ssh_key: Option<String>) -> Result<creds::Cred, String> {
+    creds::validate(&cred)?;
+    if let Some(k) = ssh_key.as_deref().filter(|k| !k.trim().is_empty()) {
+        ssh::check_private_key(k)?;
+    }
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let p = creds_path(&path);
+    let mut all = creds::load(&p)?;
+    let old = all.iter().find(|x| x.id == cred.id).cloned();
+    cred.has_password = old.as_ref().is_some_and(|o| o.has_password);
+    cred.has_key = old.as_ref().is_some_and(|o| o.has_key);
+    let vid = creds::vault_id(&cred.id);
+    for (secret, kind, flag) in [(password, Kind::Password, &mut cred.has_password), (ssh_key, Kind::SshKey, &mut cred.has_key)] {
+        match secret.as_deref() {
+            None => {}
+            Some("") => {
+                vault::delete(&vid, kind)?;
+                *flag = false;
+            }
+            Some(s) => {
+                vault::set(&vid, kind, s)?;
+                *flag = true;
+            }
+        }
+    }
+    match all.iter_mut().find(|x| x.id == cred.id) {
+        Some(x) => *x = cred.clone(),
+        None => all.push(cred.clone()),
+    }
+    creds::save(&p, &all)?;
+    Ok(cred)
+}
+
+/// Löschen; Verbindungen, die es nutzen, fallen auf «Eigene» zurück.
+#[tauri::command]
+fn cred_delete(path: State<LibraryPath>, id: String) -> Result<(), String> {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let p = creds_path(&path);
+    let mut all = creds::load(&p)?;
+    all.retain(|x| x.id != id);
+    creds::save(&p, &all)?;
+    let vid = creds::vault_id(&id);
+    vault::delete(&vid, Kind::Password)?;
+    vault::delete(&vid, Kind::SshKey)?;
+    let mut lib = library::load(&path.0)?;
+    for c in lib.iter_mut().filter(|c| c.credential_id.as_deref() == Some(id.as_str())) {
+        c.credential_id = None;
+    }
+    library::save(&path.0, &lib)
+}
+
+/// Bestehende Zugangsdaten einer Verbindung als gespeichertes Profil übernehmen und zuweisen.
+#[tauri::command]
+fn cred_from_connection(path: State<LibraryPath>, id: String, cred_id: String, name: String) -> Result<creds::Cred, String> {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let mut lib = library::load(&path.0)?;
+    let conn = lib.iter_mut().find(|c| c.id == id).ok_or("Verbindung nicht gefunden")?;
+    let mut cred = creds::Cred { id: cred_id, name, user: conn.user.clone(), ..Default::default() };
+    creds::validate(&cred)?;
+    let vid = creds::vault_id(&cred.id);
+    if let Some(pw) = vault::get(&conn.id, Kind::Password)? {
+        vault::set(&vid, Kind::Password, &pw)?;
+        cred.has_password = true;
+    }
+    if let Some(k) = vault::get(&conn.id, Kind::SshKey)? {
+        vault::set(&vid, Kind::SshKey, &k)?;
+        cred.has_key = true;
+    }
+    conn.credential_id = Some(cred.id.clone());
+    let p = creds_path(&path);
+    let mut all = creds::load(&p)?;
+    all.push(cred.clone());
+    creds::save(&p, &all)?;
+    library::save(&path.0, &lib)?;
+    Ok(cred)
+}
+
+fn find_raw(path: &LibraryPath, id: &str) -> Result<Connection, String> {
     library::load(&path.0)?.into_iter().find(|c| c.id == id).ok_or_else(|| "Verbindung nicht gefunden".into())
+}
+
+/// Passwort/SSH-Schlüssel: aus den gespeicherten Zugangsdaten, wenn zugewiesen, sonst aus der Verbindung.
+fn login_secret(c: &Connection, kind: Kind) -> Result<Option<String>, String> {
+    match (&c.credential_id, kind) {
+        (Some(cid), Kind::Password | Kind::SshKey) => vault::get(&creds::vault_id(cid), kind),
+        _ => vault::get(&c.id, kind),
+    }
 }
 
 fn ssh_target(c: &Connection, trust: Option<String>) -> Result<ssh::Target<'_>, String> {
@@ -120,8 +234,8 @@ fn ssh_target(c: &Connection, trust: Option<String>) -> Result<ssh::Target<'_>, 
         host: &c.address,
         port: c.ssh_port.ok_or("SSH ist für diese Verbindung ausgeschaltet")?,
         user: &c.user,
-        password: vault::get(&c.id, Kind::Password)?,
-        key: vault::get(&c.id, Kind::SshKey)?,
+        password: login_secret(c, Kind::Password)?,
+        key: login_secret(c, Kind::SshKey)?,
         trusted: trust,
     })
 }
@@ -434,7 +548,7 @@ async fn vnc_open(
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
     let port = c.vnc_port.ok_or("Desktop (VNC) ist für diese Verbindung ausgeschaltet")?;
-    let password = vault::get(&c.id, Kind::Password)?;
+    let password = login_secret(&c, Kind::Password)?;
     let vnc_password = vault::get(&c.id, Kind::VncPassword)?;
     let pins_path = path.0.with_file_name("known_certs.json");
     let mut pins = load_pins(&pins_path);
@@ -658,7 +772,7 @@ async fn rdp_open(
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
     let port = c.rdp_port.ok_or("Desktop über RDP ist für diese Verbindung ausgeschaltet")?;
-    let password = vault::get(&c.id, Kind::RdpPassword)?.or(vault::get(&c.id, Kind::Password)?).unwrap_or_default();
+    let password = vault::get(&c.id, Kind::RdpPassword)?.or(login_secret(&c, Kind::Password)?).unwrap_or_default();
     let pins_path = path.0.with_file_name("known_certs.json");
     let mut pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
@@ -832,6 +946,10 @@ pub fn run() {
             save_bytes,
             certs_list,
             quick_register,
+            creds_list,
+            cred_save,
+            cred_delete,
+            cred_from_connection,
             create_shortcut,
             drop_files,
             thumb_save,

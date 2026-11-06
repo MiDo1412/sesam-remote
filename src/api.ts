@@ -19,6 +19,7 @@ export interface Connection {
   skipCertCheck: boolean;
   os: "" | "ubuntu" | "linux" | "macos" | "windows" | "raspberry";
   customThumb: boolean;
+  credentialId: string | null;
   sharedFolder: string;
   fitToWindow: boolean;
   hasPassword: boolean;
@@ -26,6 +27,14 @@ export interface Connection {
   hasRdpPassword: boolean;
   hasKey: boolean;
   lastUsed: string | null;
+}
+
+export interface Cred {
+  id: string;
+  name: string;
+  user: string;
+  hasPassword: boolean;
+  hasKey: boolean;
 }
 
 export type ShellEvent = { kind: "data"; data: number[] } | { kind: "closed"; reason: string };
@@ -64,6 +73,10 @@ export const api = {
   save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; sshKey?: string }) =>
     invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
+  credsList: () => invoke<[Cred, number][]>("creds_list"),
+  credSave: (cred: Cred, password?: string, sshKey?: string) => invoke<Cred>("cred_save", { cred, password, sshKey }),
+  credDelete: (id: string) => invoke<void>("cred_delete", { id }),
+  credFromConnection: (id: string, credId: string, name: string) => invoke<Cred>("cred_from_connection", { id, credId, name }),
   quickRegister: (connection: Connection, password?: string) => invoke<string>("quick_register", { connection, password }),
   shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void) => {
     const ch = new Channel<ShellEvent>();

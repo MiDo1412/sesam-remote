@@ -36,6 +36,8 @@ pub struct Connection {
     pub os: String,
     /// Eigenes Bild statt des letzten Desktop-Bildes.
     pub custom_thumb: bool,
+    /// Gespeicherte Zugangsdaten statt eigener (Benutzername, Passwort, SSH-Schlüssel).
+    pub credential_id: Option<String>,
     pub fit_to_window: bool,
     /// Nur Merker für die Anzeige; das Geheimnis selbst liegt im Tresor.
     pub has_password: bool,
@@ -66,6 +68,7 @@ impl Default for Connection {
             skip_cert_check: false,
             os: String::new(),
             custom_thumb: false,
+            credential_id: None,
             fit_to_window: true,
             has_password: false,
             has_vnc_password: false,

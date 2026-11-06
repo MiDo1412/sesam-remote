@@ -412,3 +412,8 @@ fieldset.svc legend { float: none; padding: 0; }
 .icon.zip { background: #8e6c3f; }
 .icon.pdf { background: #c5574a; }
 .icon.txt { background: #6b8e7d; }
+
+/* ---------- Zugangsdaten ---------- */
+.sheet.uses-cred .own-cred, .sheet.uses-cred #extra-creds, .sheet.uses-cred #key-row { display: none; }
+.row-actions { display: flex; gap: 12px; }
+#cred-form { width: 480px; }
