@@ -23,6 +23,7 @@
           <section aria-labelledby="title" class="list">
             <div class="list-head">
               <h1 id="title">Alle Verbindungen</h1>
+              <button id="open-settings" type="button" class="plain" title="Einstellungen (Strg+,)">Einstellungen</button>
               <button id="new" type="button" class="primary">＋ Neue Verbindung</button>
             </div>
             <div id="active-sessions" class="active-sessions" hidden></div>
@@ -145,6 +146,50 @@
           <button type="submit" class="primary">Sichern</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="settings" aria-label="Einstellungen">
+      <div class="settings">
+        <nav class="settings-nav" role="tablist" aria-label="Bereiche">
+          <button type="button" role="tab" data-pane="general">Allgemein</button>
+          <button type="button" role="tab" data-pane="shell">Shell</button>
+          <button type="button" role="tab" data-pane="security">Sicherheit</button>
+          <button type="button" role="tab" data-pane="about">Über Sesam</button>
+        </nav>
+        <section class="settings-pane" id="settings-general">
+          <h2>Allgemein</h2>
+          <div class="row"><span>Erscheinungsbild</span>
+            <div class="segmented" role="radiogroup" aria-label="Erscheinungsbild">
+              <label><input type="radio" name="appearance" value="auto" />Automatisch</label>
+              <label><input type="radio" name="appearance" value="light" />Hell</label>
+              <label><input type="radio" name="appearance" value="dark" />Dunkel</label>
+            </div>
+          </div>
+          <p class="note">«Automatisch» folgt der Einstellung des Betriebssystems.</p>
+        </section>
+        <section class="settings-pane" id="settings-shell" hidden>
+          <h2>Shell</h2>
+          <div id="settings-schemes" class="schemes" role="radiogroup" aria-label="Farbschema"></div>
+          <div class="pair">
+            <label>Schriftgrösse<input id="settings-fontsize" type="number" min="8" max="32" /></label>
+            <label>Schriftart<input id="settings-fontfamily" placeholder="Standard (Cascadia Mono, SF Mono …)" /></label>
+          </div>
+        </section>
+        <section class="settings-pane" id="settings-security" hidden>
+          <h2>Sicherheit</h2>
+          <h3>Gemerkte Zertifikate (RDP, VNC über TLS)</h3>
+          <div id="settings-certs" class="certs"></div>
+          <h3>SSH-Server</h3>
+          <p class="note">Bestätigte SSH-Server stehen in <code>~/.ssh/known_hosts</code>, wie bei OpenSSH.</p>
+        </section>
+        <section class="settings-pane about" id="settings-about" hidden>
+          <img src="/sesam-icon.svg" alt="" width="72" height="72" />
+          <h2>Sesam Remote</h2>
+          <p>Version <span id="settings-version"></span></p>
+          <p class="note">Fernzugriff über RDP, VNC, SSH und SFTP.<br />Quelloffen unter der GNU General Public License 3.0.</p>
+        </section>
+        <form method="dialog" class="settings-close"><button class="primary">Fertig</button></form>
+      </div>
     </dialog>
 
     <dialog id="help" aria-label="Hilfe">

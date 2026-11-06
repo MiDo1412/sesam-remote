@@ -186,6 +186,22 @@ fn sftp_close(files: State<Files>, sid: String) {
     files.0.lock().unwrap().remove(&sid);
 }
 
+/// Gemerkte TLS-Zertifikate (RDP/VNC) für die Einstellungen.
+#[tauri::command]
+fn certs_list(path: State<LibraryPath>) -> Vec<(String, String)> {
+    let mut v: Vec<_> = load_pins(&path.0.with_file_name("known_certs.json")).into_iter().collect();
+    v.sort();
+    v
+}
+
+#[tauri::command]
+fn cert_remove(path: State<LibraryPath>, host: String) -> Result<(), String> {
+    let p = path.0.with_file_name("known_certs.json");
+    let mut pins = load_pins(&p);
+    pins.remove(&host);
+    std::fs::write(&p, serde_json::to_string_pretty(&pins).unwrap_or_default()).map_err(|e| e.to_string())
+}
+
 /// Vom Benutzer im Speichern-Dialog gewählte Datei schreiben (z. B. Bildschirmfoto).
 #[tauri::command]
 fn save_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
@@ -599,6 +615,13 @@ pub fn run() {
         .setup(|app| {
             use tauri::menu::{MenuBuilder, SubmenuBuilder};
             // IDs wie in src/help.ts.
+            use tauri::menu::MenuItemBuilder;
+            let file = SubmenuBuilder::new(app, "Ablage")
+                .item(&MenuItemBuilder::with_id("cmd:new", "Neue Verbindung …").accelerator("CmdOrCtrl+N").build(app)?)
+                .item(&MenuItemBuilder::with_id("cmd:quick", "Schnelle Verbindung …").accelerator("CmdOrCtrl+K").build(app)?)
+                .separator()
+                .item(&MenuItemBuilder::with_id("cmd:settings", "Einstellungen …").accelerator("CmdOrCtrl+,").build(app)?)
+                .build()?;
             let help = SubmenuBuilder::new(app, "Hilfe")
                 .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")
                 .text("help:rdp-windows", "RDP mit Windows")
@@ -610,15 +633,18 @@ pub fn run() {
             // macOS braucht das Standardmenü (Bearbeiten: Kopieren/Einfügen); Windows nur «Hilfe».
             let menu = if cfg!(target_os = "macos") {
                 let m = tauri::menu::Menu::default(app.handle())?;
+                m.insert(&file, 1)?;
                 m.append(&help)?;
                 m
             } else {
-                MenuBuilder::new(app).item(&help).build()?
+                MenuBuilder::new(app).item(&file).item(&help).build()?
             };
             app.set_menu(menu)?;
             app.on_menu_event(|app, e| {
                 if let Some(topic) = e.id().as_ref().strip_prefix("help:") {
                     let _ = app.emit("help", topic);
+                } else if let Some(cmd) = e.id().as_ref().strip_prefix("cmd:") {
+                    let _ = app.emit("cmd", cmd);
                 }
             });
             let dir = app.path().app_data_dir()?;
@@ -653,6 +679,8 @@ pub fn run() {
             sftp_close,
             local_list,
             save_bytes,
+            certs_list,
+            cert_remove,
             local_home,
             transfer_start,
             transfer_cancel,

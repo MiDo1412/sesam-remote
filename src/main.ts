@@ -5,6 +5,7 @@ import { filesTab } from "./files";
 import { initTabs, openTab } from "./tabs";
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
+import { applyAppearance, openSettings } from "./settings";
 import { listen } from "@tauri-apps/api/event";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { enhanceSelect } from "./menu";
@@ -282,5 +283,18 @@ form.onsubmit = async (ev) => {
 $("new").onclick = () => edit(null);
 for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
 listen<string>("help", (e) => openHelp(e.payload));
+applyAppearance();
+$("open-settings").onclick = () => openSettings();
+// Befehle aus dem App-Menü und Tastenkürzel
+const command = (cmd: string) => {
+  if (cmd === "settings") openSettings();
+  else if (cmd === "new") edit(null);
+};
+listen<string>("cmd", (e) => command(e.payload));
+addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  if (e.key === ",") (e.preventDefault(), command("settings"));
+  else if (e.key.toLowerCase() === "n" && !e.shiftKey && !document.querySelector("dialog[open]")) (e.preventDefault(), command("new"));
+});
 $("search").addEventListener("input", render);
 reload();
