@@ -20,7 +20,7 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-pub async fn open(t: Target<'_>) -> Result<Sftp, String> {
+pub async fn open(t: Target) -> Result<Sftp, String> {
     start(ssh::connect(&t).await?).await.map_err(|(_, e)| e)
 }
 

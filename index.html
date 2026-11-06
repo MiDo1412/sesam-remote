@@ -108,6 +108,11 @@
           </label>
           <label>SSH-Keepalive (Sekunden)<input name="sshKeepalive" type="number" min="0" max="3600" class="mono" placeholder="0 = aus" /></label>
           <label class="option"><span><b>SSH-Kompression</b><small>Hilft bei langsamen Leitungen</small></span><input type="checkbox" name="sshCompression" /></label>
+          <label class="span">Sprungserver (ProxyJump)
+            <select name="jumpHost"><option value="">Keiner, direkt verbinden</option></select>
+          </label>
+          <label class="option"><span><b>SSH-Agent verwenden</b><small>Zuerst die Schlüssel aus Pageant oder dem OpenSSH-Agenten von Windows probieren</small></span><input type="checkbox" name="sshAgent" /></label>
+          <label class="option warn"><span><b>Agent an den Server weiterreichen</b><small>Der Server kann deine Agent-Schlüssel benutzen, solange die Shell offen ist. Nur bei vertrauenswürdigen Servern.</small></span><input type="checkbox" name="agentForward" /></label>
           <label class="span">Portweiterleitungen (aktiv, solange eine Shell offen ist)
             <textarea name="forwards" rows="3" class="mono" spellcheck="false" placeholder="L8080 localhost:80&#10;R9000 localhost:3000&#10;D1080"></textarea>
             <small class="note">Je Zeile eine Regel: L = lokaler Port über den Server, R = Server-Port hierher, D = SOCKS5-Proxy. Lokal nur auf 127.0.0.1.</small>

@@ -35,10 +35,32 @@ pub struct Client {
     rejected: Arc<Mutex<Option<String>>>,
     /// Fernweiterleitungen (R): Port auf dem Server → Ziel hier.
     remote: HashMap<u32, (String, u16)>,
+    /// Agent-Kanäle vom Server nur annehmen, wenn wir die Weiterleitung selbst verlangt haben.
+    agent_forward: bool,
+    /// Verbindung zum Sprungserver; lebt so lange wie diese Sitzung.
+    jump: Option<Handle<Client>>,
 }
 
 impl client::Handler for Client {
     type Error = russh::Error;
+
+    async fn server_channel_open_agent_forward(
+        &mut self,
+        channel: russh::Channel<Msg>,
+        reply: client::ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        if !self.agent_forward {
+            return Ok(()); // Drop von `reply` lehnt ab
+        }
+        reply.accept().await;
+        tokio::spawn(async move {
+            if let Ok(a) = agent().await {
+                let _ = tokio::io::copy_bidirectional(&mut channel.into_stream(), &mut a.into_inner()).await;
+            }
+        });
+        Ok(())
+    }
 
     async fn server_channel_open_forwarded_tcpip(
         &mut self,
@@ -128,16 +150,18 @@ pub fn check_private_key(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub struct Target<'a> {
-    pub host: &'a str,
+pub struct Target {
+    pub host: String,
     pub port: u16,
-    pub user: &'a str,
+    pub user: String,
     pub password: Option<String>,
     pub key: Option<String>,
     pub trusted: Option<String>,
     pub opts: Options,
     /// Nur für die Shell: Portweiterleitungen.
     pub forwards: Vec<forward::Rule>,
+    /// Sprungserver (ProxyJump): erst dorthin, dann durch ihn weiter (eine Stufe).
+    pub jump: Option<Box<Target>>,
 }
 
 /// Verbindungsoptionen pro Eintrag der Bibliothek.
@@ -148,6 +172,10 @@ pub struct Options {
     /// Sekunden zwischen Keepalives, 0 = aus.
     pub keepalive: u32,
     pub compression: bool,
+    /// Zuerst mit den Schlüsseln aus Pageant bzw. dem Windows-OpenSSH-Agenten anmelden.
+    pub agent: bool,
+    /// Agenten an den Server weiterreichen (nur Shell).
+    pub agent_forward: bool,
 }
 
 const KEX: &[kex::Name] = &[
@@ -204,14 +232,54 @@ pub fn config(o: Options) -> client::Config {
     }
 }
 
-async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), String> {
+type Agent = keys::agent::client::AgentClient<Box<dyn keys::agent::client::AgentStream + Send + Unpin>>;
+
+/// Laufender SSH-Agent: Pageant, sonst der OpenSSH-Agent von Windows; unter macOS/Linux `SSH_AUTH_SOCK`.
+async fn agent() -> Result<Agent, String> {
+    use keys::agent::client::AgentClient;
+    #[cfg(windows)]
+    let a = match AgentClient::connect_pageant().await {
+        Ok(a) => Ok(a.dynamic()),
+        Err(_) => AgentClient::connect_named_pipe(r"\\.\pipe\openssh-ssh-agent").await.map(|a| a.dynamic()),
+    };
+    #[cfg(unix)]
+    let a = AgentClient::connect_env().await.map(|a| a.dynamic());
+    a.map_err(|e| format!("Kein SSH-Agent erreichbar (Pageant oder OpenSSH-Agent): {e}"))
+}
+
+/// Alle Schlüssel des Agenten durchprobieren. `false`, wenn keiner passt oder kein Agent läuft.
+async fn agent_auth(h: &mut Handle<Client>, user: &str) -> bool {
+    let mut a = match agent().await {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::info!("{e}");
+            return false;
+        }
+    };
+    let Ok(ids) = a.request_identities().await else { return false };
+    let hash = h.best_supported_rsa_hash().await.ok().flatten().flatten();
+    for id in ids {
+        let keys::agent::AgentIdentity::PublicKey { key, .. } = id else { continue };
+        if let Ok(r) = h.authenticate_publickey_with(user, key, hash, &mut a).await
+            && r.success()
+        {
+            return true;
+        }
+    }
+    false
+}
+
+async fn authenticate(h: &mut Handle<Client>, t: &Target) -> Result<(), String> {
+    if t.opts.agent && agent_auth(h, &t.user).await {
+        return Ok(());
+    }
     if let Some(pem) = &t.key {
         let pk = keys::decode_secret_key(pem, None)
             .or_else(|_| keys::decode_secret_key(pem, t.password.as_deref()))
             .map_err(|e| format!("SSH-Schlüssel nicht lesbar: {e}"))?;
         let hash = h.best_supported_rsa_hash().await.map_err(|e| e.to_string())?.flatten();
         let r = h
-            .authenticate_publickey(t.user, PrivateKeyWithHashAlg::new(Arc::new(pk), hash))
+            .authenticate_publickey(&t.user, PrivateKeyWithHashAlg::new(Arc::new(pk), hash))
             .await
             .map_err(|e| e.to_string())?;
         if r.success() {
@@ -219,7 +287,7 @@ async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), Stri
         }
     }
     if let Some(pw) = &t.password {
-        let r = h.authenticate_password(t.user, pw).await.map_err(|e| e.to_string())?;
+        let r = h.authenticate_password(&t.user, pw).await.map_err(|e| e.to_string())?;
         if r.success() {
             return Ok(());
         }
@@ -227,8 +295,8 @@ async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), Stri
     Err("Anmeldung abgelehnt".into())
 }
 
-/// Verbinden, Host-Schlüssel prüfen, anmelden. Gemeinsam für Shell und SFTP.
-pub async fn connect(t: &Target<'_>) -> Result<Handle<Client>, String> {
+/// Verbinden (direkt oder über den Sprungserver), Host-Schlüssel prüfen, anmelden. Gemeinsam für Shell und Dateien.
+pub async fn connect(t: &Target) -> Result<Handle<Client>, String> {
     let rejected = Arc::new(Mutex::new(None));
     let remote = t
         .forwards
@@ -238,16 +306,40 @@ pub async fn connect(t: &Target<'_>) -> Result<Handle<Client>, String> {
             _ => None,
         })
         .collect();
-    let client = Client { host: t.host.into(), port: t.port, trusted: t.trusted.clone(), rejected: rejected.clone(), remote };
+    let mut client = Client {
+        host: t.host.clone(),
+        port: t.port,
+        trusted: t.trusted.clone(),
+        rejected: rejected.clone(),
+        remote,
+        agent_forward: t.opts.agent && t.opts.agent_forward,
+        jump: None,
+    };
     let config = Arc::new(config(t.opts));
-    let mut handle = client::connect(config, (t.host, t.port), client).await.map_err(|e| {
-        rejected.lock().unwrap().take().unwrap_or_else(|| format!("Verbindung fehlgeschlagen: {e}"))
-    })?;
+    let fail = |e: russh::Error| rejected.lock().unwrap().take().unwrap_or_else(|| format!("Verbindung fehlgeschlagen: {e}"));
+    let mut handle = match &t.jump {
+        None => client::connect(config, (t.host.as_str(), t.port), client).await.map_err(fail)?,
+        Some(j) => {
+            let jh = Box::pin(connect(j)).await.map_err(|e| {
+                if e.starts_with(HOSTKEY_UNKNOWN) {
+                    format!("Sprungserver {}: Server-Schlüssel noch nicht bestätigt. Bitte einmal direkt verbinden (Shell) und bestätigen.", j.host)
+                } else {
+                    format!("Sprungserver {}: {e}", j.host)
+                }
+            })?;
+            let ch = jh
+                .channel_open_direct_tcpip(t.host.as_str(), t.port.into(), "127.0.0.1", 0)
+                .await
+                .map_err(|e| format!("Sprungserver {} erreicht {}:{} nicht: {e}", j.host, t.host, t.port))?;
+            client.jump = Some(jh);
+            client::connect_stream(config, ch.into_stream(), client).await.map_err(fail)?
+        }
+    };
     authenticate(&mut handle, t).await?;
     Ok(handle)
 }
 
-pub async fn open(t: Target<'_>, cols: u32, rows: u32, on_event: Channel<ShellEvent>) -> Result<Shell, String> {
+pub async fn open(t: Target, cols: u32, rows: u32, on_event: Channel<ShellEvent>) -> Result<Shell, String> {
     let handle = Arc::new(connect(&t).await?);
     let note = on_event.clone();
     let forwards = forward::start(&handle, &t.forwards, move |m| {
@@ -256,6 +348,9 @@ pub async fn open(t: Target<'_>, cols: u32, rows: u32, on_event: Channel<ShellEv
     .await;
     let channel = handle.channel_open_session().await.map_err(|e| e.to_string())?;
     channel.request_pty(false, "xterm-256color", cols, rows, 0, 0, &[]).await.map_err(|e| e.to_string())?;
+    if t.opts.agent && t.opts.agent_forward {
+        channel.agent_forward(false).await.map_err(|e| e.to_string())?;
+    }
     channel.request_shell(false).await.map_err(|e| e.to_string())?;
     let (mut reader, writer) = channel.split();
 
@@ -318,7 +413,7 @@ mod tests {
         assert_eq!(modern.preferred.compression.iter().map(|c| c.as_ref()).collect::<Vec<_>>(), ["none"]);
         assert!(modern.keepalive_interval.is_none());
 
-        let legacy = config(Options { legacy: true, keepalive: 30, compression: true });
+        let legacy = config(Options { legacy: true, keepalive: 30, compression: true, ..Default::default() });
         let l = names(&legacy);
         for o in old {
             assert!(l.iter().any(|n| n == o), "{o} fehlt");

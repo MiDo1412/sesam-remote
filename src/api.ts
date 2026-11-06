@@ -32,6 +32,12 @@ export interface Connection {
   sshCompression: boolean;
   /** Portweiterleitungen der Shell: «L8080 localhost:80», «R9000 localhost:3000», «D1080» */
   forwards: string[];
+  /** Sprungserver: ID einer anderen Verbindung, "" = direkt */
+  jumpHost: string;
+  /** Zuerst mit dem SSH-Agenten anmelden (Pageant / Windows-OpenSSH-Agent). */
+  sshAgent: boolean;
+  /** Agent an den Server weiterreichen (nur Shell, nur mit sshAgent). */
+  agentForward: boolean;
   lastUsed: string | null;
 }
 

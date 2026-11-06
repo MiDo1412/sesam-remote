@@ -52,3 +52,19 @@ Sesam zeigt den Fingerabdruck des Servers. Vergleichen mit:
 ```
 ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
 ```
+
+## Erweitert
+
+Im Sheet unter «Erweitert»:
+
+- **Dateiübertragung:** Automatisch nimmt SFTP und weicht auf SCP aus, wenn der Server kein SFTP hat.
+  Mit SCP geht Hoch- und Herunterladen und «Neuer Ordner», aber kein Umbenennen und Löschen.
+- **Sprungserver:** eine andere Verbindung aus der Bibliothek, über die Sesam weiterverbindet
+  (wie `ssh -J`). Den Sprungserver vorher einmal direkt öffnen und seinen Fingerabdruck bestätigen.
+- **SSH-Agent:** nimmt die Schlüssel aus Pageant oder dem OpenSSH-Agenten von Windows.
+  «Agent weiterreichen» nur bei Servern, denen du vertraust.
+- **Portweiterleitungen:** je Zeile eine Regel, aktiv solange eine Shell offen ist.
+  `L8080 localhost:80` macht Port 80 des Servers hier unter `localhost:8080` erreichbar,
+  `R9000 localhost:3000` macht Port 3000 dieses Computers auf dem Server unter Port 9000 erreichbar,
+  `D1080` ist ein SOCKS5-Proxy auf `localhost:1080`.
+- **Keepalive, Kompression, veraltete Algorithmen:** für instabile Leitungen und alte Server.

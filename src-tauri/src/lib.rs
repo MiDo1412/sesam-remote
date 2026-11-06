@@ -96,16 +96,37 @@ fn find(path: &LibraryPath, id: &str) -> Result<Connection, String> {
     library::load(&path.0)?.into_iter().find(|c| c.id == id).ok_or_else(|| "Verbindung nicht gefunden".into())
 }
 
-fn ssh_target(c: &Connection, trust: Option<String>) -> Result<ssh::Target<'_>, String> {
+/// Pfad der Bibliothek für Stellen ohne Tauri-State (Sprungserver nachschlagen).
+static LIBRARY_FILE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+fn ssh_target(c: &Connection, trust: Option<String>) -> Result<ssh::Target, String> {
+    let mut t = ssh_target_direct(c, trust)?;
+    if !c.jump_host.is_empty() {
+        let path = LIBRARY_FILE.get().ok_or("Bibliothek nicht geladen")?;
+        let j = library::load(path)?.into_iter().find(|j| j.id == c.jump_host).ok_or("Sprungserver nicht mehr in der Bibliothek")?;
+        // Nur eine Stufe: der Sprungserver selbst verbindet direkt.
+        t.jump = Some(Box::new(ssh_target_direct(&j, None)?));
+    }
+    Ok(t)
+}
+
+fn ssh_target_direct(c: &Connection, trust: Option<String>) -> Result<ssh::Target, String> {
     Ok(ssh::Target {
-        host: &c.address,
-        port: c.ssh_port.ok_or("SSH ist für diese Verbindung ausgeschaltet")?,
-        user: &c.user,
+        host: c.address.clone(),
+        port: c.ssh_port.ok_or_else(|| format!("SSH ist für «{}» ausgeschaltet", c.name))?,
+        user: c.user.clone(),
         password: vault::get(&c.id, Kind::Password)?,
         key: vault::get(&c.id, Kind::SshKey)?,
         trusted: trust,
-        opts: ssh::Options { legacy: c.ssh_legacy, keepalive: c.ssh_keepalive, compression: c.ssh_compression },
+        opts: ssh::Options {
+            legacy: c.ssh_legacy,
+            keepalive: c.ssh_keepalive,
+            compression: c.ssh_compression,
+            agent: c.ssh_agent,
+            agent_forward: c.agent_forward,
+        },
         forwards: Vec::new(),
+        jump: None,
     })
 }
 
@@ -669,6 +690,7 @@ pub fn run() {
             });
             let dir = app.path().app_data_dir()?;
             diag::init(&dir);
+            let _ = LIBRARY_FILE.set(dir.join("library.json"));
             app.manage(LibraryPath(dir.join("library.json")));
             app.manage(ssh::Shells::default());
             app.manage(Desktops::default());

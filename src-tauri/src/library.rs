@@ -47,6 +47,12 @@ pub struct Connection {
     pub ssh_compression: bool,
     /// Portweiterleitungen der Shell, je eine Regel wie `L8080 localhost:80`, `R9000 localhost:3000`, `D1080`.
     pub forwards: Vec<String>,
+    /// Sprungserver (ProxyJump): ID einer anderen Verbindung der Bibliothek, leer = direkt.
+    pub jump_host: String,
+    /// Zuerst mit dem SSH-Agenten anmelden (Pageant oder Windows-OpenSSH-Agent).
+    pub ssh_agent: bool,
+    /// Agenten an den Server weiterreichen (nur mit `ssh_agent`).
+    pub agent_forward: bool,
     pub last_used: Option<String>,
 }
 
@@ -79,6 +85,9 @@ impl Default for Connection {
             ssh_keepalive: 0,
             ssh_compression: false,
             forwards: Vec::new(),
+            jump_host: String::new(),
+            ssh_agent: false,
+            agent_forward: false,
             last_used: None,
         }
     }
@@ -112,6 +121,9 @@ impl Connection {
         }
         for f in &self.forwards {
             crate::forward::parse(f)?;
+        }
+        if self.jump_host == self.id || !self.jump_host.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err("Ungültiger Sprungserver".into());
         }
         if !["landscape", "portrait"].contains(&self.orientation.as_str()) {
             return Err("Unbekannte Ausrichtung".into());
@@ -188,6 +200,8 @@ mod tests {
         assert!(Connection { file_transfer: "ftp".into(), ..ok.clone() }.validate().is_err());
         assert!(Connection { forwards: vec!["L8080 localhost:80".into(), "D1080".into()], ..ok.clone() }.validate().is_ok());
         assert!(Connection { forwards: vec!["L8080".into()], ..ok.clone() }.validate().is_err());
+        assert!(Connection { jump_host: "x".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { jump_host: "bastion-1".into(), ..ok.clone() }.validate().is_ok());
         assert!(Connection { default_view: "x".into(), ..ok }.validate().is_err());
     }
 

@@ -13,6 +13,8 @@ import { enhanceSelect } from "./menu";
 const formEls = (document.getElementById("editor-form") as HTMLFormElement).elements;
 const keyModeMenu = enhanceSelect(formEls.namedItem("keyMode") as HTMLSelectElement);
 const fileTransferMenu = enhanceSelect(formEls.namedItem("fileTransfer") as HTMLSelectElement);
+const jumpHost = formEls.namedItem("jumpHost") as HTMLSelectElement;
+const jumpHostMenu = enhanceSelect(jumpHost);
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -154,6 +156,9 @@ const blank = (): Connection => ({
   sshKeepalive: 0,
   sshCompression: false,
   forwards: [],
+  jumpHost: "",
+  sshAgent: false,
+  agentForward: false,
   lastUsed: null,
 });
 
@@ -196,6 +201,16 @@ function edit(c: Connection | null) {
   f.sshCompression.checked = editing.sshCompression;
   f.sshLegacy.checked = editing.sshLegacy;
   f.forwards.value = (editing.forwards ?? []).join("\n");
+  f.sshAgent.checked = editing.sshAgent;
+  f.agentForward.checked = editing.agentForward;
+  // Sprungserver: andere Verbindungen mit SSH.
+  const self = editing.id;
+  jumpHost.replaceChildren(
+    el("option", { value: "" }, "Keiner, direkt verbinden"),
+    ...items.filter((x) => x.id !== self && x.sshPort).map((x) => el("option", { value: x.id }, `${x.name} (${x.address})`)),
+  );
+  jumpHost.value = editing.jumpHost ?? "";
+  jumpHostMenu.sync();
   // Aufgeklappt, sobald etwas vom Standard abweicht.
   ($("advanced") as HTMLDetailsElement).open =
     editing.skipCertCheck ||
@@ -203,7 +218,9 @@ function edit(c: Connection | null) {
     !!editing.sshKeepalive ||
     editing.sshCompression ||
     editing.sshLegacy ||
-    f.forwards.value !== "";
+    f.forwards.value !== "" ||
+    jumpHost.value !== "" ||
+    editing.sshAgent;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -288,6 +305,9 @@ form.onsubmit = async (ev) => {
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean),
+    jumpHost: s("jumpHost"),
+    sshAgent: fd.get("sshAgent") !== null,
+    agentForward: fd.get("agentForward") !== null,
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],

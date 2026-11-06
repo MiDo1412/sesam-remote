@@ -165,8 +165,33 @@ und `russh-sftp` 3 ihn hergeben. Kryptografie implementiert Sesam nie selbst.
 - Kompression `zlib@openssh.com`/`zlib` nur, wenn eingeschaltet; Keepalive in Sekunden (russh
   trennt nach drei unbeantworteten).
 
+**Dateiübertragung:** SFTP (`russh-sftp`), sonst SCP wie PSCP (`scp.rs`, Einstellung «Dateiübertragung»:
+Automatisch / Nur SFTP / Nur SCP). SCP läuft über exec-Kanäle: `scp -r -t`/`scp -r -f` für die Daten,
+`ls -lAL`, `mkdir`, `test -e`, `mv`, `rm -f` für Auflisten, freie Namen und Teildateien. Pfade werden in
+einfache Anführungszeichen gesetzt, Namen mit Zeilenumbruch abgelehnt, Namen vom Server dürfen weder `/`
+noch `\` noch `..` enthalten. Mit SCP gibt es kein Umbenennen, Löschen und keine Rechte; Änderungsdatum
+fehlt in der Liste, die Gesamtgrösse von Ordnern beim Herunterladen wächst mit (SCP nennt sie nicht vorab).
+Die geteilte Zwischenablage (VNC) nutzt weiterhin nur SFTP.
+
+**Schlüssel:** ed25519 und ECDSA, OpenSSH-Format oder PuTTY `.ppk` v2/v3 (über `ssh-key`, auch mit
+Passphrase; Passphrase = Passwort der Verbindung). RSA nicht, weil Windows Geheimnisse als UTF-16 mit
+höchstens 2560 Byte speichert (1280 Zeichen; RSA-2048 im OpenSSH-Format hat rund 1800).
+
+**Agent:** «SSH-Agent verwenden» probiert zuerst Pageant, dann `\\.\pipe\openssh-ssh-agent`
+(unter macOS/Linux `SSH_AUTH_SOCK`). Agent-Weiterleitung auf Wunsch, nur für die Shell; Agent-Kanäle
+ohne eigene Anfrage werden abgelehnt.
+
+**Portweiterleitung** (`forward.rs`, nur solange eine Shell offen ist): `L` lokal über direct-tcpip,
+`D` SOCKS5 (ohne Anmeldung, nur CONNECT; kein SOCKS4), `R` über `tcpip-forward` auf 127.0.0.1 des Servers.
+Lokale Ports lauschen nur auf 127.0.0.1 (IPv4). Meldungen erscheinen grau im Terminal.
+
+**Sprungserver** (ProxyJump): eine andere Verbindung der Bibliothek; Sesam verbindet dorthin, öffnet
+direct-tcpip zum Ziel und spricht SSH darüber (`connect_stream`). Nur eine Stufe. Der Host-Schlüssel des
+Sprungservers muss schon bekannt sein (einmal direkt verbinden), die Rückfrage gibt es nur fürs Ziel.
+
 **Nicht verfügbar** (russh kann es nicht oder nur mit eigenem Krypto-Code):
-`sntrup761x25519-sha512` (fehlt in russh), `aes*-cbc` ohne «veraltet», `arcfour`, `blowfish`, DSA-Host-Schlüssel
+`sntrup761x25519-sha512` (fehlt in russh), `arcfour`, `blowfish`, DSA-Host-Schlüssel
 (nur mit Feature `dsa`, bewusst aus), GSSAPI/Kerberos (russh hat nur die Schnittstelle
 `authenticate_gssapi_with_mic`; SSPI-Anbindung wäre eigener Code), Server-Zertifikate (`*-cert-v01`,
-werden abgelehnt), SSH-1, X11-Weiterleitung, serielle Verbindungen, Telnet/rlogin.
+werden abgelehnt), SSH-1, X11-Weiterleitung, Weiterleitung über Unix-Sockets, keyboard-interactive/2FA
+(russh kann es, hier noch ohne Dialog), serielle Verbindungen, Telnet/rlogin.
