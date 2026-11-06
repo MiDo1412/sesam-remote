@@ -6,7 +6,7 @@ import { ask, choose } from "./ui";
 import { keysym } from "./keysym";
 import { ICON } from "./icons";
 import { enhanceSelect } from "./menu";
-import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
+import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { saveDesktopThumb } from "./thumbs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
@@ -368,8 +368,10 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     if (ev.payload.type === "leave") wrap.classList.remove("drop");
   });
 
+  let handedOff = false;
   const close = () => {
     unlistenDrop.then((u) => u());
+    if (handedOff) sid = null; // läuft im anderen Fenster weiter
     if (sid) void saveDesktopThumb(c, canvas);
     ro.disconnect();
     touch.dispose();
@@ -423,7 +425,22 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   };
 
   let remember = true;
-  const openSession = (trust: string | null) => {
+  const openSession = async (trust: string | null) => {
+    const at = ctx.extra?.attach;
+    if (at) {
+      // Laufende Sitzung aus einem anderen Fenster: letztes Bild zeigen, dann weiter mit neuen Rechtecken.
+      const s = at.state as { w: number; h: number; img: string } | undefined;
+      if (s) {
+        [canvas.width, canvas.height] = [s.w, s.h];
+        layout();
+        const im = new Image();
+        im.onload = () => g.drawImage(im, 0, 0);
+        im.src = s.img;
+      }
+      await api.desktopAttach(at.sid, onFrame);
+      handoffDone(at.token);
+      return at.sid;
+    }
     if (!rdp) return api.vncOpen(c.id, trust, remember, onFrame);
     const [w, h] = mode === "fit" ? wanted() : [1920, 1080];
     return api.rdpOpen(c.id, trust, remember, Math.max(w, 640), Math.max(h, 480), onFrame);
@@ -469,6 +486,8 @@ export function desktopTab(ctx: TabCtx): TabHandle {
 
   return {
     close,
+    handoff: () => (sid ? { sid, state: { w: canvas.width, h: canvas.height, img: canvas.toDataURL("image/jpeg", 0.85) } } : null),
+    release: () => ((handedOff = true), close()),
     onShow: () => requestAnimationFrame(() => (layout(), requestSize(), canvas.focus())),
     onHide: () => (touch.hide(), releaseAll()),
   };

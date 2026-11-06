@@ -3,7 +3,7 @@ import { api, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from ".
 import { ask, askHostKey, askText, tell } from "./ui";
 import { openMenu, type MenuItem } from "./menu";
 import { ICON } from "./icons";
-import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
+import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
   const e = document.createElement(tag);
@@ -550,7 +550,13 @@ export function filesTab(ctx: TabCtx): TabHandle {
   let trust: string | null = null;
   for (;;) {
     try {
-      const opened = await api.sftpOpen(c.id, trust);
+      const at = ctx.extra?.attach;
+      const st = at?.state as { scp: boolean; remote: string; local: string } | undefined;
+      const opened = at ? { sid: at.sid, scp: !!st?.scp } : await api.sftpOpen(c.id, trust);
+      if (at) {
+        handoffDone(at.token);
+        if (st?.local) load(panes.local, st.local);
+      }
       sid = opened.sid;
       status.textContent = "";
       if (opened.scp) {
@@ -560,7 +566,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
         scp = true;
       }
       ctx.setState("connected");
-      await load(panes.remote, "");
+      await load(panes.remote, st?.remote ?? "");
     } catch (e) {
       const msg = String(e);
       if (trust === null && msg.startsWith(HOSTKEY_UNKNOWN)) {
@@ -576,6 +582,11 @@ export function filesTab(ctx: TabCtx): TabHandle {
 
   return {
     close,
+    handoff: () => (sid ? { sid, state: { scp, remote: panes.remote.listing?.path ?? "", local: panes.local.listing?.path ?? "" } } : null),
+    release: () => {
+      sid = null; // SFTP-Sitzung läuft im anderen Fenster weiter
+      close();
+    },
     busy: () => (running.size ? `${running.size} Übertragung(en) laufen noch und werden abgebrochen.` : null),
   };
 }

@@ -111,6 +111,17 @@ export const api = {
     ch.onmessage = onEvent;
     return invoke<string>("shell_open", { id, cols, rows, trust, onEvent: ch });
   },
+  /** Laufende Shell an dieses Fenster hängen (Tab abkoppeln/andocken). */
+  shellAttach: (sid: string, onEvent: (e: ShellEvent) => void) => {
+    const ch = new Channel<ShellEvent>();
+    ch.onmessage = onEvent;
+    return invoke<void>("shell_attach", { sid, onEvent: ch });
+  },
+  desktopAttach: (sid: string, onFrame: (buf: ArrayBuffer) => void) => {
+    const ch = new Channel<ArrayBuffer>();
+    ch.onmessage = onFrame;
+    return invoke<void>("desktop_attach", { sid, onEvent: ch });
+  },
   shellWrite: (sid: string, data: Uint8Array) => invoke<void>("shell_write", { sid, data: Array.from(data) }),
   shellResize: (sid: string, cols: number, rows: number) => invoke<void>("shell_resize", { sid, cols, rows }),
   shellClose: (sid: string) => invoke<void>("shell_close", { sid }),

@@ -418,3 +418,6 @@ fieldset.svc legend { float: none; padding: 0; }
 .row-actions { display: flex; gap: 12px; }
 #cred-form { width: 480px; }
 .svc-fields:has(input[name=rdpOwn]:not(:checked)) #rdp-own, .svc-fields:has(input[name=vncOwn]:not(:checked)) #vnc-own { display: none; }
+
+/* ---------- Abgekoppeltes Fenster ---------- */
+body.detached #library, body.detached #session-back { display: none !important; }

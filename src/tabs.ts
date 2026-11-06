@@ -2,7 +2,13 @@
 import type { Connection } from "./api";
 import { ICON } from "./icons";
 import { openMenu } from "./menu";
-import { ask } from "./ui";
+import { ask, tell } from "./ui";
+import { emit, emitTo, listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+/** Dieses Fenster zeigt abgekoppelte Sitzungen (ohne Bibliothek). */
+export const detachedWindow = new URLSearchParams(location.search).has("detach");
 
 export type Kind = "desktop" | "shell" | "files";
 
@@ -20,8 +26,9 @@ export interface TabCtx {
   setState(s: "connecting" | "connected" | "closed"): void;
   /** Weitere Shell usw. als neuen Tab öffnen. */
   openTab(kind: Kind, fresh?: boolean): void;
-  /** Zusatzangaben beim Öffnen, z. B. ein Befehl, den die Shell nach dem Verbinden tippt. */
-  extra?: { command?: string };
+  /** Zusatzangaben beim Öffnen, z. B. ein Befehl, den die Shell nach dem Verbinden tippt,
+   *  oder eine laufende Sitzung aus einem anderen Fenster (`attach`). */
+  extra?: { command?: string; attach?: Attach };
   closeSelf(): void;
 }
 
@@ -31,6 +38,17 @@ export interface TabHandle {
   onHide?(): void;
   /** Grund, warum Schliessen nachfragen soll (z. B. laufende Übertragungen). */
   busy?(): string | null;
+  /** Für die Übergabe an ein anderes Fenster: Sitzungs-ID und Zustand (Bild, Text …); null = nicht möglich. */
+  handoff?(): { sid: string; state?: unknown } | null;
+  /** Nach erfolgreicher Übergabe: Oberfläche aufräumen, ohne die Verbindung zu trennen. */
+  release?(): void;
+}
+
+/** Übernahme einer laufenden Sitzung; nach dem Anhängen meldet der Tab `sesam:handoff-done` mit `token`. */
+export interface Attach {
+  token: string;
+  sid: string;
+  state?: unknown;
 }
 
 type Factory = (ctx: TabCtx) => TabHandle;
@@ -148,11 +166,13 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
     const v = await openMenu(tabEl, [
       { value: "dup", label: `Weitere ${kindLabel[kind]}-Sitzung`, icon: ICON.plus, disabled: kind === "desktop" },
       ...(conn.id.startsWith("quick-") ? [{ value: "save", label: "Als Verbindung sichern …", icon: ICON.save }] : []),
-      { value: "min", label: "Minimieren", icon: ICON.minimize, separator: true },
+      { value: "detach", label: detachedWindow ? "Ins Hauptfenster zurück" : "In eigenem Fenster öffnen", icon: ICON.detach, separator: true },
+      { value: "min", label: "Minimieren", icon: ICON.minimize, disabled: detachedWindow },
       { value: "close", label: "Trennen", icon: ICON.disconnect },
     ]);
     if (v === "save") dispatchEvent(new CustomEvent("sesam:save-quick", { detail: conn }));
     if (v === "dup") openTab(conn, kind, true);
+    if (v === "detach") detachTab(tab);
     if (v === "min") minimizeTab(tab);
     if (v === "close") closeTab(tab);
   };
@@ -160,12 +180,90 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   tab.ctx.setState("connecting");
   activate(tab);
   tab.handle = factories[kind](tab.ctx);
-  // «Minimieren» vor «Trennen» in jeder Werkzeugleiste (auch für das Menü «Sitzung»).
-  const minBtn = toolButton(ICON.minimize, "Minimieren", () => minimizeTab(tab), { shortcut: "läuft weiter" });
+  // «Abkoppeln» und «Minimieren» vor «Trennen» in jeder Werkzeugleiste (auch für das Menü «Sitzung»).
+  const extraBtns = [toolButton(ICON.detach, detachedWindow ? "Andocken" : "Abkoppeln", () => detachTab(tab), { shortcut: detachedWindow ? "zurück ins Hauptfenster" : "eigenes Fenster" })];
+  if (!detachedWindow) extraBtns.push(toolButton(ICON.minimize, "Minimieren", () => minimizeTab(tab), { shortcut: "läuft weiter" }));
   const last = toolbar.lastElementChild;
-  if (last) toolbar.insertBefore(minBtn, last);
-  else toolbar.append(minBtn);
+  for (const b of extraBtns) last ? toolbar.insertBefore(b, last) : toolbar.append(b);
 }
+
+// ---------- Abkoppeln / Andocken ----------
+// Die Verbindung bleibt bestehen: das Backend sendet ab der Übernahme an das neue Fenster.
+// Ablauf: Zustand in den localStorage, anderes Fenster übernimmt und meldet `sesam:handoff-done`.
+const pending = new Map<string, Tab>();
+listen<string>("sesam:handoff-done", (e) => {
+  const tab = pending.get(e.payload);
+  if (!tab) return;
+  pending.delete(e.payload);
+  tab.handle.release?.();
+  removeTab(tab);
+});
+// Hauptfenster: Sitzung aus einem abgekoppelten Fenster zurücknehmen.
+if (!detachedWindow) listen<string>("sesam:handoff", (e) => takeOver(e.payload));
+
+/** Übergabe aus dem localStorage übernehmen (Hauptfenster: Andocken; neues Fenster: Abkoppeln). */
+export function takeOver(token: string) {
+  const key = `sesam.handoff.${token}`;
+  const raw = localStorage.getItem(key);
+  localStorage.removeItem(key);
+  if (!raw) return false;
+  const h = JSON.parse(raw) as { conn: Connection; kind: Kind; sid: string; state?: unknown };
+  openTab(h.conn, h.kind, true, { attach: { token, sid: h.sid, state: h.state } });
+  return true;
+}
+
+export async function detachTab(tab: Tab) {
+  const why = tab.handle.busy?.();
+  if (why) return tell("Gerade nicht möglich", `${why} Bitte warten, bis sie fertig sind.`);
+  const info = tab.state === "connected" ? tab.handle.handoff?.() : null;
+  if (!info) return tell("Gerade nicht möglich", "Nur verbundene Sitzungen lassen sich in ein anderes Fenster verschieben.");
+  const token = crypto.randomUUID();
+  try {
+    localStorage.setItem(`sesam.handoff.${token}`, JSON.stringify({ conn: tab.ctx.conn, kind: tab.kind, ...info }));
+  } catch {
+    return tell("Gerade nicht möglich", "Der Zustand der Sitzung ist zu gross für die Übergabe.");
+  }
+  pending.set(token, tab);
+  try {
+    if (detachedWindow) await emitTo("main", "sesam:handoff", token);
+    else await invoke("open_detached", { token, title: `${tab.ctx.conn.name} · ${kindLabel[tab.kind]}` });
+  } catch (e) {
+    pending.delete(token);
+    localStorage.removeItem(`sesam.handoff.${token}`);
+    return tell("Nicht verschoben", String(e));
+  }
+  // Kommt keine Bestätigung, bleibt die Sitzung hier.
+  setTimeout(() => {
+    if (pending.delete(token)) localStorage.removeItem(`sesam.handoff.${token}`);
+  }, 20000);
+}
+
+/** Tab-Oberfläche entfernen (die Sitzung ist bereits geschlossen oder übergeben). */
+function removeTab(tab: Tab) {
+  tab.ctx.pane.remove();
+  tab.ctx.toolbar.remove();
+  tab.tabEl.remove();
+  tabs.splice(tabs.indexOf(tab), 1);
+  if (active === tab) {
+    active = null;
+    const next = [...tabs].reverse().find((t) => !t.minimized);
+    if (next) activate(next);
+    else showLibrary();
+  }
+  renderActiveBar();
+}
+
+/** Abgekoppeltes Fenster: Schliessen trennt seine Sitzungen (mit Rückfrage bei laufenden Übertragungen). */
+if (detachedWindow) {
+  getCurrentWindow().onCloseRequested(async (e) => {
+    if (!tabs.length) return;
+    e.preventDefault();
+    for (const t of [...tabs]) await closeTab(t);
+  });
+}
+
+/** Für die Tab-Fabriken: nach erfolgreichem Anhängen das abgebende Fenster benachrichtigen. */
+export const handoffDone = (token: string) => emit("sesam:handoff-done", token);
 
 /** Sitzung aus der Tab-Leiste nehmen; sie läuft weiter und kommt über «Aktive Sitzungen» zurück. */
 export function minimizeTab(tab: Tab) {
@@ -202,6 +300,8 @@ function activate(tab: Tab) {
 }
 
 export function showLibrary() {
+  // Abgekoppeltes Fenster ohne Sitzungen: schliessen.
+  if (detachedWindow) return void (tabs.length ? activate(tabs[tabs.length - 1]!) : getCurrentWindow().destroy());
   active?.handle.onHide?.();
   $("session").hidden = true;
   $("library").hidden = false;
@@ -213,17 +313,7 @@ export async function closeTab(tab: Tab) {
   const why = tab.handle.busy?.();
   if (why && !(await ask("Sitzung trennen?", why, "Trennen"))) return;
   tab.handle.close();
-  tab.ctx.pane.remove();
-  tab.ctx.toolbar.remove();
-  tab.tabEl.remove();
-  tabs.splice(tabs.indexOf(tab), 1);
-  if (active === tab) {
-    active = null;
-    const next = tabs[tabs.length - 1];
-    if (next) activate(next);
-    else showLibrary();
-  }
-  renderActiveBar();
+  removeTab(tab);
 }
 
 /** Leiste «Aktive Sitzungen» in der Bibliothek. */

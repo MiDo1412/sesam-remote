@@ -6,7 +6,7 @@ import { api, HOSTKEY_UNKNOWN } from "./api";
 import { askHostKey, askText } from "./ui";
 import { ICON } from "./icons";
 import { openMenu } from "./menu";
-import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
+import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { createKeyboard, isTouch, termSequence } from "./osk";
 import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings } from "./termthemes";
 
@@ -136,10 +136,18 @@ export function shellTab(ctx: TabCtx): TabHandle {
     let trust: string | null = null;
     for (;;) {
       try {
-        sid = await api.shellOpen(c.id, term.cols || 80, term.rows || 24, trust, onEvent);
+        const at = ctx.extra?.attach;
+        if (at) {
+          // Laufende Shell aus einem anderen Fenster: bisherigen Text zeigen, dann weiter.
+          if (typeof at.state === "string") term.write(at.state);
+          await api.shellAttach(at.sid, onEvent);
+          sid = at.sid;
+          handoffDone(at.token);
+          api.shellResize(sid, term.cols, term.rows).catch(() => {});
+        } else sid = await api.shellOpen(c.id, term.cols || 80, term.rows || 24, trust, onEvent);
         status.textContent = "";
         // Vorgegebener Befehl (z. B. Setup-Script): getippt, der Benutzer sieht und bestätigt alles im Terminal.
-        if (ctx.extra?.command) setTimeout(() => send(ctx.extra!.command!), 400);
+        if (ctx.extra?.command && !at) setTimeout(() => send(ctx.extra!.command!), 400);
         ctx.setState("connected");
         if (ctx.isActive()) term.focus();
       } catch (e) {
@@ -155,13 +163,27 @@ export function shellTab(ctx: TabCtx): TabHandle {
     }
   })();
 
+  let handedOff = false;
+  /** Sichtbarer Text samt Verlauf (letzte 2000 Zeilen) für die Übergabe; Farben gehen dabei verloren. */
+  const bufferText = () => {
+    const b = term.buffer.active;
+    const lines: string[] = [];
+    for (let i = Math.max(0, b.length - 2000); i < b.length; i++) lines.push(b.getLine(i)?.translateToString(true) ?? "");
+    while (lines.length && !lines[lines.length - 1]) lines.pop();
+    return lines.join("\r\n");
+  };
   return {
+    handoff: () => (sid ? { sid, state: bufferText() } : null),
+    release() {
+      handedOff = true;
+      this.close();
+    },
     close() {
       ro.disconnect();
       kb.dispose();
       removeEventListener("sesam:terminal-settings", applySettings);
       scheme.removeEventListener("change", applySettings);
-      if (sid) api.shellClose(sid);
+      if (sid && !handedOff) api.shellClose(sid);
       sid = null;
       term.dispose();
     },

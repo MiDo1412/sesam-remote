@@ -6,6 +6,7 @@ mod kdc;
 mod forward;
 mod library;
 mod rdp;
+mod relay;
 mod rdp_redir;
 mod rdstls;
 mod scp;
@@ -284,9 +285,11 @@ async fn shell_open(
     let c = find(&path, &id)?;
     let mut t = ssh_target(&c, trust)?;
     t.forwards = c.forwards.iter().map(|l| forward::parse(l)).collect::<Result<_, _>>()?;
-    let shell = ssh::open(t, cols, rows, on_event).await?;
+    let relay = relay::Relay::new(on_event);
+    let shell = ssh::open(t, cols, rows, relay.clone()).await?;
     let sid = new_sid(&c.id);
     shells.0.lock().await.insert(sid.clone(), shell);
+    relay::SHELLS.lock().unwrap().insert(sid.clone(), relay);
     Ok(sid)
 }
 
@@ -302,6 +305,7 @@ async fn shell_resize(shells: State<'_, ssh::Shells>, sid: String, cols: u32, ro
 
 #[tauri::command]
 async fn shell_close(shells: State<'_, ssh::Shells>, sid: String) -> Result<(), String> {
+    relay::SHELLS.lock().unwrap().remove(&sid);
     if let Some(s) = shells.0.lock().await.remove(&sid) {
         s.close().await;
     }
@@ -410,6 +414,35 @@ fn local_mkdir(dir: String, name: String) -> Result<String, String> {
 #[tauri::command]
 fn local_rename(path: String, name: String) -> Result<String, String> {
     sftp::local_rename(&path, &name)
+}
+
+/// Laufende Desktop-Sitzung (VNC/RDP) an das Fenster dieses Kanals hängen.
+#[tauri::command]
+fn desktop_attach(sid: String, on_event: Channel<InvokeResponseBody>) -> Result<(), String> {
+    relay::DESKTOPS.lock().unwrap().get(&sid).ok_or("Desktop-Sitzung geschlossen")?.swap(on_event);
+    Ok(())
+}
+
+/// Laufende Shell an das Fenster dieses Kanals hängen.
+#[tauri::command]
+fn shell_attach(sid: String, on_event: Channel<ssh::ShellEvent>) -> Result<(), String> {
+    relay::SHELLS.lock().unwrap().get(&sid).ok_or("Shell geschlossen")?.swap(on_event);
+    Ok(())
+}
+
+/// Sitzung in ein eigenes Fenster abkoppeln; `token` verweist auf die Übergabe im localStorage.
+#[tauri::command]
+fn open_detached(app: AppHandle, token: String, title: String) -> Result<(), String> {
+    if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err("Ungültige Übergabe".into());
+    }
+    tauri::WebviewWindowBuilder::new(&app, format!("detached-{token}"), tauri::WebviewUrl::App(format!("index.html?detach={token}").into()))
+        .title(title)
+        .inner_size(1200.0, 800.0)
+        .min_inner_size(480.0, 320.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -615,7 +648,7 @@ fn transfer_cancel(transfers: State<Transfers>, tid: String) {
 struct Desktop {
     session: Arc<vnc::Session>,
     share: Arc<ClipShare>,
-    events: Channel<InvokeResponseBody>,
+    events: relay::Relay<InvokeResponseBody>,
 }
 
 #[derive(Default)]
@@ -675,6 +708,7 @@ async fn vnc_open(
 
     let downloads = app.path().download_dir().unwrap_or_else(|_| std::env::temp_dir());
     let share = Arc::new(ClipShare::new(c.clone(), downloads));
+    let on_event = relay::Relay::new(on_event);
     let (sh, events) = (share.clone(), on_event.clone());
     let session = vnc::Session::start(stream, init, move |e| {
         let f = match e {
@@ -707,6 +741,7 @@ async fn vnc_open(
         on_event.send(f).is_ok()
     });
     let sid = new_sid(&c.id);
+    relay::DESKTOPS.lock().unwrap().insert(sid.clone(), events.clone());
     desktops.0.lock().unwrap().insert(sid.clone(), Desktop { session: Arc::new(session), share, events });
     Ok(sid)
 }
@@ -797,6 +832,7 @@ async fn vnc_clipboard_sync(desktops: State<'_, Desktops>, sid: String) -> Resul
 
 #[tauri::command]
 fn vnc_close(desktops: State<Desktops>, sid: String) {
+    relay::DESKTOPS.lock().unwrap().remove(&sid);
     if let Some(d) = desktops.0.lock().unwrap().remove(&sid) {
         d.session.close();
     }
@@ -922,10 +958,13 @@ async fn rdp_open(
         target.clipboard = rdp_clipboard(&app, sid.clone(), tx.clone()).await;
     }
     let seen: rdp::SeenCert = Default::default();
+    let on_event = relay::Relay::new(on_event);
+    relay::DESKTOPS.lock().unwrap().insert(sid.clone(), on_event.clone());
     let opened = rdp::open(target, seen.clone(), (tx, rx), move |e| screen_frame(e).is_none_or(|f| on_event.send(f).is_ok())).await;
     let session = match opened {
         Ok(s) => s,
         Err(e) => {
+            relay::DESKTOPS.lock().unwrap().remove(&sid);
             rdp_clipboard_drop(&app, sid);
             return Err(e);
         }
@@ -978,6 +1017,7 @@ fn rdp_set_size(sessions: State<RdpSessions>, sid: String, width: u16, height: u
 
 #[tauri::command]
 fn rdp_close(app: AppHandle, sessions: State<RdpSessions>, sid: String) {
+    relay::DESKTOPS.lock().unwrap().remove(&sid);
     if let Some(s) = sessions.0.lock().unwrap().remove(&sid) {
         s.close();
     }
@@ -1020,6 +1060,8 @@ pub fn run() {
                 .text("tool:Alle Monitore", "Alle Monitore")
                 .text("tool:Vollbild", "Vollbild")
                 .separator()
+                .text("tool:Abkoppeln", "In eigenem Fenster öffnen")
+                .text("tool:Andocken", "Ins Hauptfenster zurück")
                 .text("tool:Minimieren", "Minimieren")
                 .text("tool:Trennen", "Trennen")
                 .build()?;
@@ -1089,6 +1131,9 @@ pub fn run() {
             sftp_rename,
             sftp_remove,
             sftp_close,
+            desktop_attach,
+            shell_attach,
+            open_detached,
             sftp_chmod,
             sftp_touch,
             local_mkdir,

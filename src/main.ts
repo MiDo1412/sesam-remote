@@ -2,7 +2,7 @@ import { api, desktopProtocol, type Connection } from "./api";
 import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
-import { initTabs, openTab, runTool } from "./tabs";
+import { detachedWindow, initTabs, openTab, runTool, takeOver } from "./tabs";
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
 import { applyAppearance, openSettings } from "./settings";
@@ -81,7 +81,7 @@ async function reload() {
     tell("Bibliothek nicht lesbar", String(e));
   }
   render();
-  if (!startLinkDone) {
+  if (!startLinkDone && !detachedWindow) {
     startLinkDone = true;
     deepLinkCurrent().then((urls) => urls?.forEach(handleLink)).catch(() => {});
   }
@@ -254,6 +254,11 @@ function open(c: Connection, view: Connection["defaultView"]) {
 }
 
 initTabs({ desktop: desktopTab, shell: shellTab, files: filesTab }, () => reload());
+// Abgekoppeltes Fenster: nur die übergebene Sitzung, keine Bibliothek.
+if (detachedWindow) {
+  document.body.classList.add("detached");
+  if (!takeOver(new URLSearchParams(location.search).get("detach") ?? "")) void import("@tauri-apps/api/window").then((w) => w.getCurrentWindow().destroy());
+}
 
 // ---------- Sheet «Verbindung bearbeiten» ----------
 
@@ -506,7 +511,7 @@ form.onsubmit = async (ev) => {
 };
 
 $("new").onclick = () => edit(null);
-onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
+if (!detachedWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
 listen<string>("help", (e) => openHelp(e.payload));
 applyAppearance();
@@ -522,12 +527,13 @@ const command = (cmd: string) => {
   else if (cmd === "quick") quick.open();
 };
 addEventListener("sesam:save-quick", (e) => quick.saveAs((e as CustomEvent<Connection>).detail));
-listen<string>("cmd", (e) => command(e.payload));
-listen<string>("tool", (e) => runTool(e.payload));
+// Menübefehle gehen an alle Fenster; nur das aktive reagiert.
+listen<string>("cmd", (e) => document.hasFocus() && (!detachedWindow || e.payload === "settings") && command(e.payload));
+listen<string>("tool", (e) => document.hasFocus() && runTool(e.payload));
 addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   if (e.key === ",") (e.preventDefault(), command("settings"));
-  else if (e.key.toLowerCase() === "n" && !e.shiftKey && !document.querySelector("dialog[open]")) (e.preventDefault(), command("new"));
+  else if (e.key.toLowerCase() === "n" && !e.shiftKey && !detachedWindow && !document.querySelector("dialog[open]")) (e.preventDefault(), command("new"));
 });
 $("search").addEventListener("input", render);
 reload();

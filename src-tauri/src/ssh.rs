@@ -7,7 +7,6 @@ use russh::{ChannelMsg, ChannelWriteHalf, cipher, compression, kex, mac};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tauri::ipc::Channel;
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -339,7 +338,7 @@ pub async fn connect(t: &Target) -> Result<Handle<Client>, String> {
     Ok(handle)
 }
 
-pub async fn open(t: Target, cols: u32, rows: u32, on_event: Channel<ShellEvent>) -> Result<Shell, String> {
+pub async fn open(t: Target, cols: u32, rows: u32, on_event: crate::relay::Relay<ShellEvent>) -> Result<Shell, String> {
     let handle = Arc::new(connect(&t).await?);
     let note = on_event.clone();
     let forwards = forward::start(&handle, &t.forwards, move |m| {
