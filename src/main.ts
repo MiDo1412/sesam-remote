@@ -6,6 +6,16 @@ import { ask, tell } from "./ui";
 import { openHelp } from "./help";
 import { listen } from "@tauri-apps/api/event";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
+import { enhanceSelect } from "./menu";
+
+// Native Auswahllisten durch eigene Menüs ersetzen (einmal beim Start).
+const ICON_KEYBOARD =
+  '<svg viewBox="0 0 256 256" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><rect x="24" y="56" width="208" height="144" rx="12"/><line x1="64" y1="96" x2="64.1" y2="96"/><line x1="104" y1="96" x2="104.1" y2="96"/><line x1="152" y1="96" x2="152.1" y2="96"/><line x1="192" y1="96" x2="192.1" y2="96"/><line x1="64" y1="136" x2="64.1" y2="136"/><line x1="192" y1="136" x2="192.1" y2="136"/><line x1="96" y1="168" x2="160" y2="168"/></svg>';
+enhanceSelect(document.getElementById("send-keys") as HTMLSelectElement, {
+  pulldown: { label: "Tasten senden", icon: ICON_KEYBOARD },
+  shortcuts: { cad: "Strg+Alt+Entf", cse: "Strg+Umschalt+Esc", alttab: "Alt+Tab", altf4: "Alt+F4" },
+});
+const keyModeMenu = enhanceSelect((document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("keyMode") as HTMLSelectElement);
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -164,6 +174,7 @@ function edit(c: Connection | null) {
   f.sshPort.value = String(editing.sshPort ?? 22);
   f.user.value = editing.user;
   f.keyMode.value = editing.hasKey ? "keep" : "none";
+  keyModeMenu.sync();
   f.key.value = "";
   f.password.value = "";
   f.vncPassword.value = "";

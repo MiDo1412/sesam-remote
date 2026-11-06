@@ -164,7 +164,7 @@ label.option small { margin-top: 2px; }
 .grow { flex: 1; }
 .tools { display: flex; align-items: center; gap: 8px; }
 .segmented.dark { background: #1e1e20; }
-.tools select { height: 28px; background: #1e1e20; color: #f5f5f7; border-color: #3a3a3d; font-size: 12px; }
+
 .segmented.dark label { color: #c7c7cc; padding: 0 10px; }
 .segmented.dark label:has(input:checked) { background: #48484c; color: #f5f5f7; }
 .desktop { flex: 1; min-height: 0; overflow: hidden; display: grid; place-items: center; background: #0f0f11; }
@@ -205,6 +205,35 @@ label.option small { margin-top: 2px; }
 .transfer button { height: 24px; padding: 0 8px; font-size: 12px; }
 .drag-ghost { position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none; padding: 4px 10px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-size: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
 #ask-input { width: 100%; }
+
+/* ---------- Menüs (statt nativer Auswahllisten) ---------- */
+.menu-button { display: inline-flex; align-items: center; gap: 8px; justify-content: space-between; text-align: left; }
+.menu-button .menu-button-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-button svg { flex-shrink: 0; opacity: 0.7; }
+.sheet .menu-button { width: 100%; height: 32px; border-color: var(--field); border-radius: 7px; font-size: 13px; font-weight: 400; color: var(--text); }
+.tools .menu-button { height: 28px; background: #1e1e20; color: #f5f5f7; border-color: #3a3a3d; font-size: 12px; }
+.menu {
+  position: fixed; z-index: 100; min-width: 180px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 5px;
+  border-radius: 10px; border: 1px solid rgba(0, 0, 0, 0.12); color: var(--text); font-size: 13px;
+  background: color-mix(in srgb, var(--card) 82%, transparent); backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12); outline: none;
+  animation: menu-in 120ms ease-out;
+}
+.menu.closing { animation: menu-out 90ms ease-in forwards; }
+@keyframes menu-in { from { opacity: 0; transform: scale(0.97); } }
+@keyframes menu-out { to { opacity: 0; transform: scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .menu, .menu.closing { animation: none; } }
+@media (prefers-color-scheme: dark) { .menu { border-color: rgba(255, 255, 255, 0.12); } }
+.menu-item { display: flex; align-items: center; gap: 8px; min-height: 26px; padding: 3px 10px 3px 4px; border-radius: 6px; cursor: default; white-space: nowrap; }
+.menu-item.active { background: var(--accent); color: var(--on-accent); }
+.menu-item[aria-disabled=true] { opacity: 0.4; }
+.menu-check { width: 16px; display: inline-flex; justify-content: center; }
+.menu-icon { display: inline-flex; }
+.menu-label { flex: 1; }
+.menu-key { margin-left: 24px; color: var(--muted); font-size: 12px; }
+.menu-item.active .menu-key { color: inherit; opacity: 0.85; }
+.menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.menu-section { padding: 6px 10px 2px 28px; font-size: 11px; font-weight: 600; color: var(--muted); }
 
 /* ---------- Hilfe ---------- */
 .help-btn { height: 18px; width: 18px; padding: 0; margin-left: 6px; border-radius: 9px; font-size: 11px; font-weight: 600; color: var(--accent); vertical-align: 1px; }
