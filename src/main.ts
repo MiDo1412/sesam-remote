@@ -153,6 +153,7 @@ const blank = (): Connection => ({
   sshLegacy: false,
   sshKeepalive: 0,
   sshCompression: false,
+  forwards: [],
   lastUsed: null,
 });
 
@@ -194,9 +195,15 @@ function edit(c: Connection | null) {
   f.sshKeepalive.value = editing.sshKeepalive ? String(editing.sshKeepalive) : "";
   f.sshCompression.checked = editing.sshCompression;
   f.sshLegacy.checked = editing.sshLegacy;
+  f.forwards.value = (editing.forwards ?? []).join("\n");
   // Aufgeklappt, sobald etwas vom Standard abweicht.
   ($("advanced") as HTMLDetailsElement).open =
-    editing.skipCertCheck || f.fileTransfer.value !== "auto" || !!editing.sshKeepalive || editing.sshCompression || editing.sshLegacy;
+    editing.skipCertCheck ||
+    f.fileTransfer.value !== "auto" ||
+    !!editing.sshKeepalive ||
+    editing.sshCompression ||
+    editing.sshLegacy ||
+    f.forwards.value !== "";
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -277,6 +284,10 @@ form.onsubmit = async (ev) => {
     sshKeepalive: Math.max(0, Math.min(3600, Math.round(Number(s("sshKeepalive")) || 0))),
     sshCompression: fd.get("sshCompression") !== null,
     sshLegacy: fd.get("sshLegacy") !== null,
+    forwards: s("forwards")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean),
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],

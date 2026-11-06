@@ -2,6 +2,7 @@
 
 use russh::client::{self, Handle, Msg};
 use russh::keys::{self, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
+use crate::forward;
 use russh::{ChannelMsg, ChannelWriteHalf, cipher, compression, kex, mac};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -16,8 +17,10 @@ pub enum ShellEvent {
 }
 
 pub struct Shell {
-    handle: Handle<Client>,
+    handle: Arc<Handle<Client>>,
     writer: ChannelWriteHalf<Msg>,
+    /// Portweiterleitungen leben so lange wie die Shell.
+    _forwards: forward::Forwards,
 }
 
 #[derive(Default)]
@@ -30,10 +33,30 @@ pub struct Client {
     trusted: Option<String>,
     /// Grund für eine Ablehnung des Server-Schlüssels, damit die Meldung verständlich ist.
     rejected: Arc<Mutex<Option<String>>>,
+    /// Fernweiterleitungen (R): Port auf dem Server → Ziel hier.
+    remote: HashMap<u32, (String, u16)>,
 }
 
 impl client::Handler for Client {
     type Error = russh::Error;
+
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<Msg>,
+        _connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: client::ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        // Nur Ports, die wir selbst angemeldet haben; alles andere lehnt der Drop von `reply` ab.
+        if let Some((host, port)) = self.remote.get(&connected_port).cloned() {
+            reply.accept().await;
+            forward::serve_remote(channel, host, port);
+        }
+        Ok(())
+    }
 
     async fn check_server_key(&mut self, key: &PublicKeyOrCertificate) -> Result<bool, Self::Error> {
         let PublicKeyOrCertificate::PublicKey { key, .. } = key else {
@@ -113,6 +136,8 @@ pub struct Target<'a> {
     pub key: Option<String>,
     pub trusted: Option<String>,
     pub opts: Options,
+    /// Nur für die Shell: Portweiterleitungen.
+    pub forwards: Vec<forward::Rule>,
 }
 
 /// Verbindungsoptionen pro Eintrag der Bibliothek.
@@ -205,7 +230,15 @@ async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), Stri
 /// Verbinden, Host-Schlüssel prüfen, anmelden. Gemeinsam für Shell und SFTP.
 pub async fn connect(t: &Target<'_>) -> Result<Handle<Client>, String> {
     let rejected = Arc::new(Mutex::new(None));
-    let client = Client { host: t.host.into(), port: t.port, trusted: t.trusted.clone(), rejected: rejected.clone() };
+    let remote = t
+        .forwards
+        .iter()
+        .filter_map(|r| match r {
+            forward::Rule::Remote { listen, host, port } => Some((u32::from(*listen), (host.clone(), *port))),
+            _ => None,
+        })
+        .collect();
+    let client = Client { host: t.host.into(), port: t.port, trusted: t.trusted.clone(), rejected: rejected.clone(), remote };
     let config = Arc::new(config(t.opts));
     let mut handle = client::connect(config, (t.host, t.port), client).await.map_err(|e| {
         rejected.lock().unwrap().take().unwrap_or_else(|| format!("Verbindung fehlgeschlagen: {e}"))
@@ -215,7 +248,12 @@ pub async fn connect(t: &Target<'_>) -> Result<Handle<Client>, String> {
 }
 
 pub async fn open(t: Target<'_>, cols: u32, rows: u32, on_event: Channel<ShellEvent>) -> Result<Shell, String> {
-    let handle = connect(&t).await?;
+    let handle = Arc::new(connect(&t).await?);
+    let note = on_event.clone();
+    let forwards = forward::start(&handle, &t.forwards, move |m| {
+        let _ = note.send(ShellEvent::Data { data: format!("\x1b[2m[Sesam] {m}\x1b[0m\r\n").into_bytes() });
+    })
+    .await;
     let channel = handle.channel_open_session().await.map_err(|e| e.to_string())?;
     channel.request_pty(false, "xterm-256color", cols, rows, 0, 0, &[]).await.map_err(|e| e.to_string())?;
     channel.request_shell(false).await.map_err(|e| e.to_string())?;
@@ -237,7 +275,7 @@ pub async fn open(t: Target<'_>, cols: u32, rows: u32, on_event: Channel<ShellEv
         let _ = on_event.send(ShellEvent::Closed { reason });
     });
 
-    Ok(Shell { handle, writer })
+    Ok(Shell { handle, writer, _forwards: forwards })
 }
 
 impl Shell {

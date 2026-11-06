@@ -108,6 +108,10 @@
           </label>
           <label>SSH-Keepalive (Sekunden)<input name="sshKeepalive" type="number" min="0" max="3600" class="mono" placeholder="0 = aus" /></label>
           <label class="option"><span><b>SSH-Kompression</b><small>Hilft bei langsamen Leitungen</small></span><input type="checkbox" name="sshCompression" /></label>
+          <label class="span">Portweiterleitungen (aktiv, solange eine Shell offen ist)
+            <textarea name="forwards" rows="3" class="mono" spellcheck="false" placeholder="L8080 localhost:80&#10;R9000 localhost:3000&#10;D1080"></textarea>
+            <small class="note">Je Zeile eine Regel: L = lokaler Port über den Server, R = Server-Port hierher, D = SOCKS5-Proxy. Lokal nur auf 127.0.0.1.</small>
+          </label>
           <label class="option warn"><span><b>Veraltete Algorithmen erlauben</b><small>Für alte Server: SHA-1, CBC, 3DES, ssh-rsa. Schwächer, nur wenn nötig.</small></span><input type="checkbox" name="sshLegacy" /></label>
           <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
         </details>

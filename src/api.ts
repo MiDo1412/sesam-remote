@@ -30,6 +30,8 @@ export interface Connection {
   /** Sekunden, 0 = aus */
   sshKeepalive: number;
   sshCompression: boolean;
+  /** Portweiterleitungen der Shell: «L8080 localhost:80», «R9000 localhost:3000», «D1080» */
+  forwards: string[];
   lastUsed: string | null;
 }
 

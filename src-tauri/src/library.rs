@@ -45,6 +45,8 @@ pub struct Connection {
     /// SSH-Keepalive in Sekunden, 0 = aus.
     pub ssh_keepalive: u32,
     pub ssh_compression: bool,
+    /// Portweiterleitungen der Shell, je eine Regel wie `L8080 localhost:80`, `R9000 localhost:3000`, `D1080`.
+    pub forwards: Vec<String>,
     pub last_used: Option<String>,
 }
 
@@ -76,6 +78,7 @@ impl Default for Connection {
             ssh_legacy: false,
             ssh_keepalive: 0,
             ssh_compression: false,
+            forwards: Vec::new(),
             last_used: None,
         }
     }
@@ -103,6 +106,12 @@ impl Connection {
         }
         if !["auto", "sftp", "scp"].contains(&self.file_transfer.as_str()) {
             return Err("Unbekannte Dateiübertragung".into());
+        }
+        if self.forwards.len() > 32 {
+            return Err("Höchstens 32 Weiterleitungen".into());
+        }
+        for f in &self.forwards {
+            crate::forward::parse(f)?;
         }
         if !["landscape", "portrait"].contains(&self.orientation.as_str()) {
             return Err("Unbekannte Ausrichtung".into());
@@ -176,6 +185,9 @@ mod tests {
         assert!(Connection { ssh_port: Some(0), ..ok.clone() }.validate().is_err());
         assert!(Connection { rdp_port: Some(0), ..ok.clone() }.validate().is_err());
         assert!(Connection { desktop_protocol: "x".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { file_transfer: "ftp".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { forwards: vec!["L8080 localhost:80".into(), "D1080".into()], ..ok.clone() }.validate().is_ok());
+        assert!(Connection { forwards: vec!["L8080".into()], ..ok.clone() }.validate().is_err());
         assert!(Connection { default_view: "x".into(), ..ok }.validate().is_err());
     }
 

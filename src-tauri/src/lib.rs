@@ -1,5 +1,6 @@
 mod clipshare;
 mod diag;
+mod forward;
 mod library;
 mod rdp;
 mod rdp_redir;
@@ -104,6 +105,7 @@ fn ssh_target(c: &Connection, trust: Option<String>) -> Result<ssh::Target<'_>, 
         key: vault::get(&c.id, Kind::SshKey)?,
         trusted: trust,
         opts: ssh::Options { legacy: c.ssh_legacy, keepalive: c.ssh_keepalive, compression: c.ssh_compression },
+        forwards: Vec::new(),
     })
 }
 
@@ -118,7 +120,9 @@ async fn shell_open(
     on_event: Channel<ssh::ShellEvent>,
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
-    let shell = ssh::open(ssh_target(&c, trust)?, cols, rows, on_event).await?;
+    let mut t = ssh_target(&c, trust)?;
+    t.forwards = c.forwards.iter().map(|l| forward::parse(l)).collect::<Result<_, _>>()?;
+    let shell = ssh::open(t, cols, rows, on_event).await?;
     let sid = new_sid(&c.id);
     shells.0.lock().await.insert(sid.clone(), shell);
     Ok(sid)
