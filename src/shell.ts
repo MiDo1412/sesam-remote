@@ -2,7 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { api, HOSTKEY_UNKNOWN, type Connection } from "./api";
-import { ask } from "./ui";
+import { askHostKey, showView } from "./ui";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -10,11 +10,7 @@ let close: (() => void) | null = null;
 
 export async function openShell(c: Connection, onBack: () => void) {
   close?.();
-  $("library").hidden = true;
-  $("session").hidden = false;
-  $("terminal").hidden = false;
-  $("desktop").hidden = true;
-  $("desktop-tools").hidden = true;
+  showView("terminal");
   $("session-title").textContent = c.name;
   $("session-sub").textContent = `SSH · ${c.user}@${c.address}:${c.sshPort}`;
   const status = $("session-status");
@@ -50,8 +46,7 @@ export async function openShell(c: Connection, onBack: () => void) {
   };
   $("session-back").onclick = () => {
     close?.();
-    $("session").hidden = true;
-    $("library").hidden = false;
+    showView(null);
     onBack();
   };
 
@@ -68,16 +63,8 @@ export async function openShell(c: Connection, onBack: () => void) {
     } catch (e) {
       const msg = String(e);
       if (trust === null && msg.startsWith(HOSTKEY_UNKNOWN)) {
-        const [alg, fp] = msg.slice(HOSTKEY_UNKNOWN.length).split("|");
-        const ok = await ask(
-          "Unbekannter Server",
-          `${c.address} ist noch nicht bekannt. Vergleiche den Fingerabdruck mit dem Server (ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub), bevor du ihm vertraust.
-
-${alg}
-${fp}`,
-          "Vertrauen und verbinden",
-        );
-        if (ok) {
+        const fp = await askHostKey(c.address, msg);
+        if (fp) {
           trust = fp;
           continue;
         }

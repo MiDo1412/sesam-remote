@@ -39,6 +39,11 @@
           <div id="session-sub" class="sub"></div>
         </div>
         <div class="grow"></div>
+        <div id="files-tools" class="tools" hidden>
+          <button id="files-up" type="button" class="plain" title="Auswahl links auf den Server kopieren">Hochladen →</button>
+          <button id="files-down" type="button" class="plain" title="Auswahl rechts auf diesen Computer kopieren">← Herunterladen</button>
+          <button id="files-mkdir" type="button" class="plain">Neuer Ordner</button>
+        </div>
         <div id="desktop-tools" class="tools" hidden>
           <div class="segmented dark" role="radiogroup" aria-label="Anzeige">
             <label title="Entfernte Auflösung folgt der Fenstergrösse"><input type="radio" name="viewMode" value="fit" />An Fenster anpassen</label>
@@ -59,6 +64,7 @@
       </header>
       <div id="terminal" class="terminal"></div>
       <div id="desktop" class="desktop" hidden></div>
+      <div id="files" class="files" hidden></div>
       <div id="session-status" role="status" class="status"></div>
     </div>
 
@@ -129,6 +135,7 @@
       <form method="dialog" class="alert">
         <h2 id="ask-title"></h2>
         <p id="ask-text"></p>
+        <input id="ask-input" hidden autocomplete="off" spellcheck="false" aria-labelledby="ask-text" />
         <div class="pair">
           <button value="cancel" id="ask-cancel">Abbrechen</button>
           <button value="ok" id="ask-ok" class="primary">OK</button>

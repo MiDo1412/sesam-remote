@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, CERT_CHANGED, CERT_UNKNOWN, type Connection } from "./api";
-import { ask } from "./ui";
+import { ask, showView } from "./ui";
 import { keysym } from "./keysym";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -10,11 +10,7 @@ let close: (() => void) | null = null;
 
 export async function openDesktop(c: Connection, onBack: () => void) {
   close?.();
-  $("library").hidden = true;
-  $("session").hidden = false;
-  $("terminal").hidden = true;
-  $("desktop").hidden = false;
-  $("desktop-tools").hidden = false;
+  showView("desktop");
   $("session-title").textContent = c.name;
   $("session-sub").textContent = `VNC · ${c.address}:${c.vncPort}`;
   const status = $("session-status");
@@ -222,11 +218,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
   };
   $("session-back").onclick = () => {
     close?.();
-    $("session").hidden = true;
-    $("desktop").hidden = true;
-    $("desktop-tools").hidden = true;
-    $("terminal").hidden = false;
-    $("library").hidden = false;
+    showView(null);
     onBack();
   };
 

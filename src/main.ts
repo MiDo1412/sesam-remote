@@ -1,6 +1,7 @@
 import { api, type Connection } from "./api";
 import { openShell } from "./shell";
 import { openDesktop } from "./desktop";
+import { openFiles } from "./files";
 import { ask, tell } from "./ui";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -106,8 +107,7 @@ function renderDetails() {
 function open(c: Connection, view: Connection["defaultView"]) {
   if (view === "shell") return openShell(c, reload);
   if (view === "desktop") return openDesktop(c, reload);
-  // shortcut: Dateien (SFTP) folgt in einem späteren Meilenstein.
-  tell("Noch nicht verfügbar", "Der Dateitransfer folgt in einem späteren Meilenstein.");
+  return openFiles(c, reload);
 }
 
 // ---------- Sheet «Verbindung bearbeiten» ----------

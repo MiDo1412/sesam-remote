@@ -26,6 +26,24 @@ export const HOSTKEY_UNKNOWN = "HOSTKEY_UNKNOWN:";
 export const CERT_UNKNOWN = "CERT_UNKNOWN:";
 export const CERT_CHANGED = "CERT_CHANGED:";
 
+export interface Entry {
+  name: string;
+  dir: boolean;
+  size: number;
+  /** Sekunden seit 1970 */
+  modified: number | null;
+}
+export interface Listing {
+  path: string;
+  /** null = oberste Ebene; "" = Laufwerksliste (Windows) */
+  parent: string | null;
+  entries: Entry[];
+}
+export type Progress =
+  | { state: "running"; done: number; total: number; file: string }
+  | { state: "done"; target: string }
+  | { state: "failed"; error: string };
+
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
   /** Geheimnisse: undefined = unverändert, "" = löschen */
@@ -51,4 +69,17 @@ export const api = {
   vncSetSize: (sid: string, width: number, height: number) => invoke<boolean>("vnc_set_size", { sid, width, height }),
   vncClipboardSync: (sid: string) => invoke<void>("vnc_clipboard_sync", { sid }),
   vncClose: (sid: string) => invoke<void>("vnc_close", { sid }),
+  sftpOpen: (id: string, trust: string | null) => invoke<string>("sftp_open", { id, trust }),
+  sftpList: (sid: string, path: string) => invoke<Listing>("sftp_list", { sid, path }),
+  sftpMkdir: (sid: string, dir: string, name: string) => invoke<string>("sftp_mkdir", { sid, dir, name }),
+  sftpClose: (sid: string) => invoke<void>("sftp_close", { sid }),
+  localList: (path: string) => invoke<Listing>("local_list", { path }),
+  localHome: () => invoke<string>("local_home"),
+  /** upload: lokal → Server; sonst Server → lokal. Gibt die Übertragungs-ID zurück. */
+  transferStart: (sid: string, upload: boolean, src: string, destDir: string, onProgress: (p: Progress) => void) => {
+    const ch = new Channel<Progress>();
+    ch.onmessage = onProgress;
+    return invoke<string>("transfer_start", { sid, upload, src, destDir, onProgress: ch });
+  },
+  transferCancel: (tid: string) => invoke<void>("transfer_cancel", { tid }),
 };
