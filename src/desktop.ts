@@ -361,7 +361,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
           (changed
             ? `Das TLS-Zertifikat von ${c.address} ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn du das Zertifikat selbst erneuert hast.`
             : `${c.address} verschlüsselt mit einem eigenen Zertifikat. Vergleiche den Fingerabdruck mit dem Server, bevor du ihm vertraust.`) +
-            `\n\n${fp}`,
+            `\n\nSHA-256:\n${fp.replace(/^SHA256:/, "").toLowerCase()}`,
           changed ? "Neuem Zertifikat vertrauen" : "Vertrauen und verbinden",
         );
         if (ok) {

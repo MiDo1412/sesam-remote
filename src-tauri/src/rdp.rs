@@ -2,6 +2,8 @@
 //! Display Control (Auflösung folgt dem Fenster) und Server-Redirection (GNOME-Übergabe nach dem Login).
 //! Bild und Ereignisse gehen über dieselben `vnc::Event`s wie bei VNC, damit die Anzeige gleich bleibt.
 
+use crate::diag;
+use crate::rdp_redir::{self, Redir};
 use crate::vnc::Event;
 use crate::vnc::decode::Rect;
 use crate::vnc::tls::{CERT_CHANGED, CERT_UNKNOWN, fingerprint};
@@ -15,7 +17,6 @@ use ironrdp_egfx::client::{GraphicsPipelineClient, GraphicsPipelineHandler};
 use ironrdp_input::{Database, MouseButton, MousePosition, Operation, Scancode, WheelRotations};
 use ironrdp_pdu::gcc;
 use ironrdp_pdu::geometry::InclusiveRectangle;
-use ironrdp_pdu::rdp::server_redirection::{ServerRedirectionFlags, ServerRedirectionPdu};
 use ironrdp_session::image::DecodedImage;
 use ironrdp_session::{ActiveStage, ActiveStageBuilder, ActiveStageOutput};
 use ironrdp_tokio::{FramedWrite, TokioFramed, single_sequence_step_read, split_tokio_framed};
@@ -250,8 +251,8 @@ fn utf16_text(b: &[u8]) -> Option<String> {
 }
 
 /// Ziel und Anmeldung für den nächsten Versuch anpassen ([MS-RDPBCGR] 3.2.5.13.1).
-fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &ServerRedirectionPdu) -> Result<(), String> {
-    if r.flags.contains(ServerRedirectionFlags::PASSWORD_IS_PK_ENCRYPTED) && r.password.is_some() {
+fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &Redir) -> Result<(), String> {
+    if r.password_pk_encrypted && r.password.is_some() {
         return Err("Der Server leitet mit verschlüsseltem Passwort (RDSTLS) um; das wird nicht unterstützt".into());
     }
     let routing_token = match r.load_balance_info.as_deref() {
@@ -269,7 +270,7 @@ fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &ServerRedirectionPdu) -> Re
     let host = r
         .target_net_address
         .iter()
-        .chain(r.target_net_addresses.iter().flatten())
+        .chain(r.target_net_addresses.iter())
         .chain(r.target_fqdn.iter())
         .chain(r.target_netbios_name.iter())
         .find(|h| !h.is_empty())
@@ -282,8 +283,22 @@ fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &ServerRedirectionPdu) -> Re
     }
     // GNOME (und FreeRDP) nutzen das Passwort aus der Umleitung auch für NLA.
     if let Some(pw) = r.password.as_deref().and_then(utf16_text) {
+        diag::add_secret(&pw);
         t.password = pw;
     }
+    // Das Ziel zeigt ein anderes Zertifikat (z. B. das der Benutzersitzung); das aus der Umleitung gilt ohne Rückfrage.
+    if let Some(der) = &r.target_cert {
+        t.expected_cert = Some(fingerprint(der));
+    }
+    tracing::info!(
+        session_id = r.session_id,
+        host = ?host,
+        routing_token = routing_token.is_some(),
+        cookie = r.password.is_some(),
+        target_cert = r.target_cert.is_some(),
+        user = ?r.username,
+        "Umleitung übernommen"
+    );
     *hop = Hop { host, session_id: r.session_id, routing_token, cookie: r.password.clone() };
     Ok(())
 }
@@ -348,10 +363,11 @@ type Framed = TokioFramed<ironrdp_tls::TlsStream<TcpStream>>;
 /// Ein Verbindungsversuch bis zum Ende des Verbindungsaufbaus.
 async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(ConnectionOutcome, Framed), String> {
     let host = hop.host.clone().unwrap_or_else(|| t.host.clone());
+    tracing::info!(%host, port = t.port, user = %t.user, redirected = hop.session_id != 0 || hop.routing_token.is_some(), "RDP: TCP");
     let tcp = tokio::time::timeout(std::time::Duration::from_secs(15), TcpStream::connect((host.as_str(), t.port)))
         .await
-        .map_err(|_| "Zeitüberschreitung beim Verbinden".to_string())?
-        .map_err(|e| format!("Verbindung fehlgeschlagen: {e}"))?;
+        .map_err(|_| "TCP: Zeitüberschreitung beim Verbinden".to_string())?
+        .map_err(|e| format!("TCP: Verbindung fehlgeschlagen: {e}"))?;
     let _ = tcp.set_nodelay(true);
     let client_addr = tcp.local_addr().map_err(|e| e.to_string())?;
 
@@ -386,7 +402,8 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     }
 
     let mut framed = TokioFramed::new(tcp);
-    let should_upgrade = ironrdp_tokio::connect_begin(&mut framed, &mut connector).await.map_err(err)?;
+    tracing::info!("RDP: Aushandlung (X.224)");
+    let should_upgrade = ironrdp_tokio::connect_begin(&mut framed, &mut connector).await.map_err(|e| phase("Aushandlung", e))?;
     let (tcp, leftover) = framed.into_inner();
 
     // Zertifikate mit gültiger Kette akzeptiert rustls selbst; sonst entscheidet das Pinning.
@@ -398,16 +415,20 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
         *seen2.lock().unwrap() = Some(fp);
         ok
     });
+    tracing::info!("RDP: TLS");
     let (tls, cert) = ironrdp_tls::upgrade_with_certificate_validation_callback(tcp, &t.host, callback).await.map_err(|e| {
-        match (seen.lock().unwrap().clone(), &t.expected_cert) {
+        let seen = seen.lock().unwrap().clone();
+        tracing::warn!(error = %e, seen = ?seen, expected = ?t.expected_cert, "RDP: TLS gescheitert");
+        match (seen, &t.expected_cert) {
             (Some(fp), None) => format!("{CERT_UNKNOWN}{fp}"),
             (Some(fp), Some(want)) if &fp != want => format!("{CERT_CHANGED}{fp}"),
-            _ => format!("TLS-Verbindung fehlgeschlagen: {e}"),
+            _ => format!("TLS: Verbindung fehlgeschlagen: {e}"),
         }
     })?;
     let upgraded = ironrdp_tokio::mark_as_upgraded(should_upgrade, &mut connector);
     let key = ironrdp_tls::extract_tls_server_public_key(&cert).ok_or("Öffentlicher Schlüssel des Servers fehlt")?.to_vec();
     let mut framed = TokioFramed::new_with_leftover(tls, leftover);
+    tracing::info!("RDP: Anmeldung (NLA/CredSSP) und Verbindungsaufbau");
     let outcome = ironrdp_tokio::connect_finalize(
         upgraded,
         connector,
@@ -418,7 +439,8 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
         None,
     )
     .await
-    .map_err(err)?;
+    .map_err(login_err)?;
+    tracing::info!(redirected = matches!(outcome, ConnectionOutcome::Redirected(_)), "RDP: verbunden");
     Ok((outcome, framed))
 }
 
@@ -452,12 +474,29 @@ fn drive_channel(dir: &std::path::Path) -> Result<ironrdp_rdpdr::Rdpdr, String> 
     Ok(ironrdp_rdpdr::Rdpdr::new(backend, "Sesam Remote".into()).with_drives(Some(drives)))
 }
 
-fn err(e: impl std::fmt::Display) -> String {
-    let s = e.to_string();
-    if s.contains("LogonFailure") || s.contains("logon failure") || s.contains("SEC_E_LOGON_DENIED") {
-        "Anmeldung abgelehnt (Benutzer, Passwort oder Domäne prüfen)".into()
+/// Fehler mit allen Ursachen, ohne Geheimnisse; landet auch im Log.
+fn err<E: std::error::Error + 'static>(e: E) -> String {
+    let s = diag::chain(&e);
+    tracing::warn!(error = %s, "RDP-Fehler");
+    s
+}
+
+fn phase<E: std::error::Error + 'static>(name: &str, e: E) -> String {
+    format!("{name}: {}", err(e))
+}
+
+/// Fehler bei Anmeldung und Verbindungsaufbau: Ablehnung klar von Protokollfehlern trennen.
+fn login_err<E: std::error::Error + 'static>(e: E) -> String {
+    let s = err(e);
+    let lower = s.to_lowercase();
+    if ["logon_failure", "logonfailure", "logon failure", "sec_e_logon_denied", "access_denied", "access denied", "wrong password"].iter().any(|k| lower.contains(k)) {
+        "Anmeldung abgelehnt: Benutzer oder Passwort stimmen nicht (bei GNOME: die Zugangsdaten aus grdctl).".into()
+    } else if ["read frame", "eof", "connection reset", "10054", "broken pipe"].iter().any(|k| lower.contains(k)) {
+        format!(
+            "Anmeldung: Der Server hat die Verbindung beendet. Meist sind die RDP-Zugangsdaten falsch oder auf dem Server nicht gesetzt (grdctl … set-credentials). Details: {s}"
+        )
     } else {
-        format!("RDP: {s}")
+        format!("Anmeldung/Verbindungsaufbau: {s}")
     }
 }
 
@@ -473,6 +512,7 @@ pub async fn open(
     (tx, rx): (UnboundedSender<Input>, UnboundedReceiver<Input>),
     emit: impl Fn(Event) -> bool + Send + Sync + 'static,
 ) -> Result<Session, String> {
+    diag::add_secret(&t.password);
     let mut hop = Hop::default();
     let mut redirects = 0;
     let (result, framed) = loop {
@@ -484,7 +524,7 @@ pub async fn open(
                 if redirects > MAX_REDIRECTS {
                     return Err("Zu viele Umleitungen".into());
                 }
-                apply_redirect(&mut t, &mut hop, &r)?;
+                apply_redirect(&mut t, &mut hop, &Redir::from(&*r))?;
             }
         }
     };
@@ -494,7 +534,7 @@ pub async fn open(
 
 enum Flow {
     Closed(String),
-    Redirect(Box<ServerRedirectionPdu>),
+    Redirect(Redir),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -551,7 +591,7 @@ async fn reconnect(t: &mut Target, hop: &mut Hop, seen: &SeenCert, redirects: &m
                 if *redirects > MAX_REDIRECTS {
                     return Err("Zu viele Umleitungen".into());
                 }
-                apply_redirect(t, hop, &r)?;
+                apply_redirect(t, hop, &Redir::from(&*r))?;
             }
         }
     }
@@ -616,8 +656,20 @@ async fn active(
                 continue;
             }
             frame = reader.read_pdu() => {
-                let (action, payload) = frame.map_err(|e| format!("Verbindung beendet: {e}"))?;
-                stage.process(&mut image, action, &payload, reader.last_read_at()).map_err(err)?
+                let (action, payload) = frame.map_err(|e| format!("Sitzung: Verbindung beendet: {e}"))?;
+                match stage.process(&mut image, action, &payload, reader.last_read_at()) {
+                    Ok(out) => out,
+                    Err(e) => {
+                        // IronRDP scheitert an GNOMEs Umleitung nach dem Login: selbst nachsehen.
+                        if let Some(r) = rdp_redir::find(&payload).filter(|r| r.load_balance_info.is_some() || r.password.is_some() || r.target_net_address.is_some()) {
+                            tracing::info!(error = %diag::chain(&e), "Umleitung über eigenen Decoder erkannt");
+                            return Ok(Flow::Redirect(r));
+                        }
+                        let head: String = payload.iter().take(24).map(|b| format!("{b:02x}")).collect();
+                        tracing::warn!(len = payload.len(), head = %head, "Rahmen nicht lesbar");
+                        return Err(format!("Sitzung: {}", err(e)));
+                    }
+                }
             }
             msg = rx.recv() => {
                 let Some(msg) = msg else { return Ok(Flow::Closed("Fenster geschlossen".into())) };
@@ -723,7 +775,7 @@ async fn active(
                         }
                         match seq.connection_activation_state() {
                             ironrdp_connector::connection_activation::ConnectionActivationState::Redirected { redirection } => {
-                                return Ok(Flow::Redirect(redirection));
+                                return Ok(Flow::Redirect(Redir::from(&*redirection)));
                             }
                             ironrdp_connector::connection_activation::ConnectionActivationState::Finalized {
                                 desktop_size,
@@ -753,7 +805,7 @@ async fn active(
                         }
                     }
                 }
-                ActiveStageOutput::ServerRedirection(r) => return Ok(Flow::Redirect(r)),
+                ActiveStageOutput::ServerRedirection(r) => return Ok(Flow::Redirect(Redir::from(&*r))),
                 ActiveStageOutput::Terminate(reason) => return Ok(Flow::Closed(reason.to_string())),
                 _ => {}
             }
@@ -834,11 +886,12 @@ mod tests {
         };
         let mut hop = Hop::default();
         let pw: Vec<u8> = "einmal".encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
-        let r = ServerRedirectionPdu {
+        let r = Redir {
             session_id: 7,
             load_balance_info: Some(b"Cookie: msts=abc\r\n".to_vec()),
             username: Some("mike".into()),
             password: Some(pw.clone()),
+            target_cert: Some(vec![0x30, 1, 2]),
             ..Default::default()
         };
         apply_redirect(&mut t, &mut hop, &r).unwrap();
@@ -847,8 +900,48 @@ mod tests {
         assert_eq!(hop.host, None, "ohne Zieladresse derselbe Host");
         assert_eq!(hop.cookie, Some(pw));
         assert_eq!(t.password, "einmal");
+        assert_eq!(t.expected_cert, Some(fingerprint(&[0x30, 1, 2])), "Ziel-Zertifikat gilt ohne Rückfrage");
 
-        let bad = ServerRedirectionPdu { load_balance_info: Some(vec![1, 2, 3]), ..Default::default() };
+        let bad = Redir { load_balance_info: Some(vec![1, 2, 3]), ..Default::default() };
         assert!(apply_redirect(&mut t, &mut hop, &bad).is_err());
+    }
+}
+
+/// Probe gegen einen echten Server, ohne Zugangsdaten (falsches Passwort):
+/// `SESAM_RDP_PROBE=192.168.1.4:3389 cargo test --lib probe -- --ignored --nocapture`
+#[cfg(test)]
+mod probe {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn probe_real_server() {
+        let Ok(addr) = std::env::var("SESAM_RDP_PROBE") else { return };
+        let (host, port) = addr.rsplit_once(':').unwrap();
+        let mut t = Target {
+            host: host.into(),
+            port: port.parse().unwrap(),
+            user: "sesam-probe".into(),
+            domain: None,
+            password: "absichtlich-falsch".into(),
+            expected_cert: None,
+            width: 1280,
+            height: 800,
+            clipboard: None,
+            audio: false,
+            share: None,
+        };
+        for round in 1..=2 {
+            let seen: SeenCert = Default::default();
+            let r = open(t.clone(), seen.clone(), channel(), |_| true).await;
+            match r {
+                Ok(_) => println!("Runde {round}: verbunden (unerwartet ohne Zugangsdaten)"),
+                Err(e) => println!("Runde {round}: {e}"),
+            }
+            match seen.lock().unwrap().clone() {
+                Some(fp) => t.expected_cert = Some(fp),
+                None => break,
+            }
+        }
     }
 }

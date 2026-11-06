@@ -167,8 +167,9 @@ function edit(c: Connection | null) {
   f.password.value = "";
   f.vncPassword.value = "";
   clearing.clear();
-  showPwHint("vnc-pw", editing.hasVncPassword, "Nur nötig, wenn der Server ein eigenes VNC-Passwort hat. Sonst gilt das Passwort des Benutzers.");
-  showPwHint("rdp-pw", editing.hasRdpPassword, "Leer = Passwort des Benutzers.");
+  showPwHint("vnc-pw", editing.hasVncPassword, "Leer = Passwort oben.");
+  showPwHint("rdp-pw", editing.hasRdpPassword, "Leer = Passwort oben.");
+  ($("extra-creds") as HTMLDetailsElement).open = editing.hasVncPassword || editing.hasRdpPassword;
   syncDesktopRow();
   showPwHint("pw", editing.hasPassword, "");
   f.sharedClipboard.checked = editing.sharedClipboard;

@@ -107,6 +107,12 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
 .sheet small { font-weight: 400; color: var(--muted); }
 .hint { display: flex; align-items: baseline; gap: 8px; }
 .pick { display: flex; gap: 8px; }
+.sheet .note { font-size: 12px; font-weight: 400; color: var(--muted); margin: 0; }
+#extra-creds summary { cursor: default; color: var(--accent); font-size: 13px; }
+#extra-creds .pair { gap: 16px; margin-top: 8px; }
+#extra-creds label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+#extra-creds input { font-weight: 400; color: var(--text); font-size: 13px; }
+#extra-creds .note { margin-top: 6px; }
 .pick input { flex: 1; min-width: 0; }
 button.link { height: auto; padding: 0; border: 0; background: none; color: var(--accent); font-size: 12px; font-weight: 400; }
 .span, .sheet hr, .sheet .row { grid-column: span 2; }

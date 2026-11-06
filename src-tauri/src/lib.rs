@@ -1,6 +1,8 @@
 mod clipshare;
+mod diag;
 mod library;
 mod rdp;
+mod rdp_redir;
 mod sftp;
 mod ssh;
 mod vault;
@@ -606,6 +608,7 @@ pub fn run() {
                 }
             });
             let dir = app.path().app_data_dir()?;
+            diag::init(&dir);
             app.manage(LibraryPath(dir.join("library.json")));
             app.manage(ssh::Shells::default());
             app.manage(Desktops::default());

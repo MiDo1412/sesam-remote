@@ -83,20 +83,13 @@
           <legend>Desktop <small>VNC</small> <button type="button" class="help-btn" data-help="vnc" aria-label="Hilfe zu VNC">?</button></legend>
           <label class="switch"><input type="checkbox" name="vncOn" /> Aktiv</label>
           <label>Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
-          <label class="span">VNC-Passwort
-            <input name="vncPassword" type="password" autocomplete="new-password" />
-            <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
-          </label>
         </fieldset>
         <fieldset>
           <legend>Desktop <small>RDP</small> <button type="button" class="help-btn" data-help="rdp-gnome" aria-label="Hilfe zu RDP">?</button></legend>
           <label class="switch"><input type="checkbox" name="rdpOn" /> Aktiv</label>
           <label>Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
-          <label>Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="optional" /></label>
-          <label>RDP-Passwort
-            <input name="rdpPassword" type="password" autocomplete="new-password" />
-          </label>
-          <span class="hint span"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
+          <label class="span">Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="optional, nur in Windows-Domänen" /></label>
+          <small class="span note">Bei GNOME (Ubuntu): Benutzer und Passwort aus grdctl, nicht dein Ubuntu-Passwort. Dein Ubuntu-Konto gibst du danach am Anmeldebildschirm ein.</small>
           <label class="span">Ordner als Laufwerk freigeben
             <span class="pick">
               <input name="sharedFolder" class="mono" placeholder="aus" readonly />
@@ -112,7 +105,11 @@
         </fieldset>
         <hr />
         <label>Benutzer<input name="user" autocomplete="off" /></label>
-        <label>SSH-Schlüssel
+        <label>Passwort
+          <input name="password" type="password" autocomplete="new-password" />
+          <span class="hint"><small id="pw-hint"></small><button type="button" class="link" id="pw-clear" hidden>Entfernen</button></span>
+        </label>
+        <label class="span">SSH-Schlüssel
           <select name="keyMode">
             <option value="keep">Unverändert</option>
             <option value="none">Keiner, nur Passwort</option>
@@ -122,10 +119,20 @@
         <label class="span" id="key-row" hidden>Privater ed25519-Schlüssel (OpenSSH-Format)
           <textarea name="key" rows="4" class="mono" spellcheck="false"></textarea>
         </label>
-        <label class="span">Passwort des Benutzers <small>für SSH und die macOS-Bildschirmfreigabe</small>
-          <input name="password" type="password" autocomplete="new-password" />
-          <span class="hint"><small id="pw-hint"></small><button type="button" class="link" id="pw-clear" hidden>Entfernen</button></span>
-        </label>
+        <details id="extra-creds" class="span">
+          <summary>Abweichende Zugangsdaten …</summary>
+          <p class="note">Nur nötig, wenn ein Dienst ein anderes Passwort hat. Sonst gilt das Passwort oben für alle.</p>
+          <div class="pair">
+            <label>VNC-Passwort
+              <input name="vncPassword" type="password" autocomplete="new-password" />
+              <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
+            </label>
+            <label>RDP-Passwort
+              <input name="rdpPassword" type="password" autocomplete="new-password" />
+              <span class="hint"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
+            </label>
+          </div>
+        </details>
         <hr />
         <label class="option"><span><b>Gemeinsame Zwischenablage</b><small>Text, Bilder und Dateien hier kopieren, dort einfügen</small></span><input type="checkbox" name="sharedClipboard" /></label>
         <label class="option"><span><b>Ton abspielen</b><small>Ton des entfernten Rechners hier hören (RDP)</small></span><input type="checkbox" name="playAudio" /></label>

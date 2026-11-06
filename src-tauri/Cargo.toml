@@ -58,6 +58,10 @@ ironrdp-rdpsnd-native = { version = "0.8", default-features = false }
 ironrdp-rdpdr = "0.9"
 ironrdp-rdpdr-native = "0.9"
 tauri-plugin-dialog = "2"
+# Diagnose-Log und nachsichtiger Redirection-Decoder
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std", "registry"] }
+base64 = "0.22"
 # Zwischenablage mit Dateilisten und Bildern; Bilder gehen als PNG auf den Server
 arboard = "3"
 png = "0.18"
