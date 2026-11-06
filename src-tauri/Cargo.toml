@@ -50,10 +50,15 @@ ironrdp-displaycontrol = "0.10"
 ironrdp-egfx = "0.5"
 ironrdp-input = "0.9"
 ironrdp-graphics = "0.11"
+ironrdp-cliprdr = "0.9"
 # Zwischenablage mit Dateilisten und Bildern; Bilder gehen als PNG auf den Server
 arboard = "3"
 png = "0.18"
 chrono = "0.4"
+
+# Windows-Zwischenablage für RDP (Text, Bilder, Dateien)
+[target.'cfg(windows)'.dependencies]
+ironrdp-cliprdr-native = "0.9"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

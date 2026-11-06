@@ -233,7 +233,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
   };
   window.addEventListener("keydown", onF11);
   $("fullscreen").onclick = toggleFullscreen;
-  // shortcut: Zwischenablage über RDP (cliprdr) folgt; bis dahin nur bei VNC.
+  // RDP gleicht die Zwischenablage selbst ab (cliprdr); nur VNC braucht den Anstoss beim Fokussieren.
   const syncClipboard = () => sid && !rdp && c.sharedClipboard && api.vncClipboardSync(sid).catch(() => {});
   window.addEventListener("focus", syncClipboard);
   canvas.addEventListener("focus", syncClipboard);

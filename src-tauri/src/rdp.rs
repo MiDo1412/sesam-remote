@@ -5,6 +5,8 @@
 use crate::vnc::Event;
 use crate::vnc::decode::Rect;
 use crate::vnc::tls::{CERT_CHANGED, CERT_UNKNOWN, fingerprint};
+use ironrdp_cliprdr::backend::{ClipboardMessage, ClipboardMessageProxy, CliprdrBackendFactory};
+use ironrdp_cliprdr::CliprdrClient;
 use ironrdp_connector::sspi::generator::NetworkRequest;
 use ironrdp_connector::{ClientConnector, ConnectionOutcome, ConnectionResult, ConnectorResult, Credentials, DesktopSize};
 use ironrdp_displaycontrol::client::DisplayControlClient;
@@ -35,6 +37,20 @@ pub struct Target {
     pub expected_cert: Option<String>,
     pub width: u16,
     pub height: u16,
+    /// Zwischenablage (cliprdr); für jede Verbindung, auch nach Umleitungen, ein neues Backend.
+    pub clipboard: Option<ClipFactory>,
+}
+
+pub type ClipFactory = Arc<Mutex<Box<dyn CliprdrBackendFactory + Send>>>;
+
+/// Leitet Meldungen des Zwischenablage-Backends in die Sitzungsschleife.
+#[derive(Debug)]
+pub struct ClipProxy(pub UnboundedSender<Input>);
+
+impl ClipboardMessageProxy for ClipProxy {
+    fn send_clipboard_message(&self, message: ClipboardMessage) {
+        let _ = self.0.send(Input::Clipboard(message));
+    }
 }
 
 /// Eingaben vom Frontend.
@@ -46,6 +62,8 @@ pub enum Input {
     Unicode { ch: char, down: bool },
     Resize { width: u16, height: u16 },
     ReleaseAll,
+    /// Vom Zwischenablage-Backend.
+    Clipboard(ClipboardMessage),
 }
 
 /// Der TLS-Zertifikat-Fingerabdruck, den der Server gezeigt hat (für das Pinning nach Bestätigung).
@@ -323,6 +341,9 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     if let Some(cookie) = &hop.cookie {
         connector = connector.with_redirection_password_cookie(cookie.clone());
     }
+    if let Some(f) = &t.clipboard {
+        connector = connector.with_static_channel(CliprdrClient::new(f.lock().unwrap().build_cliprdr_backend()));
+    }
 
     let mut framed = TokioFramed::new(tcp);
     let should_upgrade = ironrdp_tokio::connect_begin(&mut framed, &mut connector).await.map_err(err)?;
@@ -370,8 +391,18 @@ fn err(e: impl std::fmt::Display) -> String {
     }
 }
 
+pub fn channel() -> (UnboundedSender<Input>, UnboundedReceiver<Input>) {
+    unbounded_channel()
+}
+
 /// Verbinden (inkl. Umleitungen während des Aufbaus) und Sitzung starten.
-pub async fn open(mut t: Target, seen: SeenCert, emit: impl Fn(Event) -> bool + Send + Sync + 'static) -> Result<Session, String> {
+/// `tx`/`rx` aus [`channel`]; `tx` darf vorher schon an das Zwischenablage-Backend gegangen sein.
+pub async fn open(
+    mut t: Target,
+    seen: SeenCert,
+    (tx, rx): (UnboundedSender<Input>, UnboundedReceiver<Input>),
+    emit: impl Fn(Event) -> bool + Send + Sync + 'static,
+) -> Result<Session, String> {
     let mut hop = Hop::default();
     let mut redirects = 0;
     let (result, framed) = loop {
@@ -387,7 +418,6 @@ pub async fn open(mut t: Target, seen: SeenCert, emit: impl Fn(Event) -> bool + 
             }
         }
     };
-    let (tx, rx) = unbounded_channel();
     let task = tokio::spawn(run(t, hop, seen, result, framed, rx, emit, redirects));
     Ok(Session { tx, task })
 }
@@ -501,9 +531,20 @@ async fn active(
     if !emit(Event::Resize { width: size.width, height: size.height }) {
         return Ok(Flow::Closed("Fenster geschlossen".into()));
     }
+    // Zeitüberschreitungen der Zwischenablage (Sperren) regelmässig abarbeiten.
+    let mut clip_tick = tokio::time::interval(std::time::Duration::from_secs(5));
 
     loop {
         let outputs = tokio::select! {
+            _ = clip_tick.tick() => {
+                let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { continue };
+                let msgs = c.drive_timeouts().map_err(err)?;
+                let frame = stage.process_svc_processor_messages(msgs).map_err(err)?;
+                if !frame.is_empty() {
+                    writer.write_all(&frame).await.map_err(|e| e.to_string())?;
+                }
+                continue;
+            }
             frame = reader.read_pdu() => {
                 let (action, payload) = frame.map_err(|e| format!("Verbindung beendet: {e}"))?;
                 stage.process(&mut image, action, &payload, reader.last_read_at()).map_err(err)?
@@ -527,6 +568,27 @@ async fn active(
                         vec![if down { Operation::KeyPressed(s) } else { Operation::KeyReleased(s) }]
                     }
                     Input::Unicode { ch, down } => vec![if down { Operation::UnicodeKeyPressed(ch) } else { Operation::UnicodeKeyReleased(ch) }],
+                    Input::Clipboard(m) => {
+                        let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { continue };
+                        let msgs = match m {
+                            ClipboardMessage::SendInitiateCopy(f) => c.initiate_copy(&f),
+                            ClipboardMessage::SendInitiateFileCopy(f) => c.initiate_file_copy(f),
+                            ClipboardMessage::SendFormatData(r) => c.submit_format_data(r),
+                            ClipboardMessage::SendInitiatePaste(f) => c.initiate_paste(f),
+                            ClipboardMessage::SendFileContentsRequest(r) => c.request_file_contents(r),
+                            ClipboardMessage::SendFileContentsResponse(r) => c.submit_file_contents(r),
+                            ClipboardMessage::Error(e) => {
+                                emit(Event::Info(format!("Zwischenablage: {e}")));
+                                continue;
+                            }
+                        }
+                        .map_err(err)?;
+                        let frame = stage.process_svc_processor_messages(msgs).map_err(err)?;
+                        if !frame.is_empty() {
+                            writer.write_all(&frame).await.map_err(|e| e.to_string())?;
+                        }
+                        continue;
+                    }
                     Input::ReleaseAll => {
                         let events = input.release_all();
                         let out = stage.process_fastpath_input(&mut image, &events).map_err(err)?;
@@ -665,6 +727,7 @@ mod tests {
             expected_cert: None,
             width: 800,
             height: 600,
+            clipboard: None,
         };
         let mut hop = Hop::default();
         let pw: Vec<u8> = "einmal".encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();

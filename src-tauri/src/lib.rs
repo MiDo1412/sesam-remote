@@ -426,6 +426,43 @@ fn vnc_close(desktops: State<Desktops>, sid: String) {
 #[derive(Default)]
 struct RdpSessions(Mutex<HashMap<String, rdp::Session>>);
 
+// Das Windows-Zwischenablage-Backend braucht ein Fenster auf einem Thread mit Nachrichtenschleife:
+// es entsteht und lebt auf dem Tauri-Hauptthread, je RDP-Sitzung eines.
+#[cfg(windows)]
+thread_local! {
+    static WIN_CLIPS: std::cell::RefCell<HashMap<String, ironrdp_cliprdr_native::WinClipboard>> = Default::default();
+}
+
+#[cfg(windows)]
+async fn rdp_clipboard(app: &AppHandle, key: String, tx: tokio::sync::mpsc::UnboundedSender<rdp::Input>) -> Option<rdp::ClipFactory> {
+    let (otx, orx) = tokio::sync::oneshot::channel();
+    app.run_on_main_thread(move || {
+        let made = ironrdp_cliprdr_native::WinClipboard::with_file_transfer(rdp::ClipProxy(tx), true).ok().map(|c| {
+            let f = c.backend_factory();
+            WIN_CLIPS.with(|m| m.borrow_mut().insert(key, c));
+            f
+        });
+        let _ = otx.send(made);
+    })
+    .ok()?;
+    orx.await.ok().flatten().map(|f| Arc::new(Mutex::new(f)))
+}
+
+// shortcut: Zwischenablage über RDP nur unter Windows; für macOS fehlt ein natives cliprdr-Backend.
+#[cfg(not(windows))]
+async fn rdp_clipboard(_: &AppHandle, _: String, _: tokio::sync::mpsc::UnboundedSender<rdp::Input>) -> Option<rdp::ClipFactory> {
+    None
+}
+
+fn rdp_clipboard_drop(app: &AppHandle, key: String) {
+    #[cfg(windows)]
+    let _ = app.run_on_main_thread(move || {
+        WIN_CLIPS.with(|m| m.borrow_mut().remove(&key));
+    });
+    #[cfg(not(windows))]
+    let _ = (app, key);
+}
+
 fn screen_frame(e: vnc::Event) -> Option<InvokeResponseBody> {
     Some(match e {
         vnc::Event::Rect { rect: r, rgba } => frame(0, &[r.x, r.y, r.w, r.h], &rgba),
@@ -441,6 +478,7 @@ fn screen_frame(e: vnc::Event) -> Option<InvokeResponseBody> {
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 async fn rdp_open(
+    app: AppHandle,
     path: State<'_, LibraryPath>,
     sessions: State<'_, RdpSessions>,
     id: String,
@@ -464,14 +502,27 @@ async fn rdp_open(
         expected_cert: trust.clone().or_else(|| pins.get(&pin_key).cloned()),
         width: width.clamp(200, 8192),
         height: height.clamp(200, 8192),
+        clipboard: None,
     };
+    let sid = new_sid(&c.id);
+    let (tx, rx) = rdp::channel();
+    let mut target = target;
+    if c.shared_clipboard {
+        target.clipboard = rdp_clipboard(&app, sid.clone(), tx.clone()).await;
+    }
     let seen: rdp::SeenCert = Default::default();
-    let session = rdp::open(target, seen.clone(), move |e| screen_frame(e).is_none_or(|f| on_event.send(f).is_ok())).await?;
+    let opened = rdp::open(target, seen.clone(), (tx, rx), move |e| screen_frame(e).is_none_or(|f| on_event.send(f).is_ok())).await;
+    let session = match opened {
+        Ok(s) => s,
+        Err(e) => {
+            rdp_clipboard_drop(&app, sid);
+            return Err(e);
+        }
+    };
     if let Some(fp) = trust.filter(|fp| seen.lock().unwrap().as_ref() == Some(fp)) {
         pins.insert(pin_key, fp);
         let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
     }
-    let sid = new_sid(&c.id);
     sessions.0.lock().unwrap().insert(sid.clone(), session);
     Ok(sid)
 }
@@ -510,10 +561,11 @@ fn rdp_set_size(sessions: State<RdpSessions>, sid: String, width: u16, height: u
 }
 
 #[tauri::command]
-fn rdp_close(sessions: State<RdpSessions>, sid: String) {
+fn rdp_close(app: AppHandle, sessions: State<RdpSessions>, sid: String) {
     if let Some(s) = sessions.0.lock().unwrap().remove(&sid) {
         s.close();
     }
+    rdp_clipboard_drop(&app, sid);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
