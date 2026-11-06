@@ -387,6 +387,32 @@ async fn sftp_remove(files: State<'_, Files>, sid: String, path: String) -> Resu
 }
 
 #[tauri::command]
+async fn sftp_chmod(files: State<'_, Files>, sid: String, path: String, mode: u32) -> Result<(), String> {
+    match files_get(&files, &sid)? {
+        FileSession::Sftp(s) => s.chmod(&path, mode).await,
+        FileSession::Scp(_) => Err(scp::LIMITED.into()),
+    }
+}
+
+#[tauri::command]
+async fn sftp_touch(files: State<'_, Files>, sid: String, dir: String, name: String) -> Result<String, String> {
+    match files_get(&files, &sid)? {
+        FileSession::Sftp(s) => s.touch(&dir, &name).await,
+        FileSession::Scp(_) => Err(scp::LIMITED.into()),
+    }
+}
+
+#[tauri::command]
+fn local_mkdir(dir: String, name: String) -> Result<String, String> {
+    sftp::local_mkdir(&dir, &name)
+}
+
+#[tauri::command]
+fn local_rename(path: String, name: String) -> Result<String, String> {
+    sftp::local_rename(&path, &name)
+}
+
+#[tauri::command]
 fn sftp_close(files: State<Files>, sid: String) {
     files.0.lock().unwrap().remove(&sid);
 }
@@ -1058,6 +1084,10 @@ pub fn run() {
             sftp_rename,
             sftp_remove,
             sftp_close,
+            sftp_chmod,
+            sftp_touch,
+            local_mkdir,
+            local_rename,
             local_list,
             save_bytes,
             certs_list,

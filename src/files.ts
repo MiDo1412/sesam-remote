@@ -1,7 +1,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
 import { ask, askHostKey, askText, tell } from "./ui";
-import { openMenu } from "./menu";
+import { openMenu, type MenuItem } from "./menu";
 import { ICON } from "./icons";
 import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 
@@ -64,6 +64,12 @@ interface Pane {
 }
 
 /** Dateien (SFTP) als Tab. */
+/** 0o755 → «rwxr-xr-x» (mit d für Ordner). */
+function permText(m: number, dir: boolean) {
+  const r = [6, 3, 0].map((s) => ["r", "w", "x"].map((ch, i) => ((m >> (s + 2 - i)) & 1 ? ch : "-")).join("")).join("");
+  return (dir ? "d" : "-") + r;
+}
+
 export function filesTab(ctx: TabCtx): TabHandle {
   const c = ctx.conn;
   ctx.setSub(`SFTP über SSH · ${c.user}@${c.address}`);
@@ -88,6 +94,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
   host.append(grid, transfers);
 
   let sid: string | null = null;
+  let scp = false;
   const join = (p: Pane, name: string) => {
     const dir = p.listing!.path;
     return dir === "" ? name : dir.endsWith(p.sep) ? dir + name : dir + p.sep + name;
@@ -152,6 +159,12 @@ export function filesTab(ctx: TabCtx): TabHandle {
     hiddenBox.onchange = () => ((pane.hidden = hiddenBox.checked), render(pane));
     marks.onclick = () => bookmarkMenu(pane, marks);
     pathEl.ondblclick = () => editPath(pane);
+    scroller.oncontextmenu = (ev) => {
+      ev.preventDefault();
+      pane.selected.clear();
+      render(pane);
+      contextMenu(pane, scroller, null);
+    };
     return pane;
   }
 
@@ -240,11 +253,18 @@ export function filesTab(ctx: TabCtx): TabHandle {
         tr.ondblclick = () => activate(p, e);
         tr.onkeydown = (ev) => {
           if (ev.key === "Enter") activate(p, e);
-          if (p.side === "remote" && ev.key === "F2") renameRemote();
+          if (ev.key === "F2") p.side === "remote" ? renameRemote() : renameLocal();
           if (p.side === "remote" && ev.key === "Delete") deleteRemote();
           if (ev.key === "Backspace" && l.parent != null) load(p, l.parent);
         };
         tr.onpointerdown = (ev) => startDrag(p, e.name, ev);
+        tr.oncontextmenu = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (!p.selected.has(e.name)) select(p, e.name, false);
+          contextMenu(p, tr, e);
+        };
+        if (e.perm != null) tr.title = `${e.name}\nRechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         return tr;
       }),
     );
@@ -327,18 +347,89 @@ export function filesTab(ctx: TabCtx): TabHandle {
       .catch((e) => finish(`Fehler: ${e}`));
   }
 
-  const mkdir = async () => {
-    const dir = panes.remote.listing?.path;
-    if (!sid || !dir) return;
-    const name = await askText("Neuer Ordner", `In ${dir} auf ${c.name}`, "Anlegen", "Neuer Ordner");
+  const mkdir = async (p: Pane = panes.remote) => {
+    const dir = p.listing?.path;
+    if (!dir || (p.side === "remote" && !sid)) return;
+    const name = await askText("Neuer Ordner", `In ${dir}${p.side === "remote" ? ` auf ${c.name}` : ""}`, "Anlegen", "Neuer Ordner");
     if (!name) return;
     try {
-      await api.sftpMkdir(sid, dir, name);
-      await load(panes.remote, dir);
+      await (p.side === "remote" ? api.sftpMkdir(sid!, dir, name) : api.localMkdir(dir, name));
+      await load(p, dir);
     } catch (e) {
       tell("Ordner nicht angelegt", String(e));
     }
   };
+
+  async function newFile() {
+    const dir = panes.remote.listing?.path;
+    if (!sid || !dir) return;
+    const name = await askText("Neue Datei", `Leere Datei in ${dir} auf ${c.name}`, "Anlegen", "neu.txt");
+    if (!name) return;
+    try {
+      await api.sftpTouch(sid, dir, name);
+      await load(panes.remote, dir);
+    } catch (e) {
+      tell("Datei nicht angelegt", String(e));
+    }
+  }
+
+  async function renameLocal() {
+    const p = panes.local;
+    const [name] = p.selected;
+    if (!p.listing || p.selected.size !== 1) return void (status.textContent = "Bitte links genau ein Element wählen.");
+    const next = await askText("Umbenennen", `Neuer Name für «${name}»`, "Umbenennen", name);
+    if (!next || next === name) return;
+    try {
+      await api.localRename(join(p, name), next);
+      await load(p, p.listing.path);
+    } catch (e) {
+      tell("Nicht umbenannt", String(e));
+    }
+  }
+
+  async function chmod(e: Entry) {
+    const p = panes.remote;
+    if (!sid || !p.listing) return;
+    const cur = (e.perm ?? (e.dir ? 0o755 : 0o644)).toString(8).padStart(3, "0");
+    const v = await askText("Rechte ändern", `Für «${e.name}», als Zahl wie bei chmod: 644 = Datei lesbar, 755 = Ordner oder Programm, 600 = nur für dich.`, "Ändern", cur);
+    if (!v || v === cur) return;
+    if (!/^[0-7]{3,4}$/.test(v.trim())) return void tell("Ungültige Rechte", "Bitte drei oder vier Ziffern von 0 bis 7, z. B. 644.");
+    try {
+      await api.sftpChmod(sid, join(p, e.name), parseInt(v.trim(), 8));
+      await load(p, p.listing.path);
+    } catch (err) {
+      tell("Rechte nicht geändert", String(err));
+    }
+  }
+
+  /** Rechtsklick auf eine Zeile (e) oder auf die leere Fläche (e = null). */
+  async function contextMenu(p: Pane, anchor: HTMLElement, e: Entry | null) {
+    const remote = p.side === "remote";
+    const one = p.selected.size === 1;
+    const items: MenuItem[] = [];
+    if (e) {
+      items.push(
+        { value: "transfer", label: remote ? "Herunterladen" : "Hochladen", icon: remote ? ICON.download : ICON.upload, disabled: !sid },
+        { value: "rename", label: "Umbenennen …", icon: ICON.rename, shortcut: remote ? "F2" : undefined, disabled: !one || (remote && scp) },
+      );
+      if (remote) items.push({ value: "chmod", label: "Rechte ändern …", disabled: !one || scp });
+      items.push({ value: "copy", label: "Pfad kopieren", icon: ICON.copy });
+      if (remote) items.push({ value: "delete", label: "Löschen", icon: ICON.trash, shortcut: "Entf", disabled: scp, separator: true });
+    }
+    if (p.listing?.path) {
+      items.push({ value: "mkdir", label: "Neuer Ordner …", icon: ICON.newFolder, separator: !!e, disabled: remote && !sid });
+      if (remote) items.push({ value: "touch", label: "Neue Datei …", icon: ICON.plus, disabled: !sid || scp });
+    }
+    if (!items.length) return;
+    const v = await openMenu(anchor, items);
+    if (v === "transfer") transfer(p, [...p.selected]);
+    if (v === "rename") remote ? renameRemote() : renameLocal();
+    if (v === "chmod" && e) chmod(e);
+    if (v === "copy") navigator.clipboard.writeText([...p.selected].map((n) => join(p, n)).join("\n")).catch(() => {});
+    if (v === "delete") deleteRemote();
+    if (v === "mkdir") mkdir(p);
+    if (v === "touch") newFile();
+  }
 
   async function renameRemote() {
     const p = panes.remote;
@@ -384,6 +475,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
     toolButton(ICON.download, "Herunterladen", () => transfer(panes.remote, [...panes.remote.selected]), { text: true }),
     toolSep(),
     toolButton(ICON.newFolder, "Neuer Ordner", () => mkdir()),
+    toolButton(ICON.plus, "Neue Datei", () => newFile()),
     renameBtn,
     trashBtn,
     toolButton(ICON.refresh, "Neu laden", () => {
@@ -465,6 +557,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
         ctx.setSub(`SCP über SSH · ${c.user}@${c.address}`);
         status.textContent = "Server ohne SFTP, Übertragung über SCP (eingeschränkt: kein Umbenennen/Löschen/Rechte)";
         renameBtn.disabled = trashBtn.disabled = true;
+        scp = true;
       }
       ctx.setState("connected");
       await load(panes.remote, "");

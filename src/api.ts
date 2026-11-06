@@ -75,6 +75,8 @@ export interface Entry {
   size: number;
   /** Sekunden seit 1970 */
   modified: number | null;
+  /** Unix-Rechte, nur bei SFTP */
+  perm: number | null;
 }
 export interface Listing {
   path: string;
@@ -142,6 +144,10 @@ export const api = {
   sftpRename: (sid: string, path: string, name: string) => invoke<string>("sftp_rename", { sid, path, name }),
   sftpRemove: (sid: string, path: string) => invoke<void>("sftp_remove", { sid, path }),
   sftpClose: (sid: string) => invoke<void>("sftp_close", { sid }),
+  sftpChmod: (sid: string, path: string, mode: number) => invoke<void>("sftp_chmod", { sid, path, mode }),
+  sftpTouch: (sid: string, dir: string, name: string) => invoke<string>("sftp_touch", { sid, dir, name }),
+  localMkdir: (dir: string, name: string) => invoke<string>("local_mkdir", { dir, name }),
+  localRename: (path: string, name: string) => invoke<string>("local_rename", { path, name }),
   localList: (path: string) => invoke<Listing>("local_list", { path }),
   localHome: () => invoke<string>("local_home"),
   /** upload: lokal → Server; sonst Server → lokal. Gibt die Übertragungs-ID zurück. */

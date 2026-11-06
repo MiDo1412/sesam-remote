@@ -153,7 +153,7 @@ pub fn parse_ls(text: &str) -> Vec<Entry> {
         if name.is_empty() || name == "." || name == ".." {
             continue;
         }
-        out.push(Entry { name: name.to_string(), dir, size: if dir { 0 } else { size }, modified: None });
+        out.push(Entry { name: name.to_string(), dir, size: if dir { 0 } else { size }, modified: None, perm: None });
     }
     out.sort_by(|a, b| b.dir.cmp(&a.dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
     out

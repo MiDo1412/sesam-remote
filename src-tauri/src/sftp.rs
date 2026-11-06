@@ -58,6 +58,8 @@ pub struct Entry {
     pub size: u64,
     /// Sekunden seit 1970.
     pub modified: Option<u64>,
+    /// Unix-Rechte (z. B. 0o755), nur bei SFTP.
+    pub perm: Option<u32>,
 }
 
 #[derive(Serialize, Debug)]
@@ -121,7 +123,7 @@ impl Sftp {
             }
             let modified = m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs());
             let dir = m.file_type().is_dir();
-            entries.push(Entry { name, dir, size: if dir { 0 } else { m.len() }, modified });
+            entries.push(Entry { name, dir, size: if dir { 0 } else { m.len() }, modified, perm: m.permissions.map(|p| p & 0o7777) });
         }
         sort(&mut entries);
         Ok(Listing { parent: rparent(&path), path, entries })
@@ -178,6 +180,28 @@ impl Sftp {
         Ok(())
     }
 
+    /// Rechte setzen (nur die Bits 0o7777).
+    pub async fn chmod(&self, path: &str, mode: u32) -> Result<(), String> {
+        if mode > 0o7777 {
+            return Err("Ungültige Rechte".into());
+        }
+        let mut a = russh_sftp::protocol::FileAttributes::empty();
+        a.permissions = Some(mode);
+        self.s.set_metadata(path, a).await.map_err(|e| format!("{path}: {e}"))
+    }
+
+    /// Leere Datei anlegen; ein belegter Name wird nicht überschrieben.
+    pub async fn touch(&self, dir: &str, name: &str) -> Result<String, String> {
+        use russh_sftp::protocol::OpenFlags;
+        valid_name(name)?;
+        let p = rjoin(dir, name);
+        if self.s.try_exists(&p).await.map_err(err)? {
+            return Err(format!("«{name}» gibt es dort schon"));
+        }
+        self.s.open_with_flags(&p, OpenFlags::CREATE | OpenFlags::EXCLUDE | OpenFlags::WRITE).await.map_err(|e| format!("{p}: {e}"))?;
+        Ok(p)
+    }
+
     async fn unique(&self, dir: &str, name: &str, is_dir: bool) -> Result<String, String> {
         let mut p = rjoin(dir, name);
         let mut n = 2;
@@ -189,13 +213,41 @@ impl Sftp {
     }
 }
 
+/// Lokal: Ordner anlegen.
+pub fn local_mkdir(dir: &str, name: &str) -> Result<String, String> {
+    local_name(name)?;
+    let p = Path::new(dir).join(name);
+    std::fs::create_dir(&p).map_err(|e| format!("{}: {e}", p.display()))?;
+    Ok(p.to_string_lossy().into_owned())
+}
+
+/// Lokal: im selben Ordner umbenennen, ohne zu überschreiben.
+pub fn local_rename(path: &str, name: &str) -> Result<String, String> {
+    local_name(name)?;
+    let from = Path::new(path);
+    let to = from.parent().ok_or("Laufwerke lassen sich nicht umbenennen")?.join(name);
+    if to.exists() {
+        return Err(format!("«{name}» gibt es dort schon"));
+    }
+    std::fs::rename(from, &to).map_err(|e| format!("{}: {e}", from.display()))?;
+    Ok(to.to_string_lossy().into_owned())
+}
+
+fn local_name(name: &str) -> Result<(), String> {
+    valid_name(name)?;
+    if name.contains('\\') || (cfg!(windows) && name.contains([':', '*', '?', '"', '<', '>', '|'])) {
+        return Err("Ungültiger Name".into());
+    }
+    Ok(())
+}
+
 pub fn local_list(path: &str) -> Result<Listing, String> {
     #[cfg(windows)]
     if path.is_empty() {
         let entries = (b'A'..=b'Z')
             .map(|d| format!("{}:\\", d as char))
             .filter(|d| Path::new(d).exists())
-            .map(|name| Entry { name, dir: true, size: 0, modified: None })
+            .map(|name| Entry { name, dir: true, size: 0, modified: None, perm: None })
             .collect();
         return Ok(Listing { path: String::new(), parent: None, entries });
     }
@@ -207,7 +259,7 @@ pub fn local_list(path: &str) -> Result<Listing, String> {
         let Ok(m) = std::fs::metadata(e.path()) else { continue };
         let modified = m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs());
         let size = if m.is_dir() { 0 } else { m.len() };
-        entries.push(Entry { name: e.file_name().to_string_lossy().into_owned(), dir: m.is_dir(), size, modified });
+        entries.push(Entry { name: e.file_name().to_string_lossy().into_owned(), dir: m.is_dir(), size, modified, perm: None });
     }
     sort(&mut entries);
     let parent = match p.parent() {
@@ -627,6 +679,20 @@ mod tests {
         assert_eq!(numbered("archiv.tar.gz", 3, false), "archiv.tar (3).gz");
         assert_eq!(numbered(".bashrc", 2, false), ".bashrc (2)");
         assert_eq!(numbered("v1.2", 2, true), "v1.2 (2)");
+    }
+
+    #[test]
+    fn local_mkdir_and_rename() {
+        let dir = std::env::temp_dir().join(format!("sesam-local-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let d = dir.to_str().unwrap();
+        let a = local_mkdir(d, "a").unwrap();
+        local_mkdir(d, "b").unwrap();
+        assert!(local_rename(&a, "b").is_err(), "nie überschreiben");
+        assert!(local_mkdir(d, "..").is_err() && local_mkdir(d, "x\\y").is_err());
+        local_rename(&a, "c").unwrap();
+        assert!(dir.join("c").is_dir() && !dir.join("a").exists());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
