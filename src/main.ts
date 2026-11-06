@@ -2,7 +2,7 @@ import { api, desktopProtocol, type Connection } from "./api";
 import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
-import { initTabs, openTab } from "./tabs";
+import { initTabs, openTab, runTool } from "./tabs";
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
 import { applyAppearance, openSettings } from "./settings";
@@ -451,6 +451,7 @@ const command = (cmd: string) => {
 };
 addEventListener("sesam:save-quick", (e) => quick.saveAs((e as CustomEvent<Connection>).detail));
 listen<string>("cmd", (e) => command(e.payload));
+listen<string>("tool", (e) => runTool(e.payload));
 addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   if (e.key === ",") (e.preventDefault(), command("settings"));

@@ -882,6 +882,21 @@ pub fn run() {
                 .separator()
                 .item(&MenuItemBuilder::with_id("cmd:settings", "Einstellungen …").accelerator("CmdOrCtrl+,").build(app)?)
                 .build()?;
+            // Gleiche Beschriftungen wie die Werkzeugknöpfe (src/tabs.ts runTool); Kürzel bleiben bei der Sitzung.
+            let session = SubmenuBuilder::new(app, "Sitzung")
+                .text("tool:Bibliothek", "Bibliothek anzeigen")
+                .text("tool:Vorheriger Tab", "Vorheriger Tab")
+                .text("tool:Nächster Tab", "Nächster Tab")
+                .separator()
+                .text("tool:Neue Shell", "Neue Shell")
+                .text("tool:Suchen", "Suchen …")
+                .text("tool:Zwischenablage abtippen", "Zwischenablage abtippen")
+                .text("tool:Bildschirmfoto", "Bildschirmfoto")
+                .text("tool:Alle Monitore", "Alle Monitore")
+                .text("tool:Vollbild", "Vollbild")
+                .separator()
+                .text("tool:Trennen", "Trennen")
+                .build()?;
             let help = SubmenuBuilder::new(app, "Hilfe")
                 .text("help:zugangsdaten", "Welche Zugangsdaten?")
                 .separator()
@@ -896,10 +911,11 @@ pub fn run() {
             let menu = if cfg!(target_os = "macos") {
                 let m = tauri::menu::Menu::default(app.handle())?;
                 m.insert(&file, 1)?;
+                m.append(&session)?;
                 m.append(&help)?;
                 m
             } else {
-                MenuBuilder::new(app).item(&file).item(&help).build()?
+                MenuBuilder::new(app).item(&file).item(&session).item(&help).build()?
             };
             app.set_menu(menu)?;
             app.on_menu_event(|app, e| {
@@ -907,6 +923,8 @@ pub fn run() {
                     let _ = app.emit("help", topic);
                 } else if let Some(cmd) = e.id().as_ref().strip_prefix("cmd:") {
                     let _ = app.emit("cmd", cmd);
+                } else if let Some(tool) = e.id().as_ref().strip_prefix("tool:") {
+                    let _ = app.emit("tool", tool);
                 }
             });
             #[cfg(any(windows, target_os = "linux"))]

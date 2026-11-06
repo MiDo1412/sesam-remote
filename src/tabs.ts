@@ -211,6 +211,18 @@ function renderActiveBar() {
   );
 }
 
+/** Menübefehl «Sitzung»: Werkzeugknopf des aktiven Tabs über seine Beschriftung auslösen. */
+export function runTool(label: string) {
+  if (label === "Bibliothek") return showLibrary();
+  if (label === "Nächster Tab" || label === "Vorheriger Tab") {
+    if (!tabs.length) return;
+    const i = active ? tabs.indexOf(active) : -1;
+    return activate(tabs[(i + (label === "Nächster Tab" ? 1 : tabs.length - 1)) % tabs.length]!);
+  }
+  if (!active || $("session").hidden) return;
+  active.ctx.toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(label)}"]:not(:disabled)`)?.click();
+}
+
 /** Werkzeugknopf mit Icon; Tooltip mit Tastenkürzel. */
 export function toolButton(icon: string, label: string, onClick: () => void, opts: { shortcut?: string; text?: boolean; danger?: boolean } = {}) {
   const b = document.createElement("button");
