@@ -10,7 +10,9 @@ import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { enhanceSelect } from "./menu";
 
 // Native Auswahllisten durch eigene Menüs ersetzen (einmal beim Start).
-const keyModeMenu = enhanceSelect((document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("keyMode") as HTMLSelectElement);
+const formEls = (document.getElementById("editor-form") as HTMLFormElement).elements;
+const keyModeMenu = enhanceSelect(formEls.namedItem("keyMode") as HTMLSelectElement);
+const fileTransferMenu = enhanceSelect(formEls.namedItem("fileTransfer") as HTMLSelectElement);
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -147,6 +149,7 @@ const blank = (): Connection => ({
   hasVncPassword: false,
   hasRdpPassword: false,
   hasKey: false,
+  fileTransfer: "auto",
   lastUsed: null,
 });
 
@@ -183,7 +186,9 @@ function edit(c: Connection | null) {
   f.playAudio.checked = editing.playAudio;
   f.sharedFolder.value = editing.sharedFolder;
   f.skipCertCheck.checked = editing.skipCertCheck;
-  ($("advanced") as HTMLDetailsElement).open = editing.skipCertCheck;
+  f.fileTransfer.value = editing.fileTransfer ?? "auto";
+  fileTransferMenu.sync();
+  ($("advanced") as HTMLDetailsElement).open = editing.skipCertCheck || f.fileTransfer.value !== "auto";
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -260,6 +265,7 @@ form.onsubmit = async (ev) => {
     playAudio: fd.get("playAudio") !== null,
     sharedFolder: s("sharedFolder"),
     skipCertCheck: fd.get("skipCertCheck") !== null,
+    fileTransfer: (s("fileTransfer") || "auto") as Connection["fileTransfer"],
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],

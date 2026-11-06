@@ -4,6 +4,7 @@ mod library;
 mod rdp;
 mod rdp_redir;
 mod rdstls;
+mod scp;
 mod sftp;
 mod ssh;
 mod vault;
@@ -140,45 +141,82 @@ async fn shell_close(shells: State<'_, ssh::Shells>, sid: String) -> Result<(), 
     Ok(())
 }
 
-// ---------- Dateien (SFTP) ----------
+// ---------- Dateien (SFTP, sonst SCP) ----------
+
+#[derive(Clone)]
+enum FileSession {
+    Sftp(Arc<sftp::Sftp>),
+    Scp(Arc<scp::Scp>),
+}
 
 #[derive(Default)]
-struct Files(Mutex<HashMap<String, Arc<sftp::Sftp>>>);
+struct Files(Mutex<HashMap<String, FileSession>>);
 
 #[derive(Default)]
 struct Transfers(Arc<Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>>);
 
-fn files_get(files: &Files, sid: &str) -> Result<Arc<sftp::Sftp>, String> {
+fn files_get(files: &Files, sid: &str) -> Result<FileSession, String> {
     files.0.lock().unwrap().get(sid).cloned().ok_or_else(|| "Dateisitzung geschlossen".into())
 }
 
+#[derive(serde::Serialize)]
+struct FilesOpened {
+    sid: String,
+    /// `true` = Server ohne SFTP, Übertragung über SCP (eingeschränkt).
+    scp: bool,
+}
+
 #[tauri::command]
-async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: String, trust: Option<String>) -> Result<String, String> {
+async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: String, trust: Option<String>) -> Result<FilesOpened, String> {
     let c = find(&path, &id)?;
-    let s = sftp::open(ssh_target(&c, trust)?).await?;
+    let h = ssh::connect(&ssh_target(&c, trust)?).await?;
+    let session = match c.file_transfer.as_str() {
+        "scp" => FileSession::Scp(Arc::new(scp::Scp::new(h))),
+        mode => match sftp::start(h).await {
+            Ok(s) => FileSession::Sftp(Arc::new(s)),
+            Err((_, e)) if mode == "sftp" => return Err(e),
+            Err((h, e)) => {
+                tracing::info!("SFTP nicht verfügbar ({e}), weiter mit SCP");
+                FileSession::Scp(Arc::new(scp::Scp::new(h)))
+            }
+        },
+    };
     let sid = new_sid(&c.id);
-    files.0.lock().unwrap().insert(sid.clone(), Arc::new(s));
-    Ok(sid)
+    let scp = matches!(session, FileSession::Scp(_));
+    files.0.lock().unwrap().insert(sid.clone(), session);
+    Ok(FilesOpened { sid, scp })
 }
 
 #[tauri::command]
 async fn sftp_list(files: State<'_, Files>, sid: String, path: String) -> Result<sftp::Listing, String> {
-    files_get(&files, &sid)?.list(&path).await
+    match files_get(&files, &sid)? {
+        FileSession::Sftp(s) => s.list(&path).await,
+        FileSession::Scp(s) => s.list(&path).await,
+    }
 }
 
 #[tauri::command]
 async fn sftp_mkdir(files: State<'_, Files>, sid: String, dir: String, name: String) -> Result<String, String> {
-    files_get(&files, &sid)?.mkdir(&dir, &name).await
+    match files_get(&files, &sid)? {
+        FileSession::Sftp(s) => s.mkdir(&dir, &name).await,
+        FileSession::Scp(s) => s.mkdir(&dir, &name).await,
+    }
 }
 
 #[tauri::command]
 async fn sftp_rename(files: State<'_, Files>, sid: String, path: String, name: String) -> Result<String, String> {
-    files_get(&files, &sid)?.rename(&path, &name).await
+    match files_get(&files, &sid)? {
+        FileSession::Sftp(s) => s.rename(&path, &name).await,
+        FileSession::Scp(_) => Err(scp::LIMITED.into()),
+    }
 }
 
 #[tauri::command]
 async fn sftp_remove(files: State<'_, Files>, sid: String, path: String) -> Result<(), String> {
-    files_get(&files, &sid)?.remove(&path).await
+    match files_get(&files, &sid)? {
+        FileSession::Sftp(s) => s.remove(&path).await,
+        FileSession::Scp(_) => Err(scp::LIMITED.into()),
+    }
 }
 
 #[tauri::command]
@@ -222,10 +260,13 @@ fn transfer_start(
         let report = move |p| {
             let _ = ch.send(p);
         };
-        let r = if upload {
-            sftp::upload(&s, std::path::Path::new(&src), &dest_dir, report).await
-        } else {
-            sftp::download(&s, &src, std::path::Path::new(&dest_dir), report).await
+        let (local, remote) = if upload { (&src, &dest_dir) } else { (&dest_dir, &src) };
+        let local = std::path::Path::new(local);
+        let r = match (&s, upload) {
+            (FileSession::Sftp(s), true) => sftp::upload(s, local, remote, report).await,
+            (FileSession::Sftp(s), false) => sftp::download(s, remote, local, report).await,
+            (FileSession::Scp(s), true) => scp::upload(s, local, remote, report).await,
+            (FileSession::Scp(s), false) => scp::download(s, remote, local, report).await,
         };
         if let Err(error) = r {
             let _ = on_progress.send(sftp::Progress::Failed { error });

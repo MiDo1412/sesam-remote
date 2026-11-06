@@ -23,6 +23,8 @@ export interface Connection {
   hasVncPassword: boolean;
   hasRdpPassword: boolean;
   hasKey: boolean;
+  /** Dateiübertragung: SFTP, sonst SCP ("auto") oder fest. */
+  fileTransfer: "auto" | "sftp" | "scp";
   lastUsed: string | null;
 }
 
@@ -95,7 +97,8 @@ export const api = {
     invoke<void>("rdp_set_monitors", { sid, monitors }),
   rdpSetSize: (sid: string, width: number, height: number) => invoke<void>("rdp_set_size", { sid, width, height }),
   rdpClose: (sid: string) => invoke<void>("rdp_close", { sid }),
-  sftpOpen: (id: string, trust: string | null) => invoke<string>("sftp_open", { id, trust }),
+  /** scp: Server ohne SFTP, Übertragung über SCP (eingeschränkt). */
+  sftpOpen: (id: string, trust: string | null) => invoke<{ sid: string; scp: boolean }>("sftp_open", { id, trust }),
   sftpList: (sid: string, path: string) => invoke<Listing>("sftp_list", { sid, path }),
   sftpMkdir: (sid: string, dir: string, name: string) => invoke<string>("sftp_mkdir", { sid, dir, name }),
   sftpRename: (sid: string, path: string, name: string) => invoke<string>("sftp_rename", { sid, path, name }),

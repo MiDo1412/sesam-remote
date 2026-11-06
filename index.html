@@ -99,6 +99,13 @@
         </label>
         <details id="advanced" class="span">
           <summary>Erweitert</summary>
+          <label class="span">Dateiübertragung
+            <select name="fileTransfer">
+              <option value="auto">Automatisch (SFTP, sonst SCP)</option>
+              <option value="sftp">Nur SFTP</option>
+              <option value="scp">Nur SCP</option>
+            </select>
+          </label>
           <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
         </details>
         <details id="extra-creds" class="span">

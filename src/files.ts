@@ -264,13 +264,15 @@ export function filesTab(ctx: TabCtx): TabHandle {
     await load(p, p.listing.path);
   }
 
+  const renameBtn = toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2" });
+  const trashBtn = toolButton(ICON.trash, "Löschen", () => deleteRemote(), { shortcut: "Entf", danger: true });
   ctx.toolbar.append(
     toolButton(ICON.upload, "Hochladen", () => transfer(panes.local, [...panes.local.selected]), { text: true }),
     toolButton(ICON.download, "Herunterladen", () => transfer(panes.remote, [...panes.remote.selected]), { text: true }),
     toolSep(),
     toolButton(ICON.newFolder, "Neuer Ordner", () => mkdir()),
-    toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2" }),
-    toolButton(ICON.trash, "Löschen", () => deleteRemote(), { shortcut: "Entf", danger: true }),
+    renameBtn,
+    trashBtn,
     toolButton(ICON.refresh, "Neu laden", () => {
       for (const p of Object.values(panes)) if (p.listing) load(p, p.listing.path);
     }),
@@ -343,8 +345,14 @@ export function filesTab(ctx: TabCtx): TabHandle {
   let trust: string | null = null;
   for (;;) {
     try {
-      sid = await api.sftpOpen(c.id, trust);
+      const opened = await api.sftpOpen(c.id, trust);
+      sid = opened.sid;
       status.textContent = "";
+      if (opened.scp) {
+        ctx.setSub(`SCP über SSH · ${c.user}@${c.address}`);
+        status.textContent = "Server ohne SFTP, Übertragung über SCP (eingeschränkt: kein Umbenennen/Löschen/Rechte)";
+        renameBtn.disabled = trashBtn.disabled = true;
+      }
       ctx.setState("connected");
       await load(panes.remote, "");
     } catch (e) {

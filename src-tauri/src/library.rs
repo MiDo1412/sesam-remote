@@ -38,6 +38,8 @@ pub struct Connection {
     pub has_vnc_password: bool,
     pub has_rdp_password: bool,
     pub has_key: bool,
+    /// Dateiübertragung: "auto" (SFTP, sonst SCP) | "sftp" | "scp".
+    pub file_transfer: String,
     pub last_used: Option<String>,
 }
 
@@ -65,6 +67,7 @@ impl Default for Connection {
             has_vnc_password: false,
             has_rdp_password: false,
             has_key: false,
+            file_transfer: "auto".into(),
             last_used: None,
         }
     }
@@ -89,6 +92,9 @@ impl Connection {
         }
         if !["vnc", "rdp"].contains(&self.desktop_protocol.as_str()) {
             return Err("Unbekanntes Desktop-Protokoll".into());
+        }
+        if !["auto", "sftp", "scp"].contains(&self.file_transfer.as_str()) {
+            return Err("Unbekannte Dateiübertragung".into());
         }
         if !["landscape", "portrait"].contains(&self.orientation.as_str()) {
             return Err("Unbekannte Ausrichtung".into());
@@ -170,5 +176,6 @@ mod tests {
         let c: Connection = serde_json::from_str(r#"{"id":"a","name":"n","address":"h"}"#).unwrap();
         assert_eq!(c.ssh_port, Some(22));
         assert_eq!((c.rdp_port, c.desktop_protocol.as_str()), (None, "vnc"));
+        assert_eq!(c.file_transfer, "auto");
     }
 }

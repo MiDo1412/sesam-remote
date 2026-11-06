@@ -21,11 +21,33 @@ fn err(e: impl std::fmt::Display) -> String {
 }
 
 pub async fn open(t: Target<'_>) -> Result<Sftp, String> {
-    let h = ssh::connect(&t).await?;
-    let ch = h.channel_open_session().await.map_err(err)?;
-    ch.request_subsystem(true, "sftp").await.map_err(err)?;
-    let s = SftpSession::new(ch.into_stream()).await.map_err(|e| format!("SFTP nicht verfügbar: {e}"))?;
-    Ok(Sftp { s, _ssh: Some(h) })
+    start(ssh::connect(&t).await?).await.map_err(|(_, e)| e)
+}
+
+/// SFTP auf einer bestehenden Verbindung starten. Scheitert es, kommt die Verbindung zurück (für SCP).
+pub async fn start(h: Handle<Client>) -> Result<Sftp, (Handle<Client>, String)> {
+    let stream = async {
+        let mut ch = h.channel_open_session().await.map_err(err)?;
+        ch.request_subsystem(true, "sftp").await.map_err(err)?;
+        // Auf die Antwort warten: ohne SFTP-Subsystem lehnt der Server ab oder schliesst den Kanal.
+        loop {
+            match ch.wait().await {
+                Some(russh::ChannelMsg::Success) => return Ok(ch.into_stream()),
+                Some(russh::ChannelMsg::Failure | russh::ChannelMsg::Close | russh::ChannelMsg::Eof) | None => {
+                    return Err("Der Server bietet kein SFTP an".to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+    .await;
+    match stream {
+        Ok(st) => match SftpSession::new(st).await {
+            Ok(s) => Ok(Sftp { s, _ssh: Some(h) }),
+            Err(e) => Err((h, format!("SFTP nicht verfügbar: {e}"))),
+        },
+        Err(e) => Err((h, e)),
+    }
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -66,14 +88,14 @@ pub fn rparent(path: &str) -> Option<String> {
 }
 
 /// «bericht.pdf» → «bericht (2).pdf»; Ordner und Dateien ohne Endung bekommen die Zahl hinten.
-fn numbered(name: &str, n: u32, dir: bool) -> String {
+pub(crate) fn numbered(name: &str, n: u32, dir: bool) -> String {
     match name.rsplit_once('.') {
         Some((stem, ext)) if !dir && !stem.is_empty() => format!("{stem} ({n}).{ext}"),
         _ => format!("{name} ({n})"),
     }
 }
 
-fn valid_name(name: &str) -> Result<(), String> {
+pub(crate) fn valid_name(name: &str) -> Result<(), String> {
     if name.is_empty() || name.contains('/') || name == "." || name == ".." {
         return Err("Ungültiger Name".into());
     }
@@ -196,7 +218,7 @@ pub fn local_list(path: &str) -> Result<Listing, String> {
     Ok(Listing { path: p.to_string_lossy().into_owned(), parent, entries })
 }
 
-fn local_unique(dir: &Path, name: &str, is_dir: bool) -> PathBuf {
+pub(crate) fn local_unique(dir: &Path, name: &str, is_dir: bool) -> PathBuf {
     let mut p = dir.join(name);
     let mut n = 2;
     while p.exists() {
@@ -221,9 +243,9 @@ pub const PARTIAL: &str = ".sesam-teil";
 
 /// Löscht eine halb geschriebene Datei, wenn die Übertragung scheitert oder abgebrochen wird
 /// (auch beim Abbruch der Aufgabe, darum im Drop).
-struct Partial(Option<Cleanup>);
+pub(crate) struct Partial(pub(crate) Option<Cleanup>);
 
-enum Cleanup {
+pub(crate) enum Cleanup {
     Local(PathBuf),
     Remote(Arc<Sftp>, String),
 }
@@ -253,15 +275,15 @@ struct Item {
     dir: bool,
 }
 
-struct Meter<F: Fn(Progress)> {
-    done: u64,
-    total: u64,
-    last: Instant,
-    report: F,
+pub(crate) struct Meter<F: Fn(Progress)> {
+    pub(crate) done: u64,
+    pub(crate) total: u64,
+    pub(crate) last: Instant,
+    pub(crate) report: F,
 }
 
 impl<F: Fn(Progress)> Meter<F> {
-    fn add(&mut self, n: u64, file: &str) {
+    pub(crate) fn add(&mut self, n: u64, file: &str) {
         self.done += n;
         if self.last.elapsed() >= Duration::from_millis(100) {
             self.last = Instant::now();
@@ -341,7 +363,8 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, report: 
             for e in sftp.s.read_dir(&src).await.map_err(err)? {
                 let n = e.file_name();
                 // Nur echte Dateien und Ordner; Verknüpfungen nicht verfolgen (keine Schleifen).
-                if n != "." && n != ".." && !e.file_type().is_symlink() {
+                // Namen vom Server, die lokal aus dem Zielordner führen würden (z. B. «..\x» unter Windows), auslassen.
+                if crate::scp::check_name(&n).is_ok() && !e.file_type().is_symlink() {
                     stack.push((rjoin(&src, &n), dst.join(&n), e.metadata()));
                 }
             }
