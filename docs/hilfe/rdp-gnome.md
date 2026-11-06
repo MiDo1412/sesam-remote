@@ -8,6 +8,12 @@ dort **nur RDP**, kein VNC mehr. Es gibt zwei Arten:
   Sitzung; Sesam folgt dieser Übergabe automatisch.
 - **Bildschirmfreigabe:** Sesam zeigt eine bereits laufende, angemeldete Sitzung.
 
+## Am einfachsten: Setup-Script
+
+Das Setup-Script von Sesam richtet Anmeldebildschirm (Port 3389), Bildschirmfreigabe pro Benutzer,
+Zertifikate, Firewall und auf Wunsch einen virtuellen Monitor ein. Es fragt jeden Schritt nach und
+zeigt am Ende Ports und Zertifikats-Fingerabdrücke zum Vergleichen.
+
 ## Remote Login für alle Benutzer einrichten
 
 Die Zugangsdaten des Systemdienstes sind **nur für die Verbindung** da. Die eigentliche Anmeldung

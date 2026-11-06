@@ -207,6 +207,30 @@ fn sftp_close(files: State<Files>, sid: String) {
     files.0.lock().unwrap().remove(&sid);
 }
 
+/// Setup-Script für GNOME Remote Desktop, unverändert eingebettet (LF, ohne BOM).
+const SETUP_SCRIPT: &[u8] = include_bytes!("../resources/sesam-rdp-setup.sh");
+
+/// Script-Inhalt und SHA-256 (zum Herunterladen und als Versionsangabe).
+#[tauri::command]
+fn setup_script() -> (Vec<u8>, String) {
+    use sha2::Digest;
+    (SETUP_SCRIPT.to_vec(), sha2::Sha256::digest(SETUP_SCRIPT).iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Script per SFTP nach `~/sesam-rdp-setup.sh` hochladen (Bytes 1:1). Ausführen tut der Benutzer selbst in der Shell.
+#[tauri::command]
+async fn setup_upload(path: State<'_, LibraryPath>, id: String, trust: Option<String>) -> Result<String, String> {
+    use tokio::io::AsyncWriteExt;
+    let c = find(&path, &id)?;
+    let s = sftp::open(ssh_target(&c, trust)?).await?;
+    let home = s.s.canonicalize(".").await.map_err(|e| e.to_string())?;
+    let target = sftp::rjoin(&home, "sesam-rdp-setup.sh");
+    let mut f = s.s.create(&target).await.map_err(|e| format!("{target}: {e}"))?;
+    f.write_all(SETUP_SCRIPT).await.map_err(|e| e.to_string())?;
+    f.shutdown().await.map_err(|e| e.to_string())?;
+    Ok(target)
+}
+
 /// Gemerkte TLS-Zertifikate (RDP/VNC) für die Einstellungen.
 #[tauri::command]
 fn certs_list(path: State<LibraryPath>) -> Vec<(String, String)> {
@@ -702,6 +726,8 @@ pub fn run() {
             save_bytes,
             certs_list,
             quick_register,
+            setup_script,
+            setup_upload,
             cert_remove,
             local_home,
             transfer_start,

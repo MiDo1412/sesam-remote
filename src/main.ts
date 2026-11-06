@@ -7,6 +7,7 @@ import { ask, tell } from "./ui";
 import { openHelp } from "./help";
 import { applyAppearance, openSettings } from "./settings";
 import { initQuick } from "./quick";
+import { runOnTarget } from "./setup";
 import { listen } from "@tauri-apps/api/event";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { enhanceSelect } from "./menu";
@@ -112,6 +113,7 @@ function renderDetails() {
       btn("Dateien", "", () => open(c, "files"), !c.sshPort),
     ),
     btn("Bearbeiten …", "plain", () => edit(c)),
+    ...(c.sshPort ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
   );
 }
 

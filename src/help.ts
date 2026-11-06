@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import { downloadScript } from "./setup";
 import vnc from "../docs/hilfe/vnc.md?raw";
 import wayvnc from "../docs/hilfe/wayvnc.md?raw";
 import macos from "../docs/hilfe/macos.md?raw";
@@ -39,6 +40,19 @@ export function openHelp(id: string) {
       pre.append(b);
     }
     for (const a of nav.querySelectorAll<HTMLButtonElement>("button")) a.setAttribute("aria-current", String(a.dataset.id === t.id));
+    if (t.id === "rdp-gnome") {
+      // Setup-Script direkt aus der Hilfe
+      const box = document.createElement("div");
+      box.className = "help-actions";
+      const dl = Object.assign(document.createElement("button"), { type: "button", className: "primary", textContent: "Setup-Script herunterladen …" });
+      dl.onclick = () => downloadScript();
+      const note = Object.assign(document.createElement("p"), {
+        className: "note",
+        textContent: "Oder: Verbindung mit SSH auswählen und in der Detailspalte «RDP auf Zielrechner einrichten …» wählen.",
+      });
+      box.append(dl, note);
+      body.firstElementChild?.after(box);
+    }
     body.scrollTop = 0;
   };
   nav.replaceChildren(

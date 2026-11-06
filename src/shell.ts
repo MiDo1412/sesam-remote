@@ -134,6 +134,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
       try {
         sid = await api.shellOpen(c.id, term.cols || 80, term.rows || 24, trust, onEvent);
         status.textContent = "";
+        // Vorgegebener Befehl (z. B. Setup-Script): getippt, der Benutzer sieht und bestätigt alles im Terminal.
+        if (ctx.extra?.command) setTimeout(() => send(ctx.extra!.command!), 400);
         ctx.setState("connected");
         if (ctx.isActive()) term.focus();
       } catch (e) {

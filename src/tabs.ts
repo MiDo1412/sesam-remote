@@ -20,6 +20,8 @@ export interface TabCtx {
   setState(s: "connecting" | "connected" | "closed"): void;
   /** Weitere Shell usw. als neuen Tab öffnen. */
   openTab(kind: Kind, fresh?: boolean): void;
+  /** Zusatzangaben beim Öffnen, z. B. ein Befehl, den die Shell nach dem Verbinden tippt. */
+  extra?: { command?: string };
   closeSelf(): void;
 }
 
@@ -61,7 +63,7 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
 export const hasTabs = () => tabs.length > 0;
 
 /** Tab öffnen oder vorhandenen gleicher Art zeigen (`fresh` erzwingt einen neuen, z. B. weitere Shell). */
-export function openTab(conn: Connection, kind: Kind, fresh = false) {
+export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: TabCtx["extra"]) {
   const existing = !fresh && tabs.find((t) => t.ctx.conn.id === conn.id && t.kind === kind && t.state !== "closed");
   if (existing) return activate(existing);
 
@@ -116,6 +118,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false) {
         renderActiveBar();
       },
       openTab: (k, f) => openTab(conn, k, f),
+      extra,
       closeSelf: () => closeTab(tab),
     },
   };
