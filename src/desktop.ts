@@ -112,20 +112,78 @@ export async function openDesktop(c: Connection, onBack: () => void) {
   );
 
   const down = new Map<string, number>();
+  const send = (isDown: boolean, code: string, sym: number) => {
+    if (isDown) down.set(code, sym);
+    else down.delete(code);
+    if (sid) api.vncKey(sid, isDown, sym).catch(() => {});
+  };
+  // Windows meldet AltGr als «Strg links» + «Alt rechts» kurz nacheinander. Strg darum kurz
+  // zurückhalten und verwerfen, wenn AltGr folgt. AltGr selbst senden wir nicht: das erzeugte
+  // Zeichen (z. B. «@») kommt ohnehin als eigener Keysym.
+  const isWindows = navigator.userAgent.includes("Windows");
+  let heldCtrl: { sym: number; timer: number } | null = null;
+  let swallowedCtrl = false;
+  const flushCtrl = () => {
+    if (!heldCtrl) return;
+    clearTimeout(heldCtrl.timer);
+    send(true, "ControlLeft", heldCtrl.sym);
+    heldCtrl = null;
+  };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "F11") return; // lokal: Vollbild
     e.preventDefault();
     if (!sid) return;
     const isDown = e.type === "keydown";
+    if (e.key === "AltGraph") {
+      if (isDown && heldCtrl) {
+        clearTimeout(heldCtrl.timer);
+        heldCtrl = null;
+        swallowedCtrl = true;
+      }
+      return;
+    }
+    if (isWindows && e.code === "ControlLeft" && !down.has("ControlLeft")) {
+      if (isDown) {
+        if (!heldCtrl && !swallowedCtrl) heldCtrl = { sym: keysym(e)!, timer: window.setTimeout(flushCtrl, 30) };
+        return;
+      }
+      if (swallowedCtrl) {
+        swallowedCtrl = false;
+        return;
+      }
+      flushCtrl();
+    }
+    if (isDown) flushCtrl();
     const sym = isDown ? keysym(e) : down.get(e.code);
-    if (sym === undefined) return;
-    if (isDown) down.set(e.code, sym);
-    else down.delete(e.code);
-    api.vncKey(sid, isDown, sym).catch(() => {});
+    if (sym !== undefined) send(isDown, e.code, sym);
   };
   const releaseAll = () => {
+    if (heldCtrl) clearTimeout(heldCtrl.timer);
+    heldCtrl = null;
+    swallowedCtrl = false;
     for (const sym of down.values()) if (sid) api.vncKey(sid, false, sym).catch(() => {});
     down.clear();
+  };
+
+  // Tastenkombinationen, die das lokale System selbst abfängt.
+  const combos: Record<string, number[]> = {
+    cad: [0xffe3, 0xffe9, 0xffff], // Strg+Alt+Entf
+    cse: [0xffe3, 0xffe1, 0xff1b], // Strg+Umschalt+Esc
+    alttab: [0xffe9, 0xff09],
+    altf4: [0xffe9, 0xffc1],
+    super: [0xffeb],
+    print: [0xff61],
+  };
+  const sendKeys = $<HTMLSelectElement>("send-keys");
+  sendKeys.value = "";
+  sendKeys.onchange = () => {
+    const syms = combos[sendKeys.value] ?? [];
+    if (sid) {
+      for (const s of syms) api.vncKey(sid, true, s).catch(() => {});
+      for (const s of [...syms].reverse()) api.vncKey(sid, false, s).catch(() => {});
+    }
+    sendKeys.value = "";
+    canvas.focus();
   };
   canvas.addEventListener("keydown", onKey);
   canvas.addEventListener("keyup", onKey);
