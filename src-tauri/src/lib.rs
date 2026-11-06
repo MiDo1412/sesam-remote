@@ -22,12 +22,13 @@ fn library_list(path: State<LibraryPath>) -> Result<Vec<Connection>, String> {
     library::load(&path.0)
 }
 
-/// `password`/`ssh_key`: `None` = unverändert, `Some("")` = löschen, sonst neu setzen.
+/// `password`/`vnc_password`/`ssh_key`: `None` = unverändert, `Some("")` = löschen, sonst neu setzen.
 #[tauri::command]
 fn library_save(
     path: State<LibraryPath>,
     mut connection: Connection,
     password: Option<String>,
+    vnc_password: Option<String>,
     ssh_key: Option<String>,
 ) -> Result<Connection, String> {
     connection.validate()?;
@@ -38,9 +39,11 @@ fn library_save(
     let mut items = library::load(&path.0)?;
     let old = items.iter().find(|c| c.id == connection.id);
     connection.has_password = old.is_some_and(|c| c.has_password);
+    connection.has_vnc_password = old.is_some_and(|c| c.has_vnc_password);
     connection.has_key = old.is_some_and(|c| c.has_key);
     for (secret, kind, flag) in [
         (password, Kind::Password, &mut connection.has_password),
+        (vnc_password, Kind::VncPassword, &mut connection.has_vnc_password),
         (ssh_key, Kind::SshKey, &mut connection.has_key),
     ] {
         match secret.as_deref() {
@@ -67,6 +70,7 @@ fn library_delete(path: State<LibraryPath>, id: String) -> Result<(), String> {
     if library::remove(&mut items, &id) {
         vault::delete(&id, Kind::Password)?;
         vault::delete(&id, Kind::SshKey)?;
+        vault::delete(&id, Kind::VncPassword)?;
         library::save(&path.0, &items)?;
     }
     Ok(())
@@ -162,11 +166,12 @@ async fn vnc_open(
     let c = find(&path, &id)?;
     let port = c.vnc_port.ok_or("Desktop (VNC) ist für diese Verbindung ausgeschaltet")?;
     let password = vault::get(&c.id, Kind::Password)?;
+    let vnc_password = vault::get(&c.id, Kind::VncPassword)?;
     let pins_path = path.0.with_file_name("known_certs.json");
     let mut pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
     let cert = vnc::tls::Pinned::new(trust.clone().or_else(|| pins.get(&pin_key).cloned()));
-    let login = vnc::Login { host: &c.address, user: &c.user, password: password.as_deref(), cert };
+    let login = vnc::Login { host: &c.address, user: &c.user, password: password.as_deref(), vnc_password: vnc_password.as_deref(), cert };
     let timeout = std::time::Duration::from_secs(15);
     let stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((c.address.as_str(), port)))
         .await

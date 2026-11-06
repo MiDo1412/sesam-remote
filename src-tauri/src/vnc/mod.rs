@@ -76,7 +76,10 @@ pub type Stream = Box<dyn Io>;
 pub struct Login<'a> {
     pub host: &'a str,
     pub user: &'a str,
+    /// Kontopasswort (Apple-Auth, VeNCrypt X509Plain).
     pub password: Option<&'a str>,
+    /// Eigenes VNC-Passwort (VNC-Auth); fehlt es, gilt das Kontopasswort.
+    pub vnc_password: Option<&'a str>,
     /// Zertifikat-Pinning für VeNCrypt/TLS.
     pub cert: Arc<tls::Pinned>,
 }
@@ -93,7 +96,7 @@ async fn vnc_auth(s: &mut Stream, pw: Option<&str>) -> Result<(), String> {
 }
 
 /// VeNCrypt: Untertyp aushandeln, TLS starten, darin anmelden.
-async fn vencrypt(mut s: Stream, l: &Login<'_>, pw: Option<&str>) -> Result<Stream, String> {
+async fn vencrypt(mut s: Stream, l: &Login<'_>, pw: Option<&str>, vpw: Option<&str>) -> Result<Stream, String> {
     let mut v = [0u8; 2];
     s.read_exact(&mut v).await.map_err(io)?;
     if v[0] != 0 || v[1] < 2 {
@@ -109,9 +112,15 @@ async fn vencrypt(mut s: Stream, l: &Login<'_>, pw: Option<&str>) -> Result<Stre
         subs.push(s.read_u32().await.map_err(io)?);
     }
     // X509Plain, X509Vnc, X509None. Klartext (256) und anonymes TLS (257–259) bieten wir bewusst nicht an.
-    let pick = [262u32, 261, 260].into_iter().find(|t| subs.contains(t) && (*t == 260 || pw.is_some()));
+    let pick = [262u32, 261, 260].into_iter().find(|t| {
+        subs.contains(t) && match t {
+            262 => pw.is_some(),
+            261 => vpw.is_some(),
+            _ => true,
+        }
+    });
     let Some(sub) = pick else {
-        return Err(if pw.is_none() && (subs.contains(&262) || subs.contains(&261)) {
+        return Err(if vpw.is_none() && (subs.contains(&262) || subs.contains(&261)) {
             "Der Server verlangt ein Passwort. Bitte in der Verbindung hinterlegen.".into()
         } else {
             format!("Kein unterstütztes VeNCrypt-Verfahren (Server bietet: {subs:?}; nötig: X509 mit Zertifikat)")
@@ -133,7 +142,7 @@ async fn vencrypt(mut s: Stream, l: &Login<'_>, pw: Option<&str>) -> Result<Stre
             m.extend_from_slice(p);
             s.write_all(&m).await.map_err(io)?;
         }
-        261 => vnc_auth(&mut s, pw).await?,
+        261 => vnc_auth(&mut s, vpw).await?,
         _ => {}
     }
     Ok(s)
@@ -151,6 +160,7 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
     s.write_all(format!("RFB 003.00{minor}\n").as_bytes()).await.map_err(io)?;
 
     let pw = l.password.filter(|p| !p.is_empty());
+    let vpw = l.vnc_password.filter(|p| !p.is_empty()).or(pw);
     let chosen = if minor == 3 {
         let t = s.read_u32().await.map_err(io)?;
         if t == 0 {
@@ -168,13 +178,13 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
         let pick = [19u8, 30, 2, 1].into_iter().find(|t| {
             types.contains(t) && match t {
                 30 => pw.is_some() && !l.user.is_empty(),
-                2 => pw.is_some(),
+                2 => vpw.is_some(),
                 _ => true,
             }
         });
         let Some(t) = pick else {
             let offered = types.iter().map(|&t| security_name(t)).collect::<Vec<_>>().join(", ");
-            return Err(if pw.is_none() && (types.contains(&2) || types.contains(&30)) {
+            return Err(if vpw.is_none() && (types.contains(&2) || types.contains(&30)) {
                 "Der Server verlangt ein Passwort. Bitte in der Verbindung hinterlegen.".into()
             } else {
                 format!("Kein unterstütztes Anmeldeverfahren (Server bietet: {offered})")
@@ -186,8 +196,8 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
 
     match chosen {
         1 => {}
-        2 => vnc_auth(&mut s, pw).await?,
-        19 => s = vencrypt(s, l, pw).await?,
+        2 => vnc_auth(&mut s, vpw).await?,
+        19 => s = vencrypt(s, l, pw, vpw).await?,
         30 => {
             let mut g = [0u8; 2];
             s.read_exact(&mut g).await.map_err(io)?;
@@ -540,7 +550,7 @@ mod tests {
     }
 
     fn login(user: &'static str, password: Option<&'static str>) -> Login<'static> {
-        Login { host: "localhost", user, password, cert: tls::Pinned::new(None) }
+        Login { host: "localhost", user, password, vnc_password: None, cert: tls::Pinned::new(None) }
     }
 
     #[tokio::test]
@@ -599,7 +609,7 @@ mod tests {
             s.write_all(&ch).await.unwrap();
             let mut resp = [0u8; 16];
             s.read_exact(&mut resp).await.unwrap();
-            assert_eq!(resp, auth::vnc_response(b"geheim", &ch));
+            assert_eq!(resp, auth::vnc_response(b"vncpw", &ch));
             s.write_u32(0).await.unwrap();
             assert_eq!(s.read_u8().await.unwrap(), 1);
             s.write_all(&server_init(800, 600)).await.unwrap();
@@ -608,7 +618,8 @@ mod tests {
             assert_eq!(pf[0], 0);
             assert_eq!(s.read_u8().await.unwrap(), 2); // SetEncodings
         });
-        let (_, init) = handshake(c, &login("", Some("geheim"))).await.unwrap();
+        let l = Login { vnc_password: Some("vncpw"), ..login("", Some("konto")) };
+        let (_, init) = handshake(c, &l).await.unwrap();
         assert_eq!(init, ServerInit { width: 800, height: 600, name: "Test".into() });
         server.await.unwrap();
     }

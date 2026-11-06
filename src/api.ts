@@ -13,6 +13,7 @@ export interface Connection {
   sharedClipboard: boolean;
   fitToWindow: boolean;
   hasPassword: boolean;
+  hasVncPassword: boolean;
   hasKey: boolean;
   lastUsed: string | null;
 }
@@ -27,9 +28,9 @@ export const CERT_CHANGED = "CERT_CHANGED:";
 
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
-  /** password/sshKey: undefined = unverändert, "" = löschen */
-  save: (connection: Connection, password?: string, sshKey?: string) =>
-    invoke<Connection>("library_save", { connection, password, sshKey }),
+  /** Geheimnisse: undefined = unverändert, "" = löschen */
+  save: (connection: Connection, secrets: { password?: string; vncPassword?: string; sshKey?: string }) =>
+    invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
   shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void) => {
     const ch = new Channel<ShellEvent>();

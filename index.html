@@ -65,6 +65,10 @@
           <legend>Desktop <small>VNC</small></legend>
           <label class="switch"><input type="checkbox" name="vncOn" /> Aktiv</label>
           <label>Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
+          <label class="span">VNC-Passwort
+            <input name="vncPassword" type="password" autocomplete="new-password" />
+            <small id="vnc-pw-hint"></small>
+          </label>
         </fieldset>
         <fieldset>
           <legend>Shell und Dateien <small>SSH mit SFTP</small></legend>
@@ -83,7 +87,7 @@
         <label class="span" id="key-row" hidden>Privater ed25519-Schlüssel (OpenSSH-Format)
           <textarea name="key" rows="4" class="mono" spellcheck="false"></textarea>
         </label>
-        <label class="span">Passwort
+        <label class="span">Passwort des Benutzers <small>für SSH und die macOS-Bildschirmfreigabe</small>
           <input name="password" type="password" autocomplete="new-password" />
           <small id="pw-hint"></small>
         </label>

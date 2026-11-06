@@ -9,6 +9,8 @@ const SERVICE: &str = "ch.sesam.remote";
 pub enum Kind {
     /// Login-Passwort (SSH/VNC) bzw. Passphrase des Schlüssels.
     Password,
+    /// Eigenes VNC-Passwort (falls anders als das Kontopasswort).
+    VncPassword,
     /// Privater SSH-Schlüssel im OpenSSH-Format, nur ed25519 (Windows erlaubt höchstens 2560 Byte pro Eintrag).
     SshKey,
 }
@@ -16,6 +18,7 @@ pub enum Kind {
 fn entry(id: &str, kind: Kind) -> Result<Entry, String> {
     let k = match kind {
         Kind::Password => "password",
+        Kind::VncPassword => "vnc-password",
         Kind::SshKey => "ssh-key",
     };
     Entry::new(SERVICE, &format!("{id}:{k}")).map_err(|e| format!("Tresor nicht verfügbar: {e}"))

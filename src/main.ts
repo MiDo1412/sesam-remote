@@ -89,7 +89,7 @@ function renderDetails() {
       fact("Benutzer", c.user || "–"),
       fact("Desktop", c.vncPort ? `VNC · ${c.vncPort}` : "aus"),
       fact("Shell", c.sshPort ? `SSH · ${c.sshPort}` : "aus"),
-      fact("Anmeldung", c.hasPassword || c.hasKey ? "Im Tresor" : "Keine gespeichert"),
+      fact("Anmeldung", c.hasPassword || c.hasKey || c.hasVncPassword ? "Im Tresor" : "Keine gespeichert"),
       fact("Schlüssel", c.hasKey ? "Im Tresor" : "–"),
     ),
     btn("Desktop öffnen", "primary", () => open(c, "desktop"), !c.vncPort),
@@ -129,6 +129,7 @@ const blank = (): Connection => ({
   sharedClipboard: true,
   fitToWindow: true,
   hasPassword: false,
+  hasVncPassword: false,
   hasKey: false,
   lastUsed: null,
 });
@@ -149,6 +150,10 @@ function edit(c: Connection | null) {
   f.keyMode.value = editing.hasKey ? "keep" : "none";
   f.key.value = "";
   f.password.value = "";
+  f.vncPassword.value = "";
+  $("vnc-pw-hint").textContent = editing.hasVncPassword
+    ? "Im Tresor gespeichert. Leer lassen, um es zu behalten."
+    : "Nur nötig, wenn der Server ein eigenes VNC-Passwort hat. Sonst gilt das Passwort des Benutzers.";
   $("pw-hint").textContent = editing.hasPassword ? "Passwort ist verschlüsselt im Tresor gespeichert. Leer lassen, um es zu behalten." : "";
   f.sharedClipboard.checked = editing.sharedClipboard;
   f.fitToWindow.checked = editing.fitToWindow;
@@ -198,9 +203,9 @@ form.onsubmit = async (ev) => {
   const keyMode = s("keyMode");
   const sshKey = keyMode === "none" ? "" : keyMode === "import" ? String(fd.get("key") ?? "").trim() + "\n" : undefined;
   if (keyMode === "import" && sshKey!.trim() === "") return void ($("editor-error").textContent = "Bitte den privaten Schlüssel einfügen.");
-  const pw = String(fd.get("password") ?? "");
+  const secret = (k: string) => String(fd.get(k) ?? "") || undefined;
   try {
-    const saved = await api.save(c, pw === "" ? undefined : pw, sshKey);
+    const saved = await api.save(c, { password: secret("password"), vncPassword: secret("vncPassword"), sshKey });
     selected = saved.id;
     dlg.close();
     reload();

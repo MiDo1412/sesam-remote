@@ -23,6 +23,7 @@ pub struct Connection {
     pub fit_to_window: bool,
     /// Nur Merker für die Anzeige; das Geheimnis selbst liegt im Tresor.
     pub has_password: bool,
+    pub has_vnc_password: bool,
     pub has_key: bool,
     pub last_used: Option<String>,
 }
@@ -42,6 +43,7 @@ impl Default for Connection {
             shared_clipboard: true,
             fit_to_window: true,
             has_password: false,
+            has_vnc_password: false,
             has_key: false,
             last_used: None,
         }
