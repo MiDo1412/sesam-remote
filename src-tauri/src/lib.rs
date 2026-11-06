@@ -103,6 +103,7 @@ fn ssh_target(c: &Connection, trust: Option<String>) -> Result<ssh::Target<'_>, 
         password: vault::get(&c.id, Kind::Password)?,
         key: vault::get(&c.id, Kind::SshKey)?,
         trusted: trust,
+        opts: ssh::Options { legacy: c.ssh_legacy, keepalive: c.ssh_keepalive, compression: c.ssh_compression },
     })
 }
 

@@ -2,7 +2,7 @@
 
 use russh::client::{self, Handle, Msg};
 use russh::keys::{self, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
-use russh::{ChannelMsg, ChannelWriteHalf};
+use russh::{ChannelMsg, ChannelWriteHalf, cipher, compression, kex, mac};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -90,6 +90,71 @@ pub struct Target<'a> {
     pub password: Option<String>,
     pub key: Option<String>,
     pub trusted: Option<String>,
+    pub opts: Options,
+}
+
+/// Verbindungsoptionen pro Eintrag der Bibliothek.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct Options {
+    /// Veraltete Algorithmen zusätzlich anbieten (SHA-1, CBC, 3DES, ssh-rsa), am Ende der Liste.
+    pub legacy: bool,
+    /// Sekunden zwischen Keepalives, 0 = aus.
+    pub keepalive: u32,
+    pub compression: bool,
+}
+
+const KEX: &[kex::Name] = &[
+    kex::MLKEM768X25519_SHA256,
+    kex::CURVE25519,
+    kex::CURVE25519_PRE_RFC_8731,
+    kex::ECDH_SHA2_NISTP256,
+    kex::ECDH_SHA2_NISTP384,
+    kex::ECDH_SHA2_NISTP521,
+    kex::DH_GEX_SHA256,
+    kex::DH_G16_SHA512,
+    kex::DH_G18_SHA512,
+    kex::DH_G14_SHA256,
+];
+const KEX_LEGACY: &[kex::Name] = &[kex::DH_G14_SHA1, kex::DH_GEX_SHA1, kex::DH_G1_SHA1];
+/// Keine Verfahren, sondern Signale (Erweiterungen, «strict kex» gegen Terrapin); gehören immer dazu.
+const KEX_EXT: &[kex::Name] = &[kex::EXTENSION_SUPPORT_AS_CLIENT, kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT];
+const CIPHERS: &[cipher::Name] =
+    &[cipher::CHACHA20_POLY1305, cipher::AES_256_GCM, cipher::AES_128_GCM, cipher::AES_256_CTR, cipher::AES_192_CTR, cipher::AES_128_CTR];
+const CIPHERS_LEGACY: &[cipher::Name] = &[cipher::AES_256_CBC, cipher::AES_192_CBC, cipher::AES_128_CBC, cipher::TRIPLE_DES_CBC];
+const MACS: &[mac::Name] = &[mac::HMAC_SHA512_ETM, mac::HMAC_SHA256_ETM, mac::HMAC_SHA512, mac::HMAC_SHA256];
+const MACS_LEGACY: &[mac::Name] = &[mac::HMAC_SHA1_ETM, mac::HMAC_SHA1];
+
+/// Algorithmen-Reihenfolge (modern zuerst) und Keepalive. Nur was russh selbst implementiert.
+pub fn config(o: Options) -> client::Config {
+    use keys::{Algorithm, EcdsaCurve, HashAlg};
+    fn pick<T: Clone>(modern: &[T], legacy: &[T], on: bool) -> Vec<T> {
+        [modern, if on { legacy } else { &[] }].concat()
+    }
+    let mut key = vec![
+        Algorithm::Ed25519,
+        Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 },
+        Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 },
+        Algorithm::Ecdsa { curve: EcdsaCurve::NistP521 },
+        Algorithm::Rsa { hash: Some(HashAlg::Sha512) },
+        Algorithm::Rsa { hash: Some(HashAlg::Sha256) },
+    ];
+    if o.legacy {
+        key.push(Algorithm::Rsa { hash: None }); // ssh-rsa mit SHA-1
+    }
+    let compression =
+        if o.compression { vec![compression::ZLIB_LEGACY, compression::ZLIB, compression::NONE] } else { vec![compression::NONE] };
+    client::Config {
+        preferred: russh::Preferred {
+            kex: [pick(KEX, KEX_LEGACY, o.legacy), KEX_EXT.to_vec()].concat().into(),
+            key: key.into(),
+            cipher: pick(CIPHERS, CIPHERS_LEGACY, o.legacy).into(),
+            mac: pick(MACS, MACS_LEGACY, o.legacy).into(),
+            compression: compression.into(),
+            ..Default::default()
+        },
+        keepalive_interval: (o.keepalive > 0).then(|| std::time::Duration::from_secs(o.keepalive.into())),
+        ..Default::default()
+    }
 }
 
 async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), String> {
@@ -119,7 +184,7 @@ async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), Stri
 pub async fn connect(t: &Target<'_>) -> Result<Handle<Client>, String> {
     let rejected = Arc::new(Mutex::new(None));
     let client = Client { host: t.host.into(), port: t.port, trusted: t.trusted.clone(), rejected: rejected.clone() };
-    let config = Arc::new(client::Config::default());
+    let config = Arc::new(config(t.opts));
     let mut handle = client::connect(config, (t.host, t.port), client).await.map_err(|e| {
         rejected.lock().unwrap().take().unwrap_or_else(|| format!("Verbindung fehlgeschlagen: {e}"))
     })?;
@@ -170,7 +235,38 @@ impl Shell {
 
 #[cfg(test)]
 mod tests {
-    use super::check_private_key;
+    use super::*;
+
+    #[test]
+    fn algorithm_lists() {
+        let names = |c: &client::Config| {
+            let p = &c.preferred;
+            let mut v: Vec<String> = p.kex.iter().map(|n| n.as_ref().to_string()).collect();
+            v.extend(p.cipher.iter().map(|n| n.as_ref().to_string()));
+            v.extend(p.mac.iter().map(|n| n.as_ref().to_string()));
+            v.extend(p.key.iter().map(|k| format!("{k:?}")));
+            v
+        };
+        let old = ["diffie-hellman-group14-sha1", "aes128-cbc", "3des-cbc", "hmac-sha1", "Rsa { hash: None }"];
+        let modern = config(Options::default());
+        let m = names(&modern);
+        assert_eq!(m[0], "mlkem768x25519-sha256");
+        for o in old {
+            assert!(!m.iter().any(|n| n == o), "{o} gehört nicht in die Standardliste");
+        }
+        assert!(m.iter().any(|n| n == "kex-strict-c-v00@openssh.com"));
+        assert_eq!(modern.preferred.compression.iter().map(|c| c.as_ref()).collect::<Vec<_>>(), ["none"]);
+        assert!(modern.keepalive_interval.is_none());
+
+        let legacy = config(Options { legacy: true, keepalive: 30, compression: true });
+        let l = names(&legacy);
+        for o in old {
+            assert!(l.iter().any(|n| n == o), "{o} fehlt");
+        }
+        assert_eq!(l[0], "mlkem768x25519-sha256", "Veraltetes nur hinten");
+        assert_eq!(legacy.preferred.compression[0].as_ref(), "zlib@openssh.com");
+        assert_eq!(legacy.keepalive_interval, Some(std::time::Duration::from_secs(30)));
+    }
 
     // Wegwerf-Testschlüssel, nirgends verwendet.
     const ED25519: &str = "-----BEGIN OPENSSH PRIVATE KEY-----

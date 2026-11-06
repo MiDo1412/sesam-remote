@@ -25,6 +25,11 @@ export interface Connection {
   hasKey: boolean;
   /** Dateiübertragung: SFTP, sonst SCP ("auto") oder fest. */
   fileTransfer: "auto" | "sftp" | "scp";
+  /** Veraltete SSH-Algorithmen (SHA-1, CBC, 3DES, ssh-rsa) zusätzlich anbieten. */
+  sshLegacy: boolean;
+  /** Sekunden, 0 = aus */
+  sshKeepalive: number;
+  sshCompression: boolean;
   lastUsed: string | null;
 }
 

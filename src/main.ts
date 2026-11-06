@@ -150,6 +150,9 @@ const blank = (): Connection => ({
   hasRdpPassword: false,
   hasKey: false,
   fileTransfer: "auto",
+  sshLegacy: false,
+  sshKeepalive: 0,
+  sshCompression: false,
   lastUsed: null,
 });
 
@@ -188,7 +191,12 @@ function edit(c: Connection | null) {
   f.skipCertCheck.checked = editing.skipCertCheck;
   f.fileTransfer.value = editing.fileTransfer ?? "auto";
   fileTransferMenu.sync();
-  ($("advanced") as HTMLDetailsElement).open = editing.skipCertCheck || f.fileTransfer.value !== "auto";
+  f.sshKeepalive.value = editing.sshKeepalive ? String(editing.sshKeepalive) : "";
+  f.sshCompression.checked = editing.sshCompression;
+  f.sshLegacy.checked = editing.sshLegacy;
+  // Aufgeklappt, sobald etwas vom Standard abweicht.
+  ($("advanced") as HTMLDetailsElement).open =
+    editing.skipCertCheck || f.fileTransfer.value !== "auto" || !!editing.sshKeepalive || editing.sshCompression || editing.sshLegacy;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -266,6 +274,9 @@ form.onsubmit = async (ev) => {
     sharedFolder: s("sharedFolder"),
     skipCertCheck: fd.get("skipCertCheck") !== null,
     fileTransfer: (s("fileTransfer") || "auto") as Connection["fileTransfer"],
+    sshKeepalive: Math.max(0, Math.min(3600, Math.round(Number(s("sshKeepalive")) || 0))),
+    sshCompression: fd.get("sshCompression") !== null,
+    sshLegacy: fd.get("sshLegacy") !== null,
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],

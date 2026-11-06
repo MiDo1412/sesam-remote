@@ -147,3 +147,26 @@ Client-Crates).
 
 Zuerst Windows. macOS ist ohne Code-Änderung zu erwarten. iPad (`tauri ios init`) braucht
 macOS mit Xcode und den iOS-Tresor (siehe vault).
+
+## SSH: Umfang und Grenzen
+
+Ziel ist der Umfang von PuTTY/PSCP, soweit `russh` 0.65 (Features `ring`, `rsa`, `flate2`, `des`)
+und `russh-sftp` 3 ihn hergeben. Kryptografie implementiert Sesam nie selbst.
+
+**Algorithmen** (`ssh::config`, Reihenfolge = Vorliebe des Clients):
+- Schlüsseltausch: `mlkem768x25519-sha256` (Post-Quanten-Hybrid), `curve25519-sha256`,
+  `ecdh-sha2-nistp256/384/521`, `diffie-hellman-group-exchange-sha256`, `group16/18-sha512`,
+  `group14-sha256`; dazu immer `ext-info-c` und `kex-strict-c-v00@openssh.com` (Terrapin-Schutz).
+- Chiffren: `chacha20-poly1305`, `aes256/128-gcm`, `aes256/192/128-ctr`.
+- MACs: `hmac-sha2-512/256` (ETM zuerst).
+- Host-Schlüssel: ed25519, ECDSA (P-256/384/521), RSA mit SHA-512/256.
+- «Veraltete Algorithmen erlauben» hängt hinten an: `diffie-hellman-group14-sha1`,
+  `group-exchange-sha1`, `group1-sha1`, `aes*-cbc`, `3des-cbc`, `hmac-sha1(-etm)`, `ssh-rsa` (SHA-1).
+- Kompression `zlib@openssh.com`/`zlib` nur, wenn eingeschaltet; Keepalive in Sekunden (russh
+  trennt nach drei unbeantworteten).
+
+**Nicht verfügbar** (russh kann es nicht oder nur mit eigenem Krypto-Code):
+`sntrup761x25519-sha512` (fehlt in russh), `aes*-cbc` ohne «veraltet», `arcfour`, `blowfish`, DSA-Host-Schlüssel
+(nur mit Feature `dsa`, bewusst aus), GSSAPI/Kerberos (russh hat nur die Schnittstelle
+`authenticate_gssapi_with_mic`; SSPI-Anbindung wäre eigener Code), Server-Zertifikate (`*-cert-v01`,
+werden abgelehnt), SSH-1, X11-Weiterleitung, serielle Verbindungen, Telnet/rlogin.

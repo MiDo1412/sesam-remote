@@ -106,6 +106,9 @@
               <option value="scp">Nur SCP</option>
             </select>
           </label>
+          <label>SSH-Keepalive (Sekunden)<input name="sshKeepalive" type="number" min="0" max="3600" class="mono" placeholder="0 = aus" /></label>
+          <label class="option"><span><b>SSH-Kompression</b><small>Hilft bei langsamen Leitungen</small></span><input type="checkbox" name="sshCompression" /></label>
+          <label class="option warn"><span><b>Veraltete Algorithmen erlauben</b><small>Für alte Server: SHA-1, CBC, 3DES, ssh-rsa. Schwächer, nur wenn nötig.</small></span><input type="checkbox" name="sshLegacy" /></label>
           <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
         </details>
         <details id="extra-creds" class="span">

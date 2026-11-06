@@ -40,6 +40,11 @@ pub struct Connection {
     pub has_key: bool,
     /// Dateiübertragung: "auto" (SFTP, sonst SCP) | "sftp" | "scp".
     pub file_transfer: String,
+    /// SSH: veraltete Algorithmen erlauben (SHA-1, CBC, 3DES, ssh-rsa).
+    pub ssh_legacy: bool,
+    /// SSH-Keepalive in Sekunden, 0 = aus.
+    pub ssh_keepalive: u32,
+    pub ssh_compression: bool,
     pub last_used: Option<String>,
 }
 
@@ -68,6 +73,9 @@ impl Default for Connection {
             has_rdp_password: false,
             has_key: false,
             file_transfer: "auto".into(),
+            ssh_legacy: false,
+            ssh_keepalive: 0,
+            ssh_compression: false,
             last_used: None,
         }
     }
