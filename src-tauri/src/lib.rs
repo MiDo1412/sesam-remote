@@ -553,6 +553,11 @@ fn rdp_key(sessions: State<RdpSessions>, sid: String, code: String, key: String,
 }
 
 #[tauri::command]
+fn rdp_set_monitors(sessions: State<RdpSessions>, sid: String, monitors: Vec<rdp::Monitor>) -> Result<(), String> {
+    rdp_send(&sessions, &sid, rdp::Input::Monitors(monitors))
+}
+
+#[tauri::command]
 fn rdp_release_all(sessions: State<RdpSessions>, sid: String) -> Result<(), String> {
     rdp_send(&sessions, &sid, rdp::Input::ReleaseAll)
 }
@@ -638,6 +643,7 @@ pub fn run() {
             rdp_wheel,
             rdp_key,
             rdp_release_all,
+            rdp_set_monitors,
             rdp_set_size,
             rdp_close
         ])

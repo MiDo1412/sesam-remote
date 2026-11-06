@@ -1,4 +1,4 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize, primaryMonitor } from "@tauri-apps/api/window";
 import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol, type Connection } from "./api";
 import { ask, showView } from "./ui";
 import { keysym } from "./keysym";
@@ -225,10 +225,53 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     $("session").classList.toggle("fullscreen", on);
     if (on) status.textContent = "F11 beendet das Vollbild.";
   };
+  // «Alle Monitore» (RDP): rahmenloses Fenster über alle Monitore, Server bekommt deren Anordnung.
+  let spanned: { pos: PhysicalPosition; size: PhysicalSize; mode: Mode } | null = null;
+  const toggleSpan = async () => {
+    if (spanned) {
+      const prev = spanned;
+      spanned = null;
+      await win.setAlwaysOnTop(false);
+      await win.setDecorations(true);
+      await win.setSize(prev.size);
+      await win.setPosition(prev.pos);
+      $("session").classList.remove("fullscreen");
+      mode = prev.mode;
+      layout();
+      requestSize();
+      return;
+    }
+    if (!sid || !rdp) return;
+    const mons = await availableMonitors();
+    const prim = (await primaryMonitor()) ?? mons[0];
+    if (mons.length < 2) return void (status.textContent = "Es ist nur ein Monitor angeschlossen.");
+    spanned = { pos: await win.outerPosition(), size: await win.innerSize(), mode };
+    const x0 = Math.min(...mons.map((m) => m.position.x)), y0 = Math.min(...mons.map((m) => m.position.y));
+    const x1 = Math.max(...mons.map((m) => m.position.x + m.size.width)), y1 = Math.max(...mons.map((m) => m.position.y + m.size.height));
+    await win.setFullscreen(false);
+    await win.setDecorations(false);
+    await win.setPosition(new PhysicalPosition(x0, y0));
+    await win.setSize(new PhysicalSize(x1 - x0, y1 - y0));
+    await win.setAlwaysOnTop(true);
+    $("session").classList.add("fullscreen");
+    mode = "scale"; // entfernte Fläche = Vereinigung der Monitore, also deckungsgleich
+    layout();
+    api.rdpSetMonitors(sid, mons.map((m) => ({
+      left: m.position.x,
+      top: m.position.y,
+      width: m.size.width,
+      height: m.size.height,
+      primary: m.name === prim.name && m.position.x === prim.position.x && m.position.y === prim.position.y,
+    }))).catch((e) => (status.textContent = String(e)));
+    status.textContent = "F11 beendet «Alle Monitore».";
+  };
+  $("span").hidden = !rdp;
+  $("span").onclick = toggleSpan;
   const onF11 = (e: KeyboardEvent) => {
     if (e.key === "F11") {
       e.preventDefault();
-      toggleFullscreen();
+      if (spanned) toggleSpan();
+      else toggleFullscreen();
     }
   };
   window.addEventListener("keydown", onF11);
@@ -245,6 +288,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     window.removeEventListener("focus", syncClipboard);
     if (sid) (rdp ? api.rdpClose(sid) : api.vncClose(sid)).catch(() => {});
     sid = null;
+    if (spanned) toggleSpan();
     win.setFullscreen(false);
     $("session").classList.remove("fullscreen");
     close = null;

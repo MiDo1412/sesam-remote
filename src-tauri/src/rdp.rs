@@ -65,9 +65,35 @@ pub enum Input {
     Scancode { code: u16, down: bool },
     Unicode { ch: char, down: bool },
     Resize { width: u16, height: u16 },
+    /// Mehrere Monitore: Position relativ zum Hauptmonitor, Grösse in Pixeln.
+    Monitors(Vec<Monitor>),
     ReleaseAll,
     /// Vom Zwischenablage-Backend.
     Clipboard(ClipboardMessage),
+}
+
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+pub struct Monitor {
+    pub left: i32,
+    pub top: i32,
+    pub width: u32,
+    pub height: u32,
+    pub primary: bool,
+}
+
+/// Monitor-Layout für Display Control: Hauptmonitor bei (0,0), Grössen in gültige Werte gerückt.
+pub fn monitor_layout(monitors: &[Monitor]) -> Result<ironrdp_displaycontrol::pdu::DisplayControlMonitorLayout, String> {
+    let primary = monitors.iter().find(|m| m.primary).or(monitors.first()).ok_or("Keine Monitore")?;
+    let mut entries = Vec::new();
+    for m in monitors {
+        let (w, h) = MonitorLayoutEntry::adjust_display_size(m.width, m.height);
+        let is_primary = std::ptr::eq(m, primary);
+        let e = if is_primary { MonitorLayoutEntry::new_primary(w, h) } else { MonitorLayoutEntry::new_secondary(w, h) }
+            .and_then(|e| if is_primary { Ok(e) } else { e.with_position(m.left - primary.left, m.top - primary.top) })
+            .map_err(|e| format!("Monitor-Layout: {e}"))?;
+        entries.push(e);
+    }
+    ironrdp_displaycontrol::pdu::DisplayControlMonitorLayout::new(&entries).map_err(|e| format!("Monitor-Layout: {e}"))
 }
 
 /// Der TLS-Zertifikat-Fingerabdruck, den der Server gezeigt hat (für das Pinning nach Bestätigung).
@@ -639,6 +665,17 @@ async fn active(
                         write_all(&mut writer, &out).await?;
                         continue;
                     }
+                    Input::Monitors(list) => {
+                        let layout = match monitor_layout(&list) {
+                            Ok(l) => l,
+                            Err(e) => { emit(Event::Info(e)); continue; }
+                        };
+                        match stage.encode_monitor_layout(&layout) {
+                            Some(frame) => writer.write_all(&frame.map_err(err)?).await.map_err(|e| e.to_string())?,
+                            None => { emit(Event::Info("Der Server kann keine Monitor-Anordnung übernehmen.".into())); }
+                        }
+                        continue;
+                    }
                     Input::Resize { width, height } => {
                         let (w, h) = MonitorLayoutEntry::adjust_display_size(u32::from(width), u32::from(height));
                         match stage.encode_resize(w, h, None, None) {
@@ -745,6 +782,16 @@ mod tests {
         let dir = std::env::temp_dir();
         assert!(drive_channel(&dir).is_ok());
         assert!(drive_channel(std::path::Path::new("relativ")).is_err());
+    }
+
+    #[test]
+    fn monitor_layout_is_relative_to_primary() {
+        let m = |left, top, width, height, primary| Monitor { left, top, width, height, primary };
+        // Zweiter Monitor links vom Hauptmonitor: negative Position ist erlaubt.
+        assert!(monitor_layout(&[m(0, 0, 2560, 1440, true), m(-1920, 200, 1920, 1080, false)]).is_ok());
+        // Hauptmonitor nicht bei (0,0) im System: wird verschoben.
+        assert!(monitor_layout(&[m(1920, 0, 1920, 1080, false), m(3840, 0, 1921, 1080, true)]).is_ok());
+        assert!(monitor_layout(&[]).is_err());
     }
 
     #[test]

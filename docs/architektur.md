@@ -132,7 +132,14 @@ die Anzeige (`desktop.ts`) ist für beide Protokolle dieselbe.
 - **Ton:** `ironrdp-rdpsnd` statisch und dynamisch (`AUDIO_PLAYBACK_DVC`), Ausgabe über cpal, nur PCM
   (ohne Opus/AAC, damit keine C-Bibliotheken nötig sind).
 
-Noch offen: Laufwerke (`ironrdp-rdpdr`), mehrere Monitore, H.264 (OpenH264), Zwischenablage unter macOS. Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
+- **Laufwerk:** `ironrdp-rdpdr` mit dem nativen Backend aus `ironrdp-rdpdr-native`; ein lokaler Ordner pro
+  Verbindung (Sheet, standardmässig aus), pro Verbindung ein frisches Backend.
+- **Mehrere Monitore:** «Alle Monitore» legt das Fenster rahmenlos über alle Monitore und schickt die
+  Anordnung per Display Control (`encode_monitor_layout`, Hauptmonitor bei 0,0). Der Server richtet die
+  Monitore ein; die Anzeige skaliert die Gesamtfläche deckungsgleich. Bei gemischter Skalierung der
+  Monitore kann das Bild leicht unscharf werden (ein Fenster, eine Pixeldichte).
+
+Noch offen: H.264 (OpenH264), Zwischenablage unter macOS, Drucker. Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
 braucht aber den Server aus dem IronRDP-Git-Repository (die veröffentlichte Version passt nicht zu den
 Client-Crates).
 

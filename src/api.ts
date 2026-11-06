@@ -88,6 +88,8 @@ export const api = {
   rdpWheel: (sid: string, vertical: boolean, units: number) => invoke<void>("rdp_wheel", { sid, vertical, units }),
   rdpKey: (sid: string, code: string, key: string, down: boolean, altgr: boolean) => invoke<void>("rdp_key", { sid, code, key, down, altgr }),
   rdpReleaseAll: (sid: string) => invoke<void>("rdp_release_all", { sid }),
+  rdpSetMonitors: (sid: string, monitors: { left: number; top: number; width: number; height: number; primary: boolean }[]) =>
+    invoke<void>("rdp_set_monitors", { sid, monitors }),
   rdpSetSize: (sid: string, width: number, height: number) => invoke<void>("rdp_set_size", { sid, width, height }),
   rdpClose: (sid: string) => invoke<void>("rdp_close", { sid }),
   sftpOpen: (id: string, trust: string | null) => invoke<string>("sftp_open", { id, trust }),
