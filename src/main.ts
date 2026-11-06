@@ -8,6 +8,7 @@ import { openHelp } from "./help";
 import { applyAppearance, openSettings } from "./settings";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
+import { initFieldHelp } from "./fieldhelp";
 import { listen } from "@tauri-apps/api/event";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { enhanceSelect } from "./menu";
@@ -291,6 +292,8 @@ $("open-settings").onclick = () => openSettings();
 // Befehle aus dem App-Menü und Tastenkürzel
 const quick = initQuick((c) => edit({ ...c, id: crypto.randomUUID(), name: c.address }, true));
 $("empty-new").onclick = () => edit(null);
+initFieldHelp(document.getElementById("editor-form")!);
+initFieldHelp(document.getElementById("quick-form")!);
 const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
   else if (cmd === "new") edit(null);

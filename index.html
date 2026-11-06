@@ -60,79 +60,77 @@
     <dialog id="editor" aria-labelledby="editor-title">
       <form id="editor-form" method="dialog" class="sheet">
         <h2 id="editor-title">Verbindung bearbeiten</h2>
-        <label>Name<input name="name" required /></label>
-        <label>Gruppe<input name="group" list="groups" /></label>
+
+        <h3 class="sec span">Allgemein</h3>
+        <label data-tip="Frei wählbar, erscheint in der Bibliothek. Beispiel: «Büro-PC». Pflichtfeld.">Name<input name="name" required /></label>
+        <label data-tip="Optional. Verbindungen mit gleicher Gruppe stehen in der Seitenleiste zusammen. Beispiel: «Homelab».">Gruppe<input name="group" list="groups" /></label>
         <datalist id="groups"></datalist>
-        <label class="span">Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
-        <hr />
-        <fieldset>
-          <legend>Desktop <small>VNC</small> <button type="button" class="help-btn" data-help="vnc" aria-label="Hilfe zu VNC">?</button></legend>
-          <label class="switch"><input type="checkbox" name="vncOn" /> Aktiv</label>
-          <label>Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
-        </fieldset>
-        <fieldset>
-          <legend>Desktop <small>RDP</small> <button type="button" class="help-btn" data-help="rdp-gnome" aria-label="Hilfe zu RDP">?</button></legend>
-          <label class="switch"><input type="checkbox" name="rdpOn" /> Aktiv</label>
-          <label>Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
-          <label class="span">Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="optional, nur in Windows-Domänen" /></label>
-          <small class="span note">Bei GNOME (Ubuntu): Benutzer und Passwort aus grdctl, nicht dein Ubuntu-Passwort. Dein Ubuntu-Konto gibst du danach am Anmeldebildschirm ein.</small>
-          <label class="span">Ordner als Laufwerk freigeben
-            <span class="pick">
-              <input name="sharedFolder" class="mono" placeholder="aus" readonly />
-              <button type="button" id="share-pick">Wählen …</button>
-              <button type="button" id="share-clear" class="plain">Aus</button>
-            </span>
-          </label>
-        </fieldset>
-        <fieldset>
-          <legend>Shell und Dateien <small>SSH mit SFTP</small> <button type="button" class="help-btn" data-help="ssh" aria-label="Hilfe zu SSH">?</button></legend>
-          <label class="switch"><input type="checkbox" name="sshOn" /> Aktiv</label>
-          <label>Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
-        </fieldset>
-        <hr />
-        <label>Benutzer<input name="user" autocomplete="off" /></label>
-        <label>Passwort
+        <label class="span" data-tip="Name oder IP-Adresse des Zielrechners, ohne Port. Beispiele: 192.168.1.4, doerig-02.local. Pflichtfeld.">Hostname oder IP-Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
+
+        <h3 class="sec span">Anmeldung</h3>
+        <label data-tip="Benutzername auf dem Zielrechner. Bei RDP mit GNOME: der Benutzername aus «grdctl … set-credentials», nicht dein Ubuntu-Konto. Bei macOS: der Kurzname des Kontos.">Benutzername<input name="user" autocomplete="off" /></label>
+        <label data-tip="Gilt für alle Dienste dieser Verbindung. Wird verschlüsselt im Schlüsselbund des Betriebssystems gespeichert. Leer lassen, um ein gespeichertes Passwort zu behalten.">Passwort
           <input name="password" type="password" autocomplete="new-password" />
           <span class="hint"><small id="pw-hint"></small><button type="button" class="link" id="pw-clear" hidden>Entfernen</button></span>
         </label>
-        <label class="span">SSH-Schlüssel
+        <label class="span" data-tip="Nur für SSH. Mit Schlüssel meldet sich Sesam ohne Passwort an (ed25519, OpenSSH-Format). Ein Passwort oben dient dann als Passphrase des Schlüssels.">SSH-Schlüssel
           <select name="keyMode">
             <option value="keep">Unverändert</option>
             <option value="none">Keiner, nur Passwort</option>
             <option value="import">Schlüssel importieren …</option>
           </select>
         </label>
-        <label class="span" id="key-row" hidden>Privater ed25519-Schlüssel (OpenSSH-Format)
+        <label class="span" id="key-row" hidden>Privater Schlüssel (OpenSSH-Format)
           <textarea name="key" rows="4" class="mono" spellcheck="false"></textarea>
         </label>
-        <details id="advanced" class="span">
-          <summary>Erweitert</summary>
-          <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
-        </details>
         <details id="extra-creds" class="span">
-          <summary>Abweichende Zugangsdaten …</summary>
+          <summary>Abweichende Passwörter …</summary>
           <p class="note">Nur nötig, wenn ein Dienst ein anderes Passwort hat. Sonst gilt das Passwort oben für alle.</p>
           <div class="pair">
-            <label>VNC-Passwort
+            <label data-tip="Nur wenn der VNC-Server ein eigenes VNC-Passwort hat (nicht bei macOS).">VNC-Passwort
               <input name="vncPassword" type="password" autocomplete="new-password" />
               <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
             </label>
-            <label>RDP-Passwort
+            <label data-tip="Nur wenn RDP ein anderes Passwort braucht als SSH.">RDP-Passwort
               <input name="rdpPassword" type="password" autocomplete="new-password" />
               <span class="hint"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
             </label>
           </div>
         </details>
-        <hr />
-        <label class="option"><span><b>Gemeinsame Zwischenablage</b><small>Text, Bilder und Dateien hier kopieren, dort einfügen</small></span><input type="checkbox" name="sharedClipboard" /></label>
-        <label class="option"><span><b>Ton abspielen</b><small>Ton des entfernten Rechners hier hören (RDP)</small></span><input type="checkbox" name="playAudio" /></label>
-        <label class="option"><span><b>An Fenster anpassen</b><small>Entfernte Auflösung folgt der Fenstergrösse</small></span><input type="checkbox" name="fitToWindow" /></label>
-        <div class="row"><span>Ausrichtung des Monitors</span>
-          <div class="segmented" role="radiogroup" aria-label="Ausrichtung des Monitors">
-            <label><input type="radio" name="orientation" value="landscape" />Querformat</label>
-            <label><input type="radio" name="orientation" value="portrait" />Hochformat</label>
+
+        <h3 class="sec span">Dienste</h3>
+        <fieldset class="span svc">
+          <legend>Remotedesktop <small>RDP</small> <button type="button" class="help-btn" data-help="rdp-gnome" aria-label="Hilfe zu RDP">?</button></legend>
+          <label class="switch"><input type="checkbox" name="rdpOn" /> Ein</label>
+          <div class="svc-fields">
+            <label data-tip="Standard 3389. GNOME-Bildschirmfreigabe einzelner Benutzer: der Port aus der Übersicht des Setup-Scripts (z. B. 3390).">Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
+            <label data-tip="Nur in Windows-Domänen, sonst leer lassen. Beispiel: FIRMA.">Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="leer lassen" /></label>
+            <small class="span note">Bei GNOME (Ubuntu): Benutzername und Passwort aus grdctl, nicht dein Ubuntu-Passwort. Dein Ubuntu-Konto gibst du danach am Anmeldebildschirm ein.</small>
+            <label class="span" data-tip="Optional. Dieser Ordner erscheint auf dem entfernten Rechner als Laufwerk. Standardmässig aus.">Ordner als Laufwerk freigeben
+              <span class="pick">
+                <input name="sharedFolder" class="mono" placeholder="aus" readonly />
+                <button type="button" id="share-pick">Wählen …</button>
+                <button type="button" id="share-clear" class="plain">Aus</button>
+              </span>
+            </label>
           </div>
-        </div>
+        </fieldset>
+        <fieldset class="span svc">
+          <legend>Bildschirmfreigabe <small>VNC</small> <button type="button" class="help-btn" data-help="vnc" aria-label="Hilfe zu VNC">?</button></legend>
+          <label class="switch"><input type="checkbox" name="vncOn" /> Ein</label>
+          <div class="svc-fields">
+            <label data-tip="Standard 5900. Für macOS-Bildschirmfreigabe und wayvnc.">Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
+          </div>
+        </fieldset>
+        <fieldset class="span svc">
+          <legend>Shell und Dateien <small>SSH, SFTP</small> <button type="button" class="help-btn" data-help="ssh" aria-label="Hilfe zu SSH">?</button></legend>
+          <label class="switch"><input type="checkbox" name="sshOn" /> Ein</label>
+          <div class="svc-fields">
+            <label data-tip="Standard 22.">Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
+          </div>
+        </fieldset>
+
+        <h3 class="sec span">Anzeige</h3>
         <div class="row" id="desktop-protocol-row"><span>Desktop über</span>
           <div class="segmented" role="radiogroup" aria-label="Desktop über">
             <label><input type="radio" name="desktopProtocol" value="rdp" />RDP</label>
@@ -140,12 +138,27 @@
           </div>
         </div>
         <div class="row"><span>Bei Doppelklick öffnen</span>
-          <div class="segmented" role="radiogroup" aria-label="Standardansicht">
+          <div class="segmented" role="radiogroup" aria-label="Bei Doppelklick öffnen">
             <label><input type="radio" name="defaultView" value="desktop" />Desktop</label>
             <label><input type="radio" name="defaultView" value="shell" />Shell</label>
             <label><input type="radio" name="defaultView" value="files" />Dateien</label>
           </div>
         </div>
+        <div class="row"><span>Ausrichtung</span>
+          <div class="segmented" role="radiogroup" aria-label="Ausrichtung">
+            <label><input type="radio" name="orientation" value="landscape" />Querformat</label>
+            <label><input type="radio" name="orientation" value="portrait" />Hochformat</label>
+          </div>
+        </div>
+        <label class="option"><span><b>An Fenster anpassen</b><small>Die Auflösung des entfernten Rechners folgt der Fenstergrösse</small></span><input type="checkbox" name="fitToWindow" /></label>
+        <label class="option"><span><b>Gemeinsame Zwischenablage</b><small>Text, Bilder und Dateien hier kopieren, dort einfügen</small></span><input type="checkbox" name="sharedClipboard" /></label>
+        <label class="option"><span><b>Ton abspielen</b><small>Ton des entfernten Rechners hier hören (RDP)</small></span><input type="checkbox" name="playAudio" /></label>
+
+        <details id="advanced" class="span">
+          <summary>Erweitert</summary>
+          <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
+        </details>
+
         <p id="editor-error" class="error span" role="alert"></p>
         <div class="row actions">
           <button type="button" id="editor-delete" class="danger">Löschen</button>
