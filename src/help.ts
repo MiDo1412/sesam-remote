@@ -6,9 +6,11 @@ import macos from "../docs/hilfe/macos.md?raw";
 import rdpGnome from "../docs/hilfe/rdp-gnome.md?raw";
 import rdpWindows from "../docs/hilfe/rdp-windows.md?raw";
 import ssh from "../docs/hilfe/ssh.md?raw";
+import creds from "../docs/hilfe/zugangsdaten.md?raw";
 
 /** Anleitungen aus docs/hilfe; die IDs nutzt auch das Menü «Hilfe» (lib.rs). */
 export const topics = [
+  { id: "zugangsdaten", title: "Welche Zugangsdaten?", md: creds },
   { id: "rdp-gnome", title: "RDP mit GNOME (Ubuntu)", md: rdpGnome },
   { id: "rdp-windows", title: "RDP mit Windows", md: rdpWindows },
   { id: "vnc", title: "VNC allgemein", md: vnc },

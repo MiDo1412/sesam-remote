@@ -883,6 +883,8 @@ pub fn run() {
                 .item(&MenuItemBuilder::with_id("cmd:settings", "Einstellungen …").accelerator("CmdOrCtrl+,").build(app)?)
                 .build()?;
             let help = SubmenuBuilder::new(app, "Hilfe")
+                .text("help:zugangsdaten", "Welche Zugangsdaten?")
+                .separator()
                 .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")
                 .text("help:rdp-windows", "RDP mit Windows")
                 .text("help:vnc", "VNC allgemein")
