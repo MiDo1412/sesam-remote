@@ -51,7 +51,8 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], opts: { checked
       rows.push(row);
       menu.append(row);
     }
-    document.body.append(menu);
+    // In einem offenen Dialog dorthin: modale Dialoge liegen in der obersten Ebene, alles andere ist inaktiv.
+    (anchor.closest("dialog[open]") ?? document.body).append(menu);
 
     // Platzierung: unter dem Knopf, sonst darüber; nach links, wenn rechts kein Platz.
     const a = anchor.getBoundingClientRect();
