@@ -1,6 +1,7 @@
 /** Phosphor Icons (MIT), nur die gebrauchten, als Inline-SVG mit currentColor. */
 import arrowClockwise from "@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw";
 import arrowSquareOut from "@phosphor-icons/core/assets/regular/arrow-square-out.svg?raw";
+import minus from "@phosphor-icons/core/assets/regular/minus.svg?raw";
 import arrowsOut from "@phosphor-icons/core/assets/regular/arrows-out.svg?raw";
 import camera from "@phosphor-icons/core/assets/regular/camera.svg?raw";
 import clipboardText from "@phosphor-icons/core/assets/regular/clipboard-text.svg?raw";
@@ -63,4 +64,5 @@ export const ICON = {
   trash: sized(trash),
   upload: sized(uploadSimple),
   close: sized(x, 12),
+  minimize: sized(minus, 12),
 };

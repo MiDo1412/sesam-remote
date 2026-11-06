@@ -1,4 +1,4 @@
-/** Sitzungen als Tabs. «Bibliothek» lässt sie im Hintergrund weiterlaufen; erst «Trennen» beendet sie. */
+/** Sitzungen als Tabs. «Bibliothek» und «Minimieren» lassen sie im Hintergrund weiterlaufen; erst «Trennen» beendet sie. */
 import type { Connection } from "./api";
 import { ICON } from "./icons";
 import { openMenu } from "./menu";
@@ -42,6 +42,8 @@ interface Tab {
   tabEl: HTMLElement;
   state: "connecting" | "connected" | "closed";
   sub: string;
+  /** Aus der Tab-Leiste genommen, läuft weiter; zurück über «Aktive Sitzungen». */
+  minimized: boolean;
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -90,8 +92,14 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   x.innerHTML = ICON.close;
   x.title = "Trennen";
   x.setAttribute("aria-label", `${label.textContent} trennen`);
+  const min = document.createElement("button");
+  min.type = "button";
+  min.className = "tab-close";
+  min.innerHTML = ICON.minimize;
+  min.title = "Minimieren (läuft weiter)";
+  min.setAttribute("aria-label", `${label.textContent} minimieren`);
   tabEl.innerHTML = kindIcon[kind];
-  tabEl.append(dot, label, x);
+  tabEl.append(dot, label, min, x);
   $("tabs").append(tabEl);
 
   const tab: Tab = {
@@ -99,6 +107,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
     tabEl,
     state: "connecting",
     sub: "",
+    minimized: false,
     handle: { close() {} },
     ctx: {
       id,
@@ -126,6 +135,10 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   tabEl.onkeydown = (e) => {
     if (e.key === "Enter" || e.key === " ") activate(tab);
   };
+  min.onclick = (e) => {
+    e.stopPropagation();
+    minimizeTab(tab);
+  };
   x.onclick = (e) => {
     e.stopPropagation();
     closeTab(tab);
@@ -135,16 +148,35 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
     const v = await openMenu(tabEl, [
       { value: "dup", label: `Weitere ${kindLabel[kind]}-Sitzung`, icon: ICON.plus, disabled: kind === "desktop" },
       ...(conn.id.startsWith("quick-") ? [{ value: "save", label: "Als Verbindung sichern …", icon: ICON.save }] : []),
-      { value: "close", label: "Trennen", icon: ICON.disconnect, separator: true },
+      { value: "min", label: "Minimieren", icon: ICON.minimize, separator: true },
+      { value: "close", label: "Trennen", icon: ICON.disconnect },
     ]);
     if (v === "save") dispatchEvent(new CustomEvent("sesam:save-quick", { detail: conn }));
     if (v === "dup") openTab(conn, kind, true);
+    if (v === "min") minimizeTab(tab);
     if (v === "close") closeTab(tab);
   };
   tabs.push(tab);
   tab.ctx.setState("connecting");
   activate(tab);
   tab.handle = factories[kind](tab.ctx);
+  // «Minimieren» vor «Trennen» in jeder Werkzeugleiste (auch für das Menü «Sitzung»).
+  const minBtn = toolButton(ICON.minimize, "Minimieren", () => minimizeTab(tab), { shortcut: "läuft weiter" });
+  const last = toolbar.lastElementChild;
+  if (last) toolbar.insertBefore(minBtn, last);
+  else toolbar.append(minBtn);
+}
+
+/** Sitzung aus der Tab-Leiste nehmen; sie läuft weiter und kommt über «Aktive Sitzungen» zurück. */
+export function minimizeTab(tab: Tab) {
+  tab.minimized = true;
+  tab.tabEl.hidden = true;
+  if (active === tab) {
+    const next = [...tabs].reverse().find((t) => !t.minimized);
+    if (next) activate(next);
+    else showLibrary();
+  }
+  renderActiveBar();
 }
 
 function activate(tab: Tab) {
@@ -155,6 +187,8 @@ function activate(tab: Tab) {
     active.handle.onHide?.();
   }
   active = tab;
+  tab.minimized = false;
+  tab.tabEl.hidden = false;
   for (const t of tabs) {
     t.ctx.pane.hidden = t !== tab;
     t.ctx.toolbar.hidden = t !== tab;
@@ -204,7 +238,8 @@ function renderActiveBar() {
       b.className = "chip";
       b.dataset.state = t.state;
       b.innerHTML = kindIcon[t.kind];
-      b.append(Object.assign(document.createElement("span"), { className: "dot" }), document.createTextNode(`${t.ctx.conn.name} · ${kindLabel[t.kind]}`));
+      b.title = t.minimized ? "Minimiert – klicken zum Fortsetzen" : "Zur Sitzung wechseln";
+      b.append(Object.assign(document.createElement("span"), { className: "dot" }), document.createTextNode(`${t.ctx.conn.name} · ${kindLabel[t.kind]}${t.minimized ? " (minimiert)" : ""}`));
       b.onclick = () => activate(t);
       return b;
     }),
@@ -216,8 +251,10 @@ export function runTool(label: string) {
   if (label === "Bibliothek") return showLibrary();
   if (label === "Nächster Tab" || label === "Vorheriger Tab") {
     if (!tabs.length) return;
-    const i = active ? tabs.indexOf(active) : -1;
-    return activate(tabs[(i + (label === "Nächster Tab" ? 1 : tabs.length - 1)) % tabs.length]!);
+    const open = tabs.filter((t) => !t.minimized || t === active);
+    if (!open.length) return;
+    const j = active ? open.indexOf(active) : -1;
+    return activate(open[(j + (label === "Nächster Tab" ? 1 : open.length - 1) + open.length) % open.length]!);
   }
   if (!active || $("session").hidden) return;
   active.ctx.toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(label)}"]:not(:disabled)`)?.click();

@@ -895,6 +895,7 @@ pub fn run() {
                 .text("tool:Alle Monitore", "Alle Monitore")
                 .text("tool:Vollbild", "Vollbild")
                 .separator()
+                .text("tool:Minimieren", "Minimieren")
                 .text("tool:Trennen", "Trennen")
                 .build()?;
             let help = SubmenuBuilder::new(app, "Hilfe")
