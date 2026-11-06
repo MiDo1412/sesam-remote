@@ -7,6 +7,7 @@ import { askHostKey, askText } from "./ui";
 import { ICON } from "./icons";
 import { openMenu } from "./menu";
 import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
+import { createKeyboard, isTouch, termSequence } from "./osk";
 import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings } from "./termthemes";
 
 const FONT = "'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
@@ -96,6 +97,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
     else if (v) saveTermSettings({ ...t, theme: v });
     term.focus();
   });
+  // Bildschirmtastatur: xterm-Eingabefeld plus Zusatztasten (Esc, Strg, Pfeile, F-Tasten).
+  const kb = createKeyboard({ pane: ctx.pane, input: term.textarea!, press: (k, m) => term.input(termSequence(k, m, term.modes.applicationCursorKeysMode)) });
   ctx.toolbar.append(
     toolButton(ICON.plus, "Neue Shell", () => ctx.openTab("shell", true), { shortcut: "Strg+Umschalt+T" }),
     toolSep(),
@@ -103,6 +106,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     toolButton(ICON.typeClipboard, "Einfügen", paste, { shortcut: "Strg+Umschalt+V" }),
     toolButton(ICON.search, "Suchen", find, { shortcut: "Strg+Umschalt+F" }),
     schemeBtn,
+    ...(isTouch() ? [kb.button] : []),
     toolSep(),
     toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
   );
@@ -152,12 +156,14 @@ export function shellTab(ctx: TabCtx): TabHandle {
   return {
     close() {
       ro.disconnect();
+      kb.dispose();
       removeEventListener("sesam:terminal-settings", applySettings);
       scheme.removeEventListener("change", applySettings);
       if (sid) api.shellClose(sid);
       sid = null;
       term.dispose();
     },
+    onHide: () => kb.hide(),
     onShow() {
       requestAnimationFrame(() => {
         refit();
