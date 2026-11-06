@@ -19,7 +19,8 @@ use ironrdp_pdu::gcc;
 use ironrdp_pdu::geometry::InclusiveRectangle;
 use ironrdp_session::image::DecodedImage;
 use ironrdp_session::{ActiveStage, ActiveStageBuilder, ActiveStageOutput};
-use ironrdp_tokio::{FramedWrite, TokioFramed, single_sequence_step_read, split_tokio_framed};
+use ironrdp_connector::Sequence;
+use ironrdp_tokio::{FramedWrite, TokioFramed, split_tokio_framed};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
@@ -474,6 +475,11 @@ fn drive_channel(dir: &std::path::Path) -> Result<ironrdp_rdpdr::Rdpdr, String> 
     Ok(ironrdp_rdpdr::Rdpdr::new(backend, "Sesam Remote".into()).with_drives(Some(drives)))
 }
 
+/// Ein gefundenes Paket ist nur dann eine echte Umleitung, wenn es ein Ziel oder Anmeldedaten trägt.
+fn useful_redirect(r: &Redir) -> bool {
+    r.load_balance_info.is_some() || r.password.is_some() || r.target_net_address.is_some() || r.target_fqdn.is_some()
+}
+
 /// Fehler mit allen Ursachen, ohne Geheimnisse; landet auch im Log.
 fn err<E: std::error::Error + 'static>(e: E) -> String {
     let s = diag::chain(&e);
@@ -661,7 +667,7 @@ async fn active(
                     Ok(out) => out,
                     Err(e) => {
                         // IronRDP scheitert an GNOMEs Umleitung nach dem Login: selbst nachsehen.
-                        if let Some(r) = rdp_redir::find(&payload).filter(|r| r.load_balance_info.is_some() || r.password.is_some() || r.target_net_address.is_some()) {
+                        if let Some(r) = rdp_redir::find(&payload).filter(useful_redirect) {
                             tracing::info!(error = %diag::chain(&e), "Umleitung über eigenen Decoder erkannt");
                             return Ok(Flow::Redirect(r));
                         }
@@ -769,7 +775,24 @@ async fn active(
                     let mut seq = activation.create();
                     let mut buf = ironrdp_pdu::WriteBuf::new();
                     loop {
-                        let written = single_sequence_step_read(&mut reader, &mut seq, &mut buf).await.map_err(err)?;
+                        // Wie `single_sequence_step_read`, aber mit Zugriff auf den Rahmen für den Umleitungs-Rückfall.
+                        buf.clear();
+                        let written = match seq.next_pdu_hint() {
+                            Some(hint) => {
+                                let pdu = reader.read_by_hint(hint).await.map_err(|e| format!("Reaktivierung: {e}"))?;
+                                match seq.step(&pdu, reader.last_read_at(), &mut buf) {
+                                    Ok(w) => w,
+                                    Err(e) => {
+                                        if let Some(r) = rdp_redir::find(&pdu).filter(useful_redirect) {
+                                            tracing::info!(error = %diag::chain(&e), "Umleitung bei Reaktivierung über eigenen Decoder erkannt");
+                                            return Ok(Flow::Redirect(r));
+                                        }
+                                        return Err(phase("Reaktivierung", e));
+                                    }
+                                }
+                            }
+                            None => seq.step_no_input(&mut buf).map_err(|e| phase("Reaktivierung", e))?,
+                        };
                         if written.size().is_some() {
                             writer.write_all(buf.filled()).await.map_err(|e| e.to_string())?;
                         }
