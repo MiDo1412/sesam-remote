@@ -10,6 +10,8 @@ import folder from "@phosphor-icons/core/assets/regular/folder.svg?raw";
 import folderPlus from "@phosphor-icons/core/assets/regular/folder-plus.svg?raw";
 import frameCorners from "@phosphor-icons/core/assets/regular/frame-corners.svg?raw";
 import keyboard from "@phosphor-icons/core/assets/regular/keyboard.svg?raw";
+import lightning from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
+import floppy from "@phosphor-icons/core/assets/regular/floppy-disk.svg?raw";
 import magnifyingGlass from "@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw";
 import monitor from "@phosphor-icons/core/assets/regular/monitor.svg?raw";
 import pencilSimple from "@phosphor-icons/core/assets/regular/pencil-simple.svg?raw";
@@ -35,6 +37,8 @@ export const ICON = {
   newFolder: sized(folderPlus),
   fullscreen: sized(frameCorners),
   keyboard: sized(keyboard),
+  quick: sized(lightning),
+  save: sized(floppy),
   search: sized(magnifyingGlass),
   desktop: sized(monitor),
   rename: sized(pencilSimple),

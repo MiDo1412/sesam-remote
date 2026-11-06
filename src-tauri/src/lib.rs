@@ -90,7 +90,28 @@ fn new_sid(id: &str) -> String {
     format!("{id}-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())
 }
 
+/// Schnelle Verbindungen: nicht in der Bibliothek, nur für diese Sitzung der App.
+static QUICK: Mutex<Vec<Connection>> = Mutex::new(Vec::new());
+
+/// Schnelle Verbindung anlegen (nichts wird gespeichert). Gibt die ID zurück.
+#[tauri::command]
+fn quick_register(mut connection: Connection, password: Option<String>) -> Result<String, String> {
+    connection.id = format!("quick-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+    connection.validate()?;
+    if let Some(pw) = password.filter(|p| !p.is_empty()) {
+        diag::add_secret(&pw);
+        vault::set_ephemeral(&connection.id, &pw);
+        connection.has_password = true;
+    }
+    let id = connection.id.clone();
+    QUICK.lock().unwrap().push(connection);
+    Ok(id)
+}
+
 fn find(path: &LibraryPath, id: &str) -> Result<Connection, String> {
+    if id.starts_with("quick-") {
+        return QUICK.lock().unwrap().iter().find(|c| c.id == id).cloned().ok_or_else(|| "Schnelle Verbindung nicht mehr vorhanden".into());
+    }
     library::load(&path.0)?.into_iter().find(|c| c.id == id).ok_or_else(|| "Verbindung nicht gefunden".into())
 }
 
@@ -680,6 +701,7 @@ pub fn run() {
             local_list,
             save_bytes,
             certs_list,
+            quick_register,
             cert_remove,
             local_home,
             transfer_start,

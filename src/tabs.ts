@@ -131,8 +131,10 @@ export function openTab(conn: Connection, kind: Kind, fresh = false) {
     e.preventDefault();
     const v = await openMenu(tabEl, [
       { value: "dup", label: `Weitere ${kindLabel[kind]}-Sitzung`, icon: ICON.plus, disabled: kind === "desktop" },
+      ...(conn.id.startsWith("quick-") ? [{ value: "save", label: "Als Verbindung sichern …", icon: ICON.save }] : []),
       { value: "close", label: "Trennen", icon: ICON.disconnect, separator: true },
     ]);
+    if (v === "save") dispatchEvent(new CustomEvent("sesam:save-quick", { detail: conn }));
     if (v === "dup") openTab(conn, kind, true);
     if (v === "close") closeTab(tab);
   };

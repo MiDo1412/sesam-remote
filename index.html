@@ -24,11 +24,18 @@
             <div class="list-head">
               <h1 id="title">Alle Verbindungen</h1>
               <button id="open-settings" type="button" class="plain" title="Einstellungen (Strg+,)">Einstellungen</button>
+              <button id="quick" type="button" class="quick-btn" title="Schnelle Verbindung (Strg+K)"><span class="quick-icon"></span><span class="quick-text">Schnelle Verbindung</span></button>
               <button id="new" type="button" class="primary">＋ Neue Verbindung</button>
             </div>
             <div id="active-sessions" class="active-sessions" hidden></div>
             <div id="grid" class="grid"></div>
-            <p id="empty" class="empty" hidden>Noch keine Verbindungen. Lege mit «Neue Verbindung» die erste an.</p>
+            <div id="empty" class="empty" hidden>
+              <p>Noch keine Verbindungen.</p>
+              <div class="empty-actions">
+                <button type="button" class="primary" id="empty-new">Neue Verbindung</button>
+                <button type="button" id="empty-quick">Schnelle Verbindung</button>
+              </div>
+            </div>
           </section>
           <aside id="details" aria-label="Details" hidden></aside>
         </main>
@@ -144,6 +151,32 @@
           <button type="button" id="editor-delete" class="danger">Löschen</button>
           <button type="button" id="editor-cancel">Abbrechen</button>
           <button type="submit" class="primary">Sichern</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="quick-dlg" aria-labelledby="quick-title">
+      <form id="quick-form" class="sheet quick" method="dialog">
+        <h2 id="quick-title">Schnelle Verbindung</h2>
+        <div class="row span"><span>Art</span>
+          <div class="segmented" role="radiogroup" aria-label="Art">
+            <label><input type="radio" name="kind" value="rdp" checked />Desktop RDP</label>
+            <label><input type="radio" name="kind" value="vnc" />Desktop VNC</label>
+            <label><input type="radio" name="kind" value="shell" />Shell</label>
+            <label><input type="radio" name="kind" value="files" />Dateien</label>
+          </div>
+        </div>
+        <label class="span">Hostname oder IP-Adresse
+          <input name="address" required autocomplete="off" spellcheck="false" class="mono" placeholder="192.168.1.4 · ssh mike@server · rdp://host:3389" />
+        </label>
+        <label>Port<input name="port" type="number" min="1" max="65535" class="mono" /></label>
+        <label>Benutzername<input name="user" autocomplete="off" /></label>
+        <label class="span">Passwort <small>wird nicht gespeichert</small><input name="password" type="password" autocomplete="off" /></label>
+        <div id="quick-recent" class="recent span"></div>
+        <div class="row actions">
+          <span></span>
+          <button type="button" id="quick-cancel">Abbrechen</button>
+          <button type="submit" class="primary">Verbinden</button>
         </div>
       </form>
     </dialog>

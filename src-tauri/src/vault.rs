@@ -31,7 +31,20 @@ pub fn set(id: &str, kind: Kind, secret: &str) -> Result<(), String> {
     entry(id, kind)?.set_password(secret).map_err(|e| e.to_string())
 }
 
+/// Passwörter schneller Verbindungen: nur im Arbeitsspeicher, nie im Schlüsselbund.
+static EPHEMERAL: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+
+pub fn set_ephemeral(id: &str, secret: &str) {
+    EPHEMERAL.lock().unwrap().push((id.to_string(), secret.to_string()));
+}
+
 pub fn get(id: &str, kind: Kind) -> Result<Option<String>, String> {
+    if id.starts_with("quick-") {
+        return Ok(match kind {
+            Kind::Password => EPHEMERAL.lock().unwrap().iter().find(|(i, _)| i == id).map(|(_, s)| s.clone()),
+            _ => None,
+        });
+    }
     match entry(id, kind)?.get_password() {
         Ok(s) => Ok(Some(s)),
         Err(Error::NoEntry) => Ok(None),

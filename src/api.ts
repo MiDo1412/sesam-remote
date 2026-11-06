@@ -62,6 +62,7 @@ export const api = {
   save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; sshKey?: string }) =>
     invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
+  quickRegister: (connection: Connection, password?: string) => invoke<string>("quick_register", { connection, password }),
   shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void) => {
     const ch = new Channel<ShellEvent>();
     ch.onmessage = onEvent;

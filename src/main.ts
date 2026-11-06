@@ -6,6 +6,7 @@ import { initTabs, openTab } from "./tabs";
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
 import { applyAppearance, openSettings } from "./settings";
+import { initQuick } from "./quick";
 import { listen } from "@tauri-apps/api/event";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { enhanceSelect } from "./menu";
@@ -151,8 +152,8 @@ const blank = (): Connection => ({
   lastUsed: null,
 });
 
-function edit(c: Connection | null) {
-  const isNew = !c;
+function edit(c: Connection | null, asNew = false) {
+  const isNew = !c || asNew;
   editing = c ?? blank();
   const f = form.elements as unknown as Record<string, HTMLInputElement>;
   $("editor-title").textContent = isNew ? "Neue Verbindung" : "Verbindung bearbeiten";
@@ -286,10 +287,14 @@ listen<string>("help", (e) => openHelp(e.payload));
 applyAppearance();
 $("open-settings").onclick = () => openSettings();
 // Befehle aus dem App-Menü und Tastenkürzel
+const quick = initQuick((c) => edit({ ...c, id: crypto.randomUUID(), name: c.address }, true));
+$("empty-new").onclick = () => edit(null);
 const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
   else if (cmd === "new") edit(null);
+  else if (cmd === "quick") quick.open();
 };
+addEventListener("sesam:save-quick", (e) => quick.saveAs((e as CustomEvent<Connection>).detail));
 listen<string>("cmd", (e) => command(e.payload));
 addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
