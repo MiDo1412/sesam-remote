@@ -151,10 +151,9 @@ function edit(c: Connection | null) {
   f.key.value = "";
   f.password.value = "";
   f.vncPassword.value = "";
-  $("vnc-pw-hint").textContent = editing.hasVncPassword
-    ? "Im Tresor gespeichert. Leer lassen, um es zu behalten."
-    : "Nur nötig, wenn der Server ein eigenes VNC-Passwort hat. Sonst gilt das Passwort des Benutzers.";
-  $("pw-hint").textContent = editing.hasPassword ? "Passwort ist verschlüsselt im Tresor gespeichert. Leer lassen, um es zu behalten." : "";
+  clearing.clear();
+  showPwHint("vnc-pw", editing.hasVncPassword, "Nur nötig, wenn der Server ein eigenes VNC-Passwort hat. Sonst gilt das Passwort des Benutzers.");
+  showPwHint("pw", editing.hasPassword, "");
   f.sharedClipboard.checked = editing.sharedClipboard;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
@@ -163,6 +162,22 @@ function edit(c: Connection | null) {
   $("editor-delete").hidden = isNew;
   $("editor-error").textContent = "";
   dlg.showModal();
+}
+
+/** Gespeicherte Passwörter, die beim Sichern entfernt werden (Feldname). */
+const clearing = new Set<string>();
+
+function showPwHint(prefix: "pw" | "vnc-pw", stored: boolean, emptyText: string) {
+  const field = prefix === "pw" ? "password" : "vncPassword";
+  const hint = $(`${prefix}-hint`);
+  const btn = $(`${prefix}-clear`);
+  hint.textContent = stored ? "Verschlüsselt im Tresor gespeichert. Leer lassen, um es zu behalten." : emptyText;
+  btn.hidden = !stored;
+  btn.onclick = () => {
+    clearing.add(field);
+    hint.textContent = "Wird beim Sichern entfernt.";
+    btn.hidden = true;
+  };
 }
 
 const keyMode = form.elements.namedItem("keyMode") as HTMLSelectElement;
@@ -203,7 +218,8 @@ form.onsubmit = async (ev) => {
   const keyMode = s("keyMode");
   const sshKey = keyMode === "none" ? "" : keyMode === "import" ? String(fd.get("key") ?? "").trim() + "\n" : undefined;
   if (keyMode === "import" && sshKey!.trim() === "") return void ($("editor-error").textContent = "Bitte den privaten Schlüssel einfügen.");
-  const secret = (k: string) => String(fd.get(k) ?? "") || undefined;
+  // Neuer Wert > «Entfernen» (leerer String löscht im Tresor) > unverändert.
+  const secret = (k: string) => String(fd.get(k) ?? "") || (clearing.has(k) ? "" : undefined);
   try {
     const saved = await api.save(c, { password: secret("password"), vncPassword: secret("vncPassword"), sshKey });
     selected = saved.id;

@@ -76,7 +76,7 @@
           <label>Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
           <label class="span">VNC-Passwort
             <input name="vncPassword" type="password" autocomplete="new-password" />
-            <small id="vnc-pw-hint"></small>
+            <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
           </label>
         </fieldset>
         <fieldset>
@@ -98,7 +98,7 @@
         </label>
         <label class="span">Passwort des Benutzers <small>für SSH und die macOS-Bildschirmfreigabe</small>
           <input name="password" type="password" autocomplete="new-password" />
-          <small id="pw-hint"></small>
+          <span class="hint"><small id="pw-hint"></small><button type="button" class="link" id="pw-clear" hidden>Entfernen</button></span>
         </label>
         <hr />
         <label class="option"><span><b>Gemeinsame Zwischenablage</b><small>Text, Bilder und Dateien hier kopieren, dort einfügen</small></span><input type="checkbox" name="sharedClipboard" /></label>
