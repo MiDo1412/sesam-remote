@@ -39,6 +39,8 @@ pub struct Target {
     pub height: u16,
     /// Zwischenablage (cliprdr); für jede Verbindung, auch nach Umleitungen, ein neues Backend.
     pub clipboard: Option<ClipFactory>,
+    /// Ton des entfernten Rechners hier abspielen.
+    pub audio: bool,
 }
 
 pub type ClipFactory = Arc<Mutex<Box<dyn CliprdrBackendFactory + Send>>>;
@@ -294,7 +296,7 @@ fn connector_config(t: &Target) -> ironrdp_connector::Config {
         license_cache: None,
         enable_server_pointer: true,
         autologon: false,
-        enable_audio_playback: false,
+        enable_audio_playback: t.audio,
         enable_audio_capture: false,
         request_data: None,
         pointer_software_rendering: false,
@@ -325,9 +327,13 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     let _ = tcp.set_nodelay(true);
     let client_addr = tcp.local_addr().map_err(|e| e.to_string())?;
 
-    let drdynvc = ironrdp_dvc::DrdynvcClient::new()
+    let mut drdynvc = ironrdp_dvc::DrdynvcClient::new()
         .with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())))
         .with_dynamic_channel(GraphicsPipelineClient::new(Box::new(NoGfxCallbacks), None));
+    if t.audio {
+        // Neuere Server nehmen den dynamischen Kanal, ältere den statischen; je ein eigener Ausgang.
+        drdynvc = drdynvc.with_dynamic_channel(ironrdp_rdpsnd::client::RdpsndDvc::new(Box::new(ironrdp_rdpsnd_native::cpal::RdpsndBackend::new())));
+    }
     let mut connector = ClientConnector::new(connector_config(t), client_addr)
         .with_static_channel(drdynvc)
         .with_cluster_data(gcc::ClientClusterData {
@@ -340,6 +346,9 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     }
     if let Some(cookie) = &hop.cookie {
         connector = connector.with_redirection_password_cookie(cookie.clone());
+    }
+    if t.audio {
+        connector = connector.with_static_channel(ironrdp_rdpsnd::client::Rdpsnd::new(Box::new(ironrdp_rdpsnd_native::cpal::RdpsndBackend::new())));
     }
     if let Some(f) = &t.clipboard {
         connector = connector.with_static_channel(CliprdrClient::new(f.lock().unwrap().build_cliprdr_backend()));
@@ -728,6 +737,7 @@ mod tests {
             width: 800,
             height: 600,
             clipboard: None,
+            audio: false,
         };
         let mut hop = Hop::default();
         let pw: Vec<u8> = "einmal".encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();

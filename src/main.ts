@@ -133,6 +133,7 @@ const blank = (): Connection => ({
   defaultView: "desktop",
   orientation: "landscape",
   sharedClipboard: true,
+  playAudio: true,
   fitToWindow: true,
   hasPassword: false,
   hasVncPassword: false,
@@ -169,6 +170,7 @@ function edit(c: Connection | null) {
   syncDesktopRow();
   showPwHint("pw", editing.hasPassword, "");
   f.sharedClipboard.checked = editing.sharedClipboard;
+  f.playAudio.checked = editing.playAudio;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -235,6 +237,7 @@ form.onsubmit = async (ev) => {
     desktopProtocol: (s("desktopProtocol") || "rdp") as Connection["desktopProtocol"],
     user: s("user"),
     sharedClipboard: fd.get("sharedClipboard") !== null,
+    playAudio: fd.get("playAudio") !== null,
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],

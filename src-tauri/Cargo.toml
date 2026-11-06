@@ -51,6 +51,9 @@ ironrdp-egfx = "0.5"
 ironrdp-input = "0.9"
 ironrdp-graphics = "0.11"
 ironrdp-cliprdr = "0.9"
+# Ton (nur PCM: ohne Opus/AAC keine C-Bibliotheken im Build)
+ironrdp-rdpsnd = "0.11"
+ironrdp-rdpsnd-native = { version = "0.8", default-features = false }
 # Zwischenablage mit Dateilisten und Bildern; Bilder gehen als PNG auf den Server
 arboard = "3"
 png = "0.18"

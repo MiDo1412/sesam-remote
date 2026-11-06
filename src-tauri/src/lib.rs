@@ -503,6 +503,7 @@ async fn rdp_open(
         width: width.clamp(200, 8192),
         height: height.clamp(200, 8192),
         clipboard: None,
+        audio: c.play_audio,
     };
     let sid = new_sid(&c.id);
     let (tx, rx) = rdp::channel();

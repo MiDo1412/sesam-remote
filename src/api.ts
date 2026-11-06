@@ -14,6 +14,7 @@ export interface Connection {
   defaultView: "desktop" | "shell" | "files";
   orientation: "landscape" | "portrait";
   sharedClipboard: boolean;
+  playAudio: boolean;
   fitToWindow: boolean;
   hasPassword: boolean;
   hasVncPassword: boolean;

@@ -26,6 +26,8 @@ pub struct Connection {
     /// "landscape" | "portrait"
     pub orientation: String,
     pub shared_clipboard: bool,
+    /// Ton des entfernten Rechners abspielen (RDP).
+    pub play_audio: bool,
     pub fit_to_window: bool,
     /// Nur Merker für die Anzeige; das Geheimnis selbst liegt im Tresor.
     pub has_password: bool,
@@ -51,6 +53,7 @@ impl Default for Connection {
             default_view: "desktop".into(),
             orientation: "landscape".into(),
             shared_clipboard: true,
+            play_audio: true,
             fit_to_window: true,
             has_password: false,
             has_vnc_password: false,
