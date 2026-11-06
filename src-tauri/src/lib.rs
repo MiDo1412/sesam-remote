@@ -1,6 +1,7 @@
 mod library;
 mod ssh;
 mod vault;
+mod vnc;
 
 use library::Connection;
 use std::path::PathBuf;
