@@ -1,4 +1,5 @@
 mod library;
+mod sftp;
 mod ssh;
 mod vault;
 mod vnc;
@@ -84,6 +85,17 @@ fn find(path: &LibraryPath, id: &str) -> Result<Connection, String> {
     library::load(&path.0)?.into_iter().find(|c| c.id == id).ok_or_else(|| "Verbindung nicht gefunden".into())
 }
 
+fn ssh_target(c: &Connection, trust: Option<String>) -> Result<ssh::Target<'_>, String> {
+    Ok(ssh::Target {
+        host: &c.address,
+        port: c.ssh_port.ok_or("SSH ist für diese Verbindung ausgeschaltet")?,
+        user: &c.user,
+        password: vault::get(&c.id, Kind::Password)?,
+        key: vault::get(&c.id, Kind::SshKey)?,
+        trusted: trust,
+    })
+}
+
 #[tauri::command]
 async fn shell_open(
     path: State<'_, LibraryPath>,
@@ -95,16 +107,7 @@ async fn shell_open(
     on_event: Channel<ssh::ShellEvent>,
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
-    let port = c.ssh_port.ok_or("SSH ist für diese Verbindung ausgeschaltet")?;
-    let target = ssh::Target {
-        host: &c.address,
-        port,
-        user: &c.user,
-        password: vault::get(&c.id, Kind::Password)?,
-        key: vault::get(&c.id, Kind::SshKey)?,
-        trusted: trust,
-    };
-    let shell = ssh::open(target, cols, rows, on_event).await?;
+    let shell = ssh::open(ssh_target(&c, trust)?, cols, rows, on_event).await?;
     let sid = new_sid(&c.id);
     shells.0.lock().await.insert(sid.clone(), shell);
     Ok(sid)
@@ -126,6 +129,94 @@ async fn shell_close(shells: State<'_, ssh::Shells>, sid: String) -> Result<(), 
         s.close().await;
     }
     Ok(())
+}
+
+// ---------- Dateien (SFTP) ----------
+
+#[derive(Default)]
+struct Files(Mutex<HashMap<String, Arc<sftp::Sftp>>>);
+
+#[derive(Default)]
+struct Transfers(Arc<Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>>);
+
+fn files_get(files: &Files, sid: &str) -> Result<Arc<sftp::Sftp>, String> {
+    files.0.lock().unwrap().get(sid).cloned().ok_or_else(|| "Dateisitzung geschlossen".into())
+}
+
+#[tauri::command]
+async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: String, trust: Option<String>) -> Result<String, String> {
+    let c = find(&path, &id)?;
+    let s = sftp::open(ssh_target(&c, trust)?).await?;
+    let sid = new_sid(&c.id);
+    files.0.lock().unwrap().insert(sid.clone(), Arc::new(s));
+    Ok(sid)
+}
+
+#[tauri::command]
+async fn sftp_list(files: State<'_, Files>, sid: String, path: String) -> Result<sftp::Listing, String> {
+    files_get(&files, &sid)?.list(&path).await
+}
+
+#[tauri::command]
+async fn sftp_mkdir(files: State<'_, Files>, sid: String, dir: String, name: String) -> Result<String, String> {
+    files_get(&files, &sid)?.mkdir(&dir, &name).await
+}
+
+#[tauri::command]
+fn sftp_close(files: State<Files>, sid: String) {
+    files.0.lock().unwrap().remove(&sid);
+}
+
+#[tauri::command]
+fn local_list(path: String) -> Result<sftp::Listing, String> {
+    sftp::local_list(&path)
+}
+
+#[tauri::command]
+fn local_home(app: AppHandle) -> Result<String, String> {
+    app.path().home_dir().map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
+}
+
+/// Startet eine Übertragung im Hintergrund; Fortschritt über `on_progress`. Gibt die Übertragungs-ID zurück.
+#[tauri::command]
+fn transfer_start(
+    files: State<Files>,
+    transfers: State<Transfers>,
+    sid: String,
+    upload: bool,
+    src: String,
+    dest_dir: String,
+    on_progress: Channel<sftp::Progress>,
+) -> Result<String, String> {
+    let s = files_get(&files, &sid)?;
+    let tid = new_sid("t");
+    let (map, key) = (transfers.0.clone(), tid.clone());
+    let mut running = transfers.0.lock().unwrap();
+    let task = tauri::async_runtime::spawn(async move {
+        let ch = on_progress.clone();
+        let report = move |p| {
+            let _ = ch.send(p);
+        };
+        let r = if upload {
+            sftp::upload(&s, std::path::Path::new(&src), &dest_dir, report).await
+        } else {
+            sftp::download(&s, &src, std::path::Path::new(&dest_dir), report).await
+        };
+        if let Err(error) = r {
+            let _ = on_progress.send(sftp::Progress::Failed { error });
+        }
+        map.lock().unwrap().remove(&key);
+    });
+    running.insert(tid.clone(), task);
+    Ok(tid)
+}
+
+#[tauri::command]
+fn transfer_cancel(transfers: State<Transfers>, tid: String) {
+    // shortcut: eine abgebrochene Datei bleibt halb geschrieben liegen; bei Bedarf hier aufräumen.
+    if let Some(t) = transfers.0.lock().unwrap().remove(&tid) {
+        t.abort();
+    }
 }
 
 // ---------- VNC ----------
@@ -261,6 +352,8 @@ pub fn run() {
             app.manage(LibraryPath(dir.join("library.json")));
             app.manage(ssh::Shells::default());
             app.manage(Desktops::default());
+            app.manage(Files::default());
+            app.manage(Transfers::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -276,7 +369,15 @@ pub fn run() {
             vnc_key,
             vnc_set_size,
             vnc_clipboard_sync,
-            vnc_close
+            vnc_close,
+            sftp_open,
+            sftp_list,
+            sftp_mkdir,
+            sftp_close,
+            local_list,
+            local_home,
+            transfer_start,
+            transfer_cancel
         ])
         .run(tauri::generate_context!())
         .expect("Sesam Remote konnte nicht starten");

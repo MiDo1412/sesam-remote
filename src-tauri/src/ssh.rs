@@ -23,7 +23,7 @@ pub struct Shell {
 #[derive(Default)]
 pub struct Shells(pub tokio::sync::Mutex<HashMap<String, Shell>>);
 
-struct Client {
+pub struct Client {
     host: String,
     port: u16,
     /// Vom Benutzer bestätigter Fingerabdruck (SHA256) für einen noch unbekannten Host.
@@ -115,15 +115,20 @@ async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), Stri
     Err("Anmeldung abgelehnt".into())
 }
 
-pub async fn open(t: Target<'_>, cols: u32, rows: u32, on_event: Channel<ShellEvent>) -> Result<Shell, String> {
+/// Verbinden, Host-Schlüssel prüfen, anmelden. Gemeinsam für Shell und SFTP.
+pub async fn connect(t: &Target<'_>) -> Result<Handle<Client>, String> {
     let rejected = Arc::new(Mutex::new(None));
     let client = Client { host: t.host.into(), port: t.port, trusted: t.trusted.clone(), rejected: rejected.clone() };
     let config = Arc::new(client::Config::default());
     let mut handle = client::connect(config, (t.host, t.port), client).await.map_err(|e| {
         rejected.lock().unwrap().take().unwrap_or_else(|| format!("Verbindung fehlgeschlagen: {e}"))
     })?;
-    authenticate(&mut handle, &t).await?;
+    authenticate(&mut handle, t).await?;
+    Ok(handle)
+}
 
+pub async fn open(t: Target<'_>, cols: u32, rows: u32, on_event: Channel<ShellEvent>) -> Result<Shell, String> {
+    let handle = connect(&t).await?;
     let channel = handle.channel_open_session().await.map_err(|e| e.to_string())?;
     channel.request_pty(false, "xterm-256color", cols, rows, 0, 0, &[]).await.map_err(|e| e.to_string())?;
     channel.request_shell(false).await.map_err(|e| e.to_string())?;
