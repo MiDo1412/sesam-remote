@@ -58,6 +58,9 @@ ironrdp-rdpsnd-native = { version = "0.8", default-features = false }
 ironrdp-rdpdr = "0.9"
 ironrdp-rdpdr-native = "0.9"
 tauri-plugin-dialog = "2"
+# sesam://-Links (Desktop-Verknüpfungen) an die laufende App
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 # Diagnose-Log und nachsichtiger Redirection-Decoder
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std", "registry"] }

@@ -18,6 +18,7 @@
     "core:window:allow-inner-size",
     "opener:default",
     "dialog:allow-open",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    "deep-link:default"
   ]
 }

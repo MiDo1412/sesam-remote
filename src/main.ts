@@ -11,6 +11,8 @@ import { runOnTarget } from "./setup";
 import { initFieldHelp } from "./fieldhelp";
 import { forgetThumb, renderThumb } from "./thumbs";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrent as deepLinkCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { openMenu } from "./menu";
 import { listen } from "@tauri-apps/api/event";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { enhanceSelect } from "./menu";
@@ -37,6 +39,7 @@ const el = (tag: string, props: Record<string, string> = {}, ...kids: (Node | st
   return e;
 };
 
+let startLinkDone = false;
 async function reload() {
   try {
     items = await api.list();
@@ -44,6 +47,10 @@ async function reload() {
     tell("Bibliothek nicht lesbar", String(e));
   }
   render();
+  if (!startLinkDone) {
+    startLinkDone = true;
+    deepLinkCurrent().then((urls) => urls?.forEach(handleLink)).catch(() => {});
+  }
 }
 
 function render() {
@@ -82,6 +89,7 @@ function render() {
       );
       card.onclick = () => ((selected = c.id), render());
       card.ondblclick = () => open(c, c.defaultView);
+      card.oncontextmenu = (e) => (e.preventDefault(), cardMenu(card, c));
       return card;
     }),
   );
@@ -124,6 +132,42 @@ function renderDetails() {
     btn("Bearbeiten …", "plain", () => edit(c)),
     ...(c.sshPort ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
   );
+}
+
+/** Kontextmenü einer Verbindung in der Bibliothek. */
+async function cardMenu(anchor: HTMLElement, c: Connection) {
+  const v = await openMenu(anchor, [
+    { value: "open:desktop", label: "Desktop öffnen", disabled: !desktopProtocol(c) },
+    { value: "open:shell", label: "Shell öffnen", disabled: !c.sshPort },
+    { value: "open:files", label: "Dateien öffnen", disabled: !c.sshPort },
+    { value: "edit", label: "Bearbeiten …", separator: true },
+    { value: "lnk:desktop", label: "Desktop", section: "Verknüpfung auf Schreibtisch", disabled: !desktopProtocol(c) },
+    { value: "lnk:shell", label: "Shell", disabled: !c.sshPort },
+    { value: "lnk:files", label: "Dateien", disabled: !c.sshPort },
+  ]);
+  if (!v) return;
+  const [cmd, arg] = v.split(":");
+  if (cmd === "open") open(c, arg as Connection["defaultView"]);
+  if (cmd === "edit") edit(c);
+  if (cmd === "lnk")
+    invoke<string>("create_shortcut", { id: c.id, view: arg })
+      .then((p) => tell("Verknüpfung erstellt", p))
+      .catch((e) => tell("Verknüpfung nicht erstellt", String(e)));
+}
+
+/** sesam://open?id=…&view=… (Desktop-Verknüpfung) */
+function handleLink(url: string) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "sesam:") return;
+    const id = u.searchParams.get("id");
+    const view = (u.searchParams.get("view") ?? "") as Connection["defaultView"];
+    const c = items.find((x) => x.id === id);
+    if (!c) return tell("Verbindung nicht gefunden", "Die Verknüpfung zeigt auf eine Verbindung, die es nicht mehr gibt.");
+    open(c, ["desktop", "shell", "files"].includes(view) ? view : c.defaultView);
+  } catch {
+    /* kein gültiger Link */
+  }
 }
 
 function open(c: Connection, view: Connection["defaultView"]) {
@@ -312,6 +356,7 @@ form.onsubmit = async (ev) => {
 };
 
 $("new").onclick = () => edit(null);
+onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
 listen<string>("help", (e) => openHelp(e.payload));
 applyAppearance();

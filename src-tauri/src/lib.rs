@@ -266,6 +266,32 @@ fn thumb_import(path: State<LibraryPath>, id: String, file: String) -> Result<()
     std::fs::write(&p, data).map_err(|e| e.to_string())
 }
 
+/// Verknüpfung auf dem Schreibtisch: öffnet `sesam://open?id=…&view=…`.
+/// Windows: .url mit dem Sesam-Symbol, macOS: .webloc.
+#[tauri::command]
+fn create_shortcut(app: AppHandle, path: State<LibraryPath>, id: String, view: String) -> Result<String, String> {
+    let c = find(&path, &id)?;
+    if !["desktop", "shell", "files"].contains(&view.as_str()) {
+        return Err("Unbekannte Ansicht".into());
+    }
+    let label = match view.as_str() { "desktop" => "Desktop", "shell" => "Shell", _ => "Dateien" };
+    let safe: String = c.name.chars().map(|ch| if r#"\/:*?"<>|"#.contains(ch) || ch.is_control() { '_' } else { ch }).collect();
+    let url = format!("sesam://open?id={}&view={view}", c.id);
+    let desk = app.path().desktop_dir().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    let (file, body) = (
+        desk.join(format!("{safe} ({label}).webloc")),
+        format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict><key>URL</key><string>{url}</string></dict></plist>\n"),
+    );
+    #[cfg(not(target_os = "macos"))]
+    let (file, body) = {
+        let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
+        (desk.join(format!("{safe} ({label}).url")), format!("[InternetShortcut]\r\nURL={url}\r\nIconFile={exe}\r\nIconIndex=0\r\n"))
+    };
+    std::fs::write(&file, body).map_err(|e| format!("{}: {e}", file.display()))?;
+    Ok(file.display().to_string())
+}
+
 /// Gemerkte TLS-Zertifikate (RDP/VNC) für die Einstellungen.
 #[tauri::command]
 fn certs_list(path: State<LibraryPath>) -> Vec<(String, String)> {
@@ -690,6 +716,14 @@ fn rdp_close(app: AppHandle, sessions: State<RdpSessions>, sid: String) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Zweiter Start (z. B. Klick auf eine Verknüpfung): Link an die laufende App, Fenster nach vorne.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -727,6 +761,11 @@ pub fn run() {
                     let _ = app.emit("cmd", cmd);
                 }
             });
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let _ = app.deep_link().register_all();
+            }
             let dir = app.path().app_data_dir()?;
             diag::init(&dir);
             app.manage(LibraryPath(dir.join("library.json")));
@@ -761,6 +800,7 @@ pub fn run() {
             save_bytes,
             certs_list,
             quick_register,
+            create_shortcut,
             thumb_save,
             thumb_get,
             thumb_import,
