@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::ipc::{Channel, InvokeResponseBody};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use clipshare::{ClipShare, Last, Local};
 use vault::Kind;
 
@@ -521,6 +521,30 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            use tauri::menu::{MenuBuilder, SubmenuBuilder};
+            // IDs wie in src/help.ts.
+            let help = SubmenuBuilder::new(app, "Hilfe")
+                .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")
+                .text("help:rdp-windows", "RDP mit Windows")
+                .text("help:vnc", "VNC allgemein")
+                .text("help:wayvnc", "wayvnc (wlroots)")
+                .text("help:macos", "macOS-Bildschirmfreigabe")
+                .text("help:ssh", "SSH und SFTP")
+                .build()?;
+            // macOS braucht das Standardmenü (Bearbeiten: Kopieren/Einfügen); Windows nur «Hilfe».
+            let menu = if cfg!(target_os = "macos") {
+                let m = tauri::menu::Menu::default(app.handle())?;
+                m.append(&help)?;
+                m
+            } else {
+                MenuBuilder::new(app).item(&help).build()?
+            };
+            app.set_menu(menu)?;
+            app.on_menu_event(|app, e| {
+                if let Some(topic) = e.id().as_ref().strip_prefix("help:") {
+                    let _ = app.emit("help", topic);
+                }
+            });
             let dir = app.path().app_data_dir()?;
             app.manage(LibraryPath(dir.join("library.json")));
             app.manage(ssh::Shells::default());

@@ -79,7 +79,7 @@
         <label class="span">Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
         <hr />
         <fieldset>
-          <legend>Desktop <small>VNC</small></legend>
+          <legend>Desktop <small>VNC</small> <button type="button" class="help-btn" data-help="vnc" aria-label="Hilfe zu VNC">?</button></legend>
           <label class="switch"><input type="checkbox" name="vncOn" /> Aktiv</label>
           <label>Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
           <label class="span">VNC-Passwort
@@ -88,7 +88,7 @@
           </label>
         </fieldset>
         <fieldset>
-          <legend>Desktop <small>RDP</small></legend>
+          <legend>Desktop <small>RDP</small> <button type="button" class="help-btn" data-help="rdp-gnome" aria-label="Hilfe zu RDP">?</button></legend>
           <label class="switch"><input type="checkbox" name="rdpOn" /> Aktiv</label>
           <label>Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
           <label>Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="optional" /></label>
@@ -98,7 +98,7 @@
           <span class="hint span"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
         </fieldset>
         <fieldset>
-          <legend>Shell und Dateien <small>SSH mit SFTP</small></legend>
+          <legend>Shell und Dateien <small>SSH mit SFTP</small> <button type="button" class="help-btn" data-help="ssh" aria-label="Hilfe zu SSH">?</button></legend>
           <label class="switch"><input type="checkbox" name="sshOn" /> Aktiv</label>
           <label>Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
         </fieldset>
@@ -147,6 +147,14 @@
           <button type="submit" class="primary">Sichern</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="help" aria-label="Hilfe">
+      <div class="help">
+        <nav id="help-nav" aria-label="Anleitungen"></nav>
+        <article id="help-body"></article>
+        <form method="dialog" class="help-close"><button class="plain" aria-label="Hilfe schliessen">Schliessen</button></form>
+      </div>
     </dialog>
 
     <dialog id="ask" aria-labelledby="ask-title">

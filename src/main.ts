@@ -3,6 +3,8 @@ import { openShell } from "./shell";
 import { openDesktop } from "./desktop";
 import { openFiles } from "./files";
 import { ask, tell } from "./ui";
+import { openHelp } from "./help";
+import { listen } from "@tauri-apps/api/event";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -253,5 +255,7 @@ form.onsubmit = async (ev) => {
 };
 
 $("new").onclick = () => edit(null);
+for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
+listen<string>("help", (e) => openHelp(e.payload));
 $("search").addEventListener("input", render);
 reload();
