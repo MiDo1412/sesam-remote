@@ -1,5 +1,6 @@
 mod clipshare;
 mod diag;
+mod h264;
 mod kdc;
 mod library;
 mod rdp;

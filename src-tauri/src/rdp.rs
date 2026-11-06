@@ -524,7 +524,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
 
     let mut drdynvc = ironrdp_dvc::DrdynvcClient::new()
         .with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())))
-        .with_dynamic_channel(GraphicsPipelineClient::new(Box::new(NoGfxCallbacks), None));
+        .with_dynamic_channel(GraphicsPipelineClient::new(Box::new(NoGfxCallbacks), crate::h264::decoder()));
     if t.audio {
         // Neuere Server nehmen den dynamischen Kanal, ältere den statischen; je ein eigener Ausgang.
         drdynvc = drdynvc.with_dynamic_channel(ironrdp_rdpsnd::client::RdpsndDvc::new(Box::new(ironrdp_rdpsnd_native::cpal::RdpsndBackend::new())));
