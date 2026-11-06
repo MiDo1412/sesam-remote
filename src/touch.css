@@ -1,0 +1,24 @@
+/* Touch-Bedienung und Bildschirmtastatur (touch.ts, osk.ts) */
+.desktop.touch { position: relative; touch-action: none; }
+.desktop.touch canvas { touch-action: none; transform-origin: 0 0; }
+.touch-cursor { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; transform-origin: 0 0; filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.5)); }
+.touch-cursor img, .touch-cursor svg { display: block; }
+.touch-cursor.pressed::after { content: ""; position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border: 2px solid #4cd08f; border-radius: 50%; }
+.touch-lupe { position: absolute; left: 0; top: 0; z-index: 3; width: 132px; height: 132px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 4px 16px rgb(0 0 0 / 0.5); pointer-events: none; }
+
+/* Unter 16px zoomt iOS beim Fokussieren */
+.osk-input { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; resize: none; font-size: 16px; pointer-events: none; }
+.osk-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); overflow-x: auto; scrollbar-width: none; background: rgb(32 32 34 / 0.94); border-top: 1px solid #3a3a3d; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.osk-bar[hidden] { display: none; }
+.osk-key { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 40px; padding: 0 10px; border: 0; border-radius: 8px; background: #3a3a3d; color: #f5f5f7; font: 500 14px/1 system-ui, sans-serif; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.osk-key:active { background: #55555a; }
+.osk-key:focus-visible { outline: 2px solid #4cd08f; outline-offset: 2px; }
+.osk-key.on { background: #157a5a; color: #fff; }
+.osk-key.locked { box-shadow: inset 0 -3px 0 #4cd08f; }
+.osk-key.fn { min-width: 40px; color: #c7c7cc; }
+.osk-key.close { margin-left: auto; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .osk-bar { transition: transform 120ms ease; }
+  .desktop.touch { transition: translate 160ms ease; }
+}

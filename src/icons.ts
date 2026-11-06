@@ -8,6 +8,7 @@ import copy from "@phosphor-icons/core/assets/regular/copy.svg?raw";
 import downloadSimple from "@phosphor-icons/core/assets/regular/download-simple.svg?raw";
 import folder from "@phosphor-icons/core/assets/regular/folder.svg?raw";
 import folderPlus from "@phosphor-icons/core/assets/regular/folder-plus.svg?raw";
+import handTap from "@phosphor-icons/core/assets/regular/hand-tap.svg?raw";
 import frameCorners from "@phosphor-icons/core/assets/regular/frame-corners.svg?raw";
 import keyboard from "@phosphor-icons/core/assets/regular/keyboard.svg?raw";
 import linuxLogo from "@phosphor-icons/core/assets/regular/linux-logo.svg?raw";
@@ -18,6 +19,7 @@ import desktopTower from "@phosphor-icons/core/assets/regular/desktop-tower.svg?
 import lightning from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import floppy from "@phosphor-icons/core/assets/regular/floppy-disk.svg?raw";
 import magnifyingGlass from "@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw";
+import magnifyingGlassPlus from "@phosphor-icons/core/assets/regular/magnifying-glass-plus.svg?raw";
 import monitor from "@phosphor-icons/core/assets/regular/monitor.svg?raw";
 import pencilSimple from "@phosphor-icons/core/assets/regular/pencil-simple.svg?raw";
 import plug from "@phosphor-icons/core/assets/regular/plug.svg?raw";
@@ -41,6 +43,7 @@ export const ICON = {
   folder: sized(folder),
   newFolder: sized(folderPlus),
   fullscreen: sized(frameCorners),
+  handTap: sized(handTap),
   keyboard: sized(keyboard),
   osLinux: sized(linuxLogo, 40),
   osMac: sized(appleLogo, 40),
@@ -50,6 +53,7 @@ export const ICON = {
   quick: sized(lightning),
   save: sized(floppy),
   search: sized(magnifyingGlass),
+  magnify: sized(magnifyingGlassPlus),
   desktop: sized(monitor),
   rename: sized(pencilSimple),
   disconnect: sized(plug),
