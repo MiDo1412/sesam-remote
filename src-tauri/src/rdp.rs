@@ -280,6 +280,8 @@ fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &Redir) -> Result<(), String
         .find(|h| !h.is_empty())
         .cloned();
     if let Some(u) = r.username.as_ref().filter(|u| !u.is_empty()) {
+        // GNOME vergibt hier Einmal-Zugangsdaten: wie ein Geheimnis behandeln.
+        diag::add_secret(u);
         t.user = u.clone();
     }
     if let Some(d) = &r.domain {
@@ -301,7 +303,7 @@ fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &Redir) -> Result<(), String
         cookie = r.password.is_some(),
         rdstls = encrypted,
         target_cert = r.target_cert.is_some(),
-        user = ?r.username,
+        user = r.username.is_some(),
         "Umleitung übernommen"
     );
     let rdstls = encrypted.then(|| crate::rdstls::Creds {
@@ -375,7 +377,9 @@ type Framed = TokioFramed<ironrdp_tls::TlsStream<TcpStream>>;
 /// Ein Verbindungsversuch bis zum Ende des Verbindungsaufbaus.
 async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(ConnectionOutcome, Framed), String> {
     let host = hop.host.clone().unwrap_or_else(|| t.host.clone());
-    tracing::info!(%host, port = t.port, user = %t.user, redirected = hop.session_id != 0 || hop.routing_token.is_some(), "RDP: TCP");
+    let redirected = hop.session_id != 0 || hop.routing_token.is_some();
+    let user_log = if redirected { "***" } else { t.user.as_str() };
+    tracing::info!(%host, port = t.port, user = %user_log, redirected, "RDP: TCP");
     let tcp = tokio::time::timeout(std::time::Duration::from_secs(15), TcpStream::connect((host.as_str(), t.port)))
         .await
         .map_err(|_| "TCP: Zeitüberschreitung beim Verbinden".to_string())?
@@ -458,6 +462,12 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     let upgraded = ironrdp_tokio::mark_as_upgraded(should_upgrade, &mut connector);
     let key = ironrdp_tls::extract_tls_server_public_key(&cert).ok_or("Öffentlicher Schlüssel des Servers fehlt")?.to_vec();
     let mut framed = TokioFramed::new_with_leftover(tls, leftover);
+    if hop.rdstls.is_some() {
+        tracing::info!("RDP: Verbindungsaufbau nach RDSTLS (ohne CredSSP)");
+        let outcome = finalize_tolerant(connector, &mut framed).await?;
+        tracing::info!(redirected = matches!(outcome, ConnectionOutcome::Redirected(_)), "RDP: verbunden");
+        return Ok((outcome, framed));
+    }
     tracing::info!("RDP: Anmeldung (NLA/CredSSP) und Verbindungsaufbau");
     let outcome = ironrdp_tokio::connect_finalize(
         upgraded,
@@ -472,6 +482,63 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     .map_err(login_err)?;
     tracing::info!(redirected = matches!(outcome, ConnectionOutcome::Redirected(_)), "RDP: verbunden");
     Ok((outcome, framed))
+}
+
+/// Ist das ein Lizenz-Paket (Basic Security Header mit SEC_LICENSE_PKT)? `None`, wenn kein MCS-Datenpaket.
+fn license_flag(pdu: &[u8]) -> Option<bool> {
+    let ctx = ironrdp_pdu::mcs::decode_send_data_indication(pdu).ok()?;
+    let d = ctx.user_data;
+    (d.len() >= 2).then(|| u16::from_le_bytes([d[0], d[1]]) & 0x0080 != 0)
+}
+
+/// Wie `connect_finalize` (ohne CredSSP), aber nachsichtig: Überspringt der Server die Lizenzierung
+/// (gnome-remote-desktop nach RDSTLS), geht es direkt mit dem Capabilities-Austausch weiter.
+async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) -> Result<ConnectionOutcome, String> {
+    use ironrdp_connector::{ClientConnectorState, MultitransportResult, State as _};
+    let mut buf = ironrdp_pdu::WriteBuf::new();
+    loop {
+        if connector.should_perform_multitransport() {
+            ironrdp_tokio::complete_multitransport(
+                &mut connector,
+                framed,
+                MultitransportResult::Failure(ironrdp_pdu::rdp::multitransport::MultitransportResponsePdu::E_ABORT),
+            )
+            .await
+            .map_err(|e| phase("Verbindungsaufbau", e))?;
+            continue;
+        }
+        buf.clear();
+        let written = match connector.next_pdu_hint() {
+            Some(hint) => {
+                let pdu = framed.read_by_hint(hint).await.map_err(|e| format!("Verbindungsaufbau: Verbindung beendet: {e}"))?;
+                if let ClientConnectorState::LicensingExchange { io_channel_id, user_channel_id, .. } = &connector.state {
+                    if license_flag(&pdu) == Some(false) {
+                        let head: String = pdu.iter().take(32).map(|b| format!("{b:02x}")).collect();
+                        tracing::info!(head = %head, "Server überspringt die Lizenzierung");
+                        connector.state = ClientConnectorState::MultitransportBootstrapping {
+                            io_channel_id: *io_channel_id,
+                            user_channel_id: *user_channel_id,
+                            message_channel_id: connector.message_channel_id,
+                            requests_seen: 0,
+                        };
+                    }
+                }
+                let state = connector.state.name();
+                connector.step(&pdu, framed.last_read_at(), &mut buf).map_err(|e| {
+                    let head: String = pdu.iter().take(48).map(|b| format!("{b:02x}")).collect();
+                    tracing::warn!(state, len = pdu.len(), head = %head, "Verbindungsaufbau: Paket nicht lesbar");
+                    phase("Verbindungsaufbau", e)
+                })?
+            }
+            None => connector.step_no_input(&mut buf).map_err(|e| phase("Verbindungsaufbau", e))?,
+        };
+        if written.size().is_some() {
+            framed.write_all(buf.filled()).await.map_err(|e| format!("Verbindungsaufbau: {e}"))?;
+        }
+        if let Some(outcome) = connector.state.take_outcome() {
+            return Ok(outcome);
+        }
+    }
 }
 
 /// X.224-Aushandlung mit PROTOCOL_RDSTLS und Routing-Token; der Server muss RDSTLS wählen.
@@ -923,6 +990,23 @@ mod tests {
         // Hauptmonitor nicht bei (0,0) im System: wird verschoben.
         assert!(monitor_layout(&[m(1920, 0, 1920, 1080, false), m(3840, 0, 1921, 1080, true)]).is_ok());
         assert!(monitor_layout(&[]).is_err());
+    }
+
+    #[test]
+    fn license_flag_detects_license_and_other_pdus() {
+        // TPKT + X.224 Data + MCS Send Data Indication (Kanal 1003) + Nutzdaten
+        let frame = |user: &[u8]| {
+            let mut mcs = vec![0x68, 0x00, 0x01, 0x03, 0xEB, 0x70, 0x80 | 0, user.len() as u8];
+            mcs.extend_from_slice(user);
+            let mut f = vec![0x03, 0x00, 0x00, 0x00, 0x02, 0xF0, 0x80];
+            f.extend(mcs);
+            let n = f.len() as u16;
+            f[2..4].copy_from_slice(&n.to_be_bytes());
+            f
+        };
+        assert_eq!(license_flag(&frame(&[0x80, 0x00, 0x00, 0x00, 0xFF, 0x03])), Some(true));
+        assert_eq!(license_flag(&frame(&[0x2A, 0x01, 0x11, 0x00, 0xEA, 0x03])), Some(false), "Demand Active statt Lizenz");
+        assert_eq!(license_flag(&[1, 2, 3]), None);
     }
 
     #[test]
