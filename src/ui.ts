@@ -63,12 +63,3 @@ export async function askHostKey(address: string, msg: string): Promise<string |
   );
   return ok ? fp : null;
 }
-
-/** Genau eine Ansicht zeigen: Bibliothek (`null`) oder eine Sitzungsansicht mit ihrer Werkzeugleiste. */
-export function showView(view: "terminal" | "desktop" | "files" | null) {
-  byId("library").hidden = view !== null;
-  byId("session").hidden = view === null;
-  for (const v of ["terminal", "desktop", "files"]) byId(v).hidden = view !== v;
-  byId("desktop-tools").hidden = view !== "desktop";
-  byId("files-tools").hidden = view !== "files";
-}

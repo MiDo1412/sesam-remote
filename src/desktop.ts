@@ -1,31 +1,55 @@
 import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize, primaryMonitor } from "@tauri-apps/api/window";
-import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol, type Connection } from "./api";
-import { choose, showView } from "./ui";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol } from "./api";
+import { ask, choose } from "./ui";
 import { keysym } from "./keysym";
-
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+import { ICON } from "./icons";
+import { enhanceSelect } from "./menu";
+import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
-let close: (() => void) | null = null;
 
-/** Desktop über VNC oder RDP; Anzeige, Modi und Eingabe-Logik sind gemeinsam. */
-export async function openDesktop(c: Connection, onBack: () => void) {
-  close?.();
-  showView("desktop");
+/** Desktop über VNC oder RDP als Tab; Anzeige, Modi und Eingabe-Logik sind gemeinsam. */
+export function desktopTab(ctx: TabCtx): TabHandle {
+  const c = ctx.conn;
+  const $ = <T extends HTMLElement>(sel: string) => ctx.toolbar.querySelector(sel) as T;
   const rdp = desktopProtocol(c) === "rdp";
-  $("session-title").textContent = c.name;
-  $("session-sub").textContent = rdp ? `RDP · ${c.address}:${c.rdpPort}` : `VNC · ${c.address}:${c.vncPort}`;
-  const status = $("session-status");
+  ctx.setSub(rdp ? `RDP · ${c.address}:${c.rdpPort}` : `VNC · ${c.address}:${c.vncPort}`);
+  const status = ctx.status;
   status.textContent = "Verbinde …";
+  let orientation = c.orientation;
 
-  const wrap = $("desktop");
+  // Werkzeugleiste (pro Tab)
+  ctx.toolbar.innerHTML = `
+    <div class="segmented dark" role="radiogroup" aria-label="Anzeige">
+      <label title="Entfernte Auflösung folgt der Fenstergrösse"><input type="radio" name="viewMode-${ctx.id}" value="fit" />Anpassen</label>
+      <label title="Bild auf Fenstergrösse skalieren"><input type="radio" name="viewMode-${ctx.id}" value="scale" />Skalieren</label>
+      <label title="Originalgrösse"><input type="radio" name="viewMode-${ctx.id}" value="native" />1:1</label>
+    </div>
+    <select class="send-keys" aria-label="Tastenkombination senden">
+      <option value="" disabled>Tasten senden …</option>
+      <option value="cad">Strg+Alt+Entf</option>
+      <option value="cse">Strg+Umschalt+Esc</option>
+      <option value="alttab">Alt+Tab</option>
+      <option value="altf4">Alt+F4</option>
+      <option value="super">Windows-/Super-Taste</option>
+      <option value="print">Druck</option>
+    </select>`;
+  enhanceSelect($<HTMLSelectElement>(".send-keys"), {
+    pulldown: { label: "Tasten", icon: ICON.keyboard },
+    shortcuts: { cad: "Strg+Alt+Entf", cse: "Strg+Umschalt+Esc", alttab: "Alt+Tab", altf4: "Alt+F4" },
+  });
+
+  const wrap = Object.assign(document.createElement("div"), { className: "desktop" });
+  ctx.pane.prepend(wrap);
   // Frisches Canvas pro Sitzung, damit keine alten Ereignis-Handler übrig bleiben.
   const canvas = document.createElement("canvas");
   canvas.tabIndex = 0;
   canvas.setAttribute("aria-label", "Entfernter Bildschirm");
   wrap.replaceChildren(canvas);
-  const ctx = canvas.getContext("2d", { alpha: false })!;
+  const g = canvas.getContext("2d", { alpha: false })!;
   let mode: Mode = c.fitToWindow ? "fit" : "scale";
   let sid: string | null = null;
   let resizable = true;
@@ -45,7 +69,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
   /** Gewünschte entfernte Auflösung: Fenstergrösse, bei Hochformat hochkant. */
   const wanted = () => {
     let w = wrap.clientWidth & ~1, h = wrap.clientHeight & ~1;
-    if (c.orientation === "portrait" && w > h) [w, h] = [h, w];
+    if (orientation === "portrait" && w > h) [w, h] = [h, w];
     return [w, h];
   };
 
@@ -66,7 +90,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
   const ro = new ResizeObserver(() => (layout(), requestSize()));
   ro.observe(wrap);
 
-  for (const r of document.querySelectorAll<HTMLInputElement>("[name=viewMode]")) {
+  for (const r of ctx.toolbar.querySelectorAll<HTMLInputElement>(`[name=viewMode-${ctx.id}]`)) {
     r.checked = r.value === mode;
     r.onchange = () => {
       mode = r.value as Mode;
@@ -204,7 +228,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     ControlLeft: "Control", AltLeft: "Alt", ShiftLeft: "Shift", MetaLeft: "Meta",
     Delete: "Delete", Escape: "Escape", Tab: "Tab", F4: "F4", PrintScreen: "PrintScreen",
   };
-  const sendKeys = $<HTMLSelectElement>("send-keys");
+  const sendKeys = $<HTMLSelectElement>(".send-keys");
   sendKeys.value = "";
   sendKeys.onchange = () => {
     const codes = combos[sendKeys.value] ?? [];
@@ -222,7 +246,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
   const toggleFullscreen = async () => {
     const on = !(await win.isFullscreen());
     await win.setFullscreen(on);
-    $("session").classList.toggle("fullscreen", on);
+    document.getElementById("session")!.classList.toggle("fullscreen", on);
     if (on) status.textContent = "F11 beendet das Vollbild.";
   };
   // «Alle Monitore» (RDP): rahmenloses Fenster über alle Monitore, Server bekommt deren Anordnung.
@@ -235,7 +259,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
       await win.setDecorations(true);
       await win.setSize(prev.size);
       await win.setPosition(prev.pos);
-      $("session").classList.remove("fullscreen");
+      document.getElementById("session")!.classList.remove("fullscreen");
       mode = prev.mode;
       layout();
       requestSize();
@@ -253,7 +277,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     await win.setPosition(new PhysicalPosition(x0, y0));
     await win.setSize(new PhysicalSize(x1 - x0, y1 - y0));
     await win.setAlwaysOnTop(true);
-    $("session").classList.add("fullscreen");
+    document.getElementById("session")!.classList.add("fullscreen");
     mode = "scale"; // entfernte Fläche = Vereinigung der Monitore, also deckungsgleich
     layout();
     api.rdpSetMonitors(sid, mons.map((m) => ({
@@ -265,23 +289,67 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     }))).catch((e) => (status.textContent = String(e)));
     status.textContent = "F11 beendet «Alle Monitore».";
   };
-  $("span").hidden = !rdp;
-  $("span").onclick = toggleSpan;
+
   const onF11 = (e: KeyboardEvent) => {
-    if (e.key === "F11") {
+    if (e.key === "F11" && ctx.isActive()) {
       e.preventDefault();
       if (spanned) toggleSpan();
       else toggleFullscreen();
     }
   };
   window.addEventListener("keydown", onF11);
-  $("fullscreen").onclick = toggleFullscreen;
+
+  // Zwischenablage als Tastatureingabe (für Anmeldebildschirme und Konsolen ohne Zwischenablage).
+  const typeClipboard = async () => {
+    const text = (await navigator.clipboard.readText().catch(() => "")).replace(/\r\n/g, "\n");
+    if (!sid || !text) return void (status.textContent = "Die Zwischenablage ist leer.");
+    if (text.length > 200 && !(await ask("Langen Text abtippen?", `${text.length} Zeichen werden als Tastendrücke gesendet. Das dauert etwa ${Math.ceil((text.length * 15) / 1000)} Sekunden.`, "Abtippen"))) return;
+    canvas.focus();
+    for (const ch of text) {
+      if (!sid) break;
+      const k: Key = ch === "\n" ? { code: "Enter", key: "Enter" } : ch === "\t" ? { code: "Tab", key: "Tab" } : { code: "", key: ch };
+      send(true, k);
+      send(false, k);
+      await new Promise((r) => setTimeout(r, 15));
+    }
+  };
+
+  // Bildschirmfoto als PNG speichern.
+  const screenshot = async () => {
+    if (!canvas.width) return;
+    const path = await saveDialog({ title: "Bildschirmfoto speichern", defaultPath: `${c.name} ${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.png`, filters: [{ name: "PNG", extensions: ["png"] }] });
+    if (!path) return;
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
+    if (!blob) return;
+    await invoke("save_bytes", { path, data: Array.from(new Uint8Array(await blob.arrayBuffer())) })
+      .then(() => (status.textContent = `Gespeichert: ${path}`))
+      .catch((e) => (status.textContent = String(e)));
+  };
+
+  const orientBtn = toolButton(ICON.desktop, "Hoch-/Querformat", () => {
+    orientation = orientation === "portrait" ? "landscape" : "portrait";
+    orientBtn.classList.toggle("on", orientation === "portrait");
+    requestSize();
+  });
+  orientBtn.classList.toggle("on", orientation === "portrait");
+  const spanBtn = toolButton(ICON.span, "Alle Monitore", () => toggleSpan(), { shortcut: "nur RDP" });
+  spanBtn.hidden = !rdp;
+  ctx.toolbar.prepend(orientBtn, toolSep());
+  ctx.toolbar.append(
+    toolButton(ICON.typeClipboard, "Zwischenablage abtippen", typeClipboard),
+    toolButton(ICON.screenshot, "Bildschirmfoto", screenshot),
+    toolSep(),
+    spanBtn,
+    toolButton(ICON.fullscreen, "Vollbild", toggleFullscreen, { shortcut: "F11" }),
+    toolSep(),
+    toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
+  );
   // RDP gleicht die Zwischenablage selbst ab (cliprdr); nur VNC braucht den Anstoss beim Fokussieren.
-  const syncClipboard = () => sid && !rdp && c.sharedClipboard && api.vncClipboardSync(sid).catch(() => {});
+  const syncClipboard = () => sid && !rdp && c.sharedClipboard && ctx.isActive() && api.vncClipboardSync(sid).catch(() => {});
   window.addEventListener("focus", syncClipboard);
   canvas.addEventListener("focus", syncClipboard);
 
-  close = () => {
+  const close = () => {
     ro.disconnect();
     releaseAll();
     window.removeEventListener("keydown", onF11);
@@ -290,13 +358,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     sid = null;
     if (spanned) toggleSpan();
     win.setFullscreen(false);
-    $("session").classList.remove("fullscreen");
-    close = null;
-  };
-  $("session-back").onclick = () => {
-    close?.();
-    showView(null);
-    onBack();
+    document.getElementById("session")!.classList.remove("fullscreen");
   };
 
   // ---------- Bild vom Server ----------
@@ -306,7 +368,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     switch (v.getUint8(0)) {
       case 0: {
         const [x, y, w, h] = [v.getUint16(1), v.getUint16(3), v.getUint16(5), v.getUint16(7)];
-        ctx.putImageData(new ImageData(new Uint8ClampedArray(buf, 9, w * h * 4), w, h), x, y);
+        g.putImageData(new ImageData(new Uint8ClampedArray(buf, 9, w * h * 4), w, h), x, y);
         break;
       }
       case 1:
@@ -317,6 +379,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
       case 3:
         status.textContent = `Verbindung beendet: ${text()}`;
         sid = null;
+        ctx.setState("closed");
         break;
       case 5:
         status.textContent = text();
@@ -344,12 +407,14 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     return api.rdpOpen(c.id, trust, remember, Math.max(w, 640), Math.max(h, 480), onFrame);
   };
 
+  void (async () => {
   let trust: string | null = null;
   for (;;) {
     try {
       sid = await openSession(trust);
       status.textContent = "";
-      canvas.focus();
+      ctx.setState("connected");
+      if (ctx.isActive()) canvas.focus();
       syncClipboard();
       requestSize();
     } catch (e) {
@@ -374,7 +439,15 @@ export async function openDesktop(c: Connection, onBack: () => void) {
         }
         status.textContent = "Verbindung abgebrochen: Zertifikat nicht bestätigt.";
       } else status.textContent = `Keine Verbindung: ${msg}`;
+      ctx.setState("closed");
     }
     break;
   }
+  })();
+
+  return {
+    close,
+    onShow: () => requestAnimationFrame(() => (layout(), requestSize(), canvas.focus())),
+    onHide: () => releaseAll(),
+  };
 }

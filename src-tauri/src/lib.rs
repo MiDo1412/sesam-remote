@@ -186,6 +186,12 @@ fn sftp_close(files: State<Files>, sid: String) {
     files.0.lock().unwrap().remove(&sid);
 }
 
+/// Vom Benutzer im Speichern-Dialog gewählte Datei schreiben (z. B. Bildschirmfoto).
+#[tauri::command]
+fn save_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
+    std::fs::write(&path, data).map_err(|e| format!("{path}: {e}"))
+}
+
 #[tauri::command]
 fn local_list(path: String) -> Result<sftp::Listing, String> {
     sftp::local_list(&path)
@@ -646,6 +652,7 @@ pub fn run() {
             sftp_remove,
             sftp_close,
             local_list,
+            save_bytes,
             local_home,
             transfer_start,
             transfer_cancel,

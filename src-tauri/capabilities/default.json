@@ -16,6 +16,7 @@
     "core:window:allow-outer-position",
     "core:window:allow-inner-size",
     "opener:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "dialog:allow-save"
   ]
 }

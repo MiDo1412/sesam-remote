@@ -248,3 +248,44 @@ label.option small { margin-top: 2px; }
 #help-body table { border-collapse: collapse; }
 #help-body th, #help-body td { border-bottom: 1px solid var(--line); padding: 6px 12px 6px 0; text-align: left; }
 .help-close { display: flex; justify-content: flex-end; padding: 8px 16px; border-top: 1px solid var(--line); }
+
+/* ---------- Sitzungen als Tabs ---------- */
+.session-bar { gap: 8px; }
+#tabs { flex: 1; min-width: 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tab { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 10px; border-radius: 7px; color: #c7c7cc; font-size: 12px; white-space: nowrap; cursor: default; max-width: 240px; }
+.tab:hover { background: #333336; }
+.tab[aria-selected=true] { background: #48484c; color: #f5f5f7; }
+.tab:focus-visible { outline: 2px solid #4cd08f; outline-offset: -2px; }
+.tab-label { overflow: hidden; text-overflow: ellipsis; }
+.tab-close { height: 18px; width: 18px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: inherit; opacity: 0.6; }
+.tab-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.12); }
+.dot { width: 7px; height: 7px; border-radius: 4px; background: #8a8a8a; flex-shrink: 0; }
+[data-state=connected] > .dot { background: #4cd08f; }
+[data-state=connecting] > .dot { background: #e5c07b; }
+[data-state=closed] > .dot { background: #ff6b5e; }
+.session-head { display: flex; align-items: center; gap: 16px; min-height: 44px; padding: 0 14px; background: #232325; border-bottom: 1px solid #3a3a3d; }
+.session-id { min-width: 0; }
+.session-id h1 { margin: 0; font-size: 13px; }
+.session-id .sub { font-size: 11px; color: #a1a1a6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#session-toolbar { flex: 1; display: flex; justify-content: flex-end; min-width: 0; }
+.tab-tools { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+#session-panes { flex: 1; min-height: 0; position: relative; }
+.tab-pane { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.tab-pane > .terminal, .tab-pane > .desktop, .tab-pane > .files { flex: 1; min-height: 0; }
+.fullscreen .session-head { display: none; }
+
+/* Werkzeugknöpfe mit Icons */
+button.tool { height: 30px; min-width: 30px; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 6px; background: transparent; color: #e5e5ea; font-size: 12px; }
+button.tool:hover { background: #3a3a3d; }
+button.tool:active { background: #48484c; }
+button.tool.on { background: #48484c; color: #4cd08f; }
+button.tool.danger { color: #ff8a80; }
+.tool-sep { width: 1px; height: 18px; margin: 0 4px; background: #3a3a3d; }
+.files ~ .status, .tab-pane.files .status { background: var(--surface); }
+
+/* Aktive Sitzungen in der Bibliothek */
+.active-sessions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); }
+.active-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-right: 4px; }
+.chip { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 14px; font-size: 12px; }
+.chip svg { color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .tab, button.tool, .chip { transition: background-color 120ms ease; } }

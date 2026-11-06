@@ -1,8 +1,9 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { api, HOSTKEY_UNKNOWN, type Connection, type Entry, type Listing, type Progress } from "./api";
-import { ask, askHostKey, askText, showView, tell } from "./ui";
+import { api, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
+import { ask, askHostKey, askText, tell } from "./ui";
+import { ICON } from "./icons";
+import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -44,18 +45,15 @@ interface Pane {
   sep: string;
 }
 
-let close: (() => void) | null = null;
-
-export async function openFiles(c: Connection, onBack: () => void) {
-  close?.();
-  showView("files");
-  $("session-title").textContent = c.name;
-  $("session-sub").textContent = `SFTP über SSH · ${c.user}@${c.address}`;
-  const status = $("session-status");
+/** Dateien (SFTP) als Tab. */
+export function filesTab(ctx: TabCtx): TabHandle {
+  const c = ctx.conn;
+  ctx.setSub(`SFTP über SSH · ${c.user}@${c.address}`);
+  const status = ctx.status;
   status.textContent = "Verbinde …";
 
-  const host = $("files");
-  host.replaceChildren();
+  const host = el("div", "files");
+  ctx.pane.prepend(host);
   const isWin = navigator.userAgent.includes("Windows");
   const panes: Record<Side, Pane> = {
     local: makePane("local", "Dieser Computer", isWin ? "\\" : "/"),
@@ -216,9 +214,7 @@ export async function openFiles(c: Connection, onBack: () => void) {
       .catch((e) => finish(`Fehler: ${e}`));
   }
 
-  $("files-up").onclick = () => transfer(panes.local, [...panes.local.selected]);
-  $("files-down").onclick = () => transfer(panes.remote, [...panes.remote.selected]);
-  $("files-mkdir").onclick = async () => {
+  const mkdir = async () => {
     const dir = panes.remote.listing?.path;
     if (!sid || !dir) return;
     const name = await askText("Neuer Ordner", `In ${dir} auf ${c.name}`, "Anlegen", "Neuer Ordner");
@@ -268,8 +264,19 @@ export async function openFiles(c: Connection, onBack: () => void) {
     await load(p, p.listing.path);
   }
 
-  $("files-rename").onclick = renameRemote;
-  $("files-delete").onclick = deleteRemote;
+  ctx.toolbar.append(
+    toolButton(ICON.upload, "Hochladen", () => transfer(panes.local, [...panes.local.selected]), { text: true }),
+    toolButton(ICON.download, "Herunterladen", () => transfer(panes.remote, [...panes.remote.selected]), { text: true }),
+    toolSep(),
+    toolButton(ICON.newFolder, "Neuer Ordner", () => mkdir()),
+    toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2" }),
+    toolButton(ICON.trash, "Löschen", () => deleteRemote(), { shortcut: "Entf", danger: true }),
+    toolButton(ICON.refresh, "Neu laden", () => {
+      for (const p of Object.values(panes)) if (p.listing) load(p, p.listing.path);
+    }),
+    toolSep(),
+    toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
+  );
 
   // ---------- Ziehen zwischen den Seiten ----------
   // Eigene Zeiger-Logik: Tauri fängt HTML-Drag&Drop für Dateien aus dem System ab.
@@ -307,8 +314,9 @@ export async function openFiles(c: Connection, onBack: () => void) {
     target.addEventListener("pointerup", up);
   }
 
-  // Dateien aus Explorer/Finder auf die Server-Seite ziehen.
-  const unlistenDrop = await getCurrentWebview().onDragDropEvent((ev) => {
+  // Dateien aus Explorer/Finder auf die Server-Seite ziehen (nur im sichtbaren Tab).
+  const unlistenDrop = getCurrentWebview().onDragDropEvent((ev) => {
+    if (!ctx.isActive()) return;
     const t = ev.payload.type;
     const pos = "position" in ev.payload ? ev.payload.position : null;
     const over = pos ? paneAt(pos.x / devicePixelRatio, pos.y / devicePixelRatio) : undefined;
@@ -321,28 +329,23 @@ export async function openFiles(c: Connection, onBack: () => void) {
     }
   });
 
-  close = () => {
-    unlistenDrop();
+  const close = () => {
+    unlistenDrop.then((u) => u());
     for (const t of running) api.transferCancel(t);
     running.clear();
     if (sid) api.sftpClose(sid);
     sid = null;
-    close = null;
-  };
-  $("session-back").onclick = () => {
-    if (running.size) status.textContent = "Laufende Übertragungen wurden abgebrochen.";
-    close?.();
-    showView(null);
-    onBack();
   };
 
   // ---------- Verbinden ----------
+  void (async () => {
   load(panes.local, await api.localHome());
   let trust: string | null = null;
   for (;;) {
     try {
       sid = await api.sftpOpen(c.id, trust);
       status.textContent = "";
+      ctx.setState("connected");
       await load(panes.remote, "");
     } catch (e) {
       const msg = String(e);
@@ -351,7 +354,14 @@ export async function openFiles(c: Connection, onBack: () => void) {
         if (trust) continue;
         status.textContent = "Verbindung abgebrochen: Server nicht bestätigt.";
       } else status.textContent = `Keine Verbindung: ${msg}`;
+      ctx.setState("closed");
     }
     break;
   }
+  })();
+
+  return {
+    close,
+    busy: () => (running.size ? `${running.size} Übertragung(en) laufen noch und werden abgebrochen.` : null),
+  };
 }

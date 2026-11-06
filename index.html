@@ -25,6 +25,7 @@
               <h1 id="title">Alle Verbindungen</h1>
               <button id="new" type="button" class="primary">＋ Neue Verbindung</button>
             </div>
+            <div id="active-sessions" class="active-sessions" hidden></div>
             <div id="grid" class="grid"></div>
             <p id="empty" class="empty" hidden>Noch keine Verbindungen. Lege mit «Neue Verbindung» die erste an.</p>
           </section>
@@ -35,42 +36,17 @@
 
     <div id="session" class="session" hidden>
       <header class="session-bar">
-        <button id="session-back" type="button" class="plain">‹ Bibliothek</button>
-        <div>
+        <button id="session-back" type="button" class="plain" title="Zurück zur Bibliothek; Sitzungen laufen weiter">‹ Bibliothek</button>
+        <div id="tabs" role="tablist" aria-label="Sitzungen"></div>
+      </header>
+      <div class="session-head">
+        <div class="session-id">
           <h1 id="session-title"></h1>
           <div id="session-sub" class="sub"></div>
         </div>
-        <div class="grow"></div>
-        <div id="files-tools" class="tools" hidden>
-          <button id="files-up" type="button" class="plain" title="Auswahl links auf den Server kopieren">Hochladen →</button>
-          <button id="files-down" type="button" class="plain" title="Auswahl rechts auf diesen Computer kopieren">← Herunterladen</button>
-          <button id="files-mkdir" type="button" class="plain">Neuer Ordner</button>
-          <button id="files-rename" type="button" class="plain" title="Auswahl rechts umbenennen (F2)">Umbenennen</button>
-          <button id="files-delete" type="button" class="plain danger" title="Auswahl rechts löschen (Entf)">Löschen</button>
-        </div>
-        <div id="desktop-tools" class="tools" hidden>
-          <div class="segmented dark" role="radiogroup" aria-label="Anzeige">
-            <label title="Entfernte Auflösung folgt der Fenstergrösse"><input type="radio" name="viewMode" value="fit" />An Fenster anpassen</label>
-            <label><input type="radio" name="viewMode" value="scale" />Skalieren</label>
-            <label><input type="radio" name="viewMode" value="native" />1:1</label>
-          </div>
-          <select id="send-keys" aria-label="Tastenkombination senden">
-            <option value="" disabled>Tasten senden …</option>
-            <option value="cad">Strg+Alt+Entf</option>
-            <option value="cse">Strg+Umschalt+Esc</option>
-            <option value="alttab">Alt+Tab</option>
-            <option value="altf4">Alt+F4</option>
-            <option value="super">Windows-/Super-Taste</option>
-            <option value="print">Druck</option>
-          </select>
-          <button id="span" type="button" class="plain" title="Über alle Monitore (RDP); F11 beendet">Alle Monitore</button>
-          <button id="fullscreen" type="button" class="plain" title="Vollbild (F11)">Vollbild</button>
-        </div>
-      </header>
-      <div id="terminal" class="terminal"></div>
-      <div id="desktop" class="desktop" hidden></div>
-      <div id="files" class="files" hidden></div>
-      <div id="session-status" role="status" class="status"></div>
+        <div id="session-toolbar"></div>
+      </div>
+      <div id="session-panes"></div>
     </div>
 
     <dialog id="editor" aria-labelledby="editor-title">
