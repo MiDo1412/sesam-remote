@@ -214,7 +214,6 @@ fn transfer_start(
 
 #[tauri::command]
 fn transfer_cancel(transfers: State<Transfers>, tid: String) {
-    // shortcut: eine abgebrochene Datei bleibt halb geschrieben liegen; bei Bedarf hier aufräumen.
     if let Some(t) = transfers.0.lock().unwrap().remove(&tid) {
         t.abort();
     }

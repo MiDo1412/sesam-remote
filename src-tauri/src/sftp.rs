@@ -6,6 +6,7 @@ use russh::client::Handle;
 use russh_sftp::client::SftpSession;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
@@ -166,6 +167,36 @@ pub enum Progress {
     Failed { error: String },
 }
 
+/// Endung, unter der eine Datei geschrieben wird, bis sie vollständig ist.
+pub const PARTIAL: &str = ".sesam-teil";
+
+/// Löscht eine halb geschriebene Datei, wenn die Übertragung scheitert oder abgebrochen wird
+/// (auch beim Abbruch der Aufgabe, darum im Drop).
+struct Partial(Option<Cleanup>);
+
+enum Cleanup {
+    Local(PathBuf),
+    Remote(Arc<Sftp>, String),
+}
+
+impl Drop for Partial {
+    fn drop(&mut self) {
+        match self.0.take() {
+            Some(Cleanup::Local(p)) => {
+                let _ = std::fs::remove_file(p);
+            }
+            Some(Cleanup::Remote(s, p)) => {
+                if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                    rt.spawn(async move {
+                        let _ = s.s.remove_file(p).await;
+                    });
+                }
+            }
+            None => {}
+        }
+    }
+}
+
 /// Ein Schritt der Übertragung: Ordner anlegen oder Datei kopieren.
 struct Item {
     src: String,
@@ -209,7 +240,7 @@ where
 }
 
 /// Lokale Datei oder lokalen Ordner nach `remote_dir` hochladen. Gibt den Zielpfad zurück.
-pub async fn upload(sftp: &Sftp, local: &Path, remote_dir: &str, report: impl Fn(Progress)) -> Result<String, String> {
+pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, report: impl Fn(Progress)) -> Result<String, String> {
     let name = local.file_name().ok_or("Ungültige Quelle")?.to_string_lossy().into_owned();
     let root = sftp.unique(remote_dir, &name, local.is_dir()).await?;
 
@@ -234,9 +265,13 @@ pub async fn upload(sftp: &Sftp, local: &Path, remote_dir: &str, report: impl Fn
         if it.dir {
             sftp.s.create_dir(&it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
         } else {
+            let tmp = format!("{}{PARTIAL}", it.dst);
             let r = tokio::fs::File::open(&it.src).await.map_err(|e| format!("{}: {e}", it.src))?;
-            let w = sftp.s.create(&it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
+            let w = sftp.s.create(&tmp).await.map_err(|e| format!("{}: {e}", it.dst))?;
+            let mut guard = Partial(Some(Cleanup::Remote(sftp.clone(), tmp.clone())));
             pump(r, w, &mut m, &it.src).await?;
+            sftp.s.rename(&tmp, &it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
+            guard.0 = None;
         }
     }
     (m.report)(Progress::Done { target: root.clone() });
@@ -244,7 +279,7 @@ pub async fn upload(sftp: &Sftp, local: &Path, remote_dir: &str, report: impl Fn
 }
 
 /// Entfernte Datei oder entfernten Ordner nach `local_dir` herunterladen. Gibt den Zielpfad zurück.
-pub async fn download(sftp: &Sftp, remote: &str, local_dir: &Path, report: impl Fn(Progress)) -> Result<String, String> {
+pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, report: impl Fn(Progress)) -> Result<String, String> {
     let meta = sftp.s.metadata(remote).await.map_err(|e| format!("{remote}: {e}"))?;
     let name = remote.trim_end_matches('/').rsplit('/').next().filter(|n| !n.is_empty()).ok_or("Ungültige Quelle")?;
     let root = local_unique(local_dir, name, meta.file_type().is_dir());
@@ -272,9 +307,13 @@ pub async fn download(sftp: &Sftp, remote: &str, local_dir: &Path, report: impl 
         if it.dir {
             tokio::fs::create_dir_all(&it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
         } else {
+            let tmp = PathBuf::from(format!("{}{PARTIAL}", it.dst));
             let r = sftp.s.open(&it.src).await.map_err(|e| format!("{}: {e}", it.src))?;
-            let w = tokio::fs::File::create(&it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
+            let w = tokio::fs::File::create(&tmp).await.map_err(|e| format!("{}: {e}", it.dst))?;
+            let mut guard = Partial(Some(Cleanup::Local(tmp.clone())));
             pump(r, w, &mut m, &it.src).await?;
+            tokio::fs::rename(&tmp, &it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
+            guard.0 = None;
         }
     }
     let root = root.to_string_lossy().into_owned();
@@ -287,13 +326,15 @@ mod tests {
     use super::*;
     use russh_sftp::protocol::{Attrs, Data, File, FileAttributes, Handle as H, Name, OpenFlags, Status, StatusCode, Version};
     use std::collections::{BTreeMap, HashSet};
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
 
     /// Kleiner SFTP-Server im Arbeitsspeicher als Gegenstelle für Hoch-/Herunterladen.
     #[derive(Default)]
     struct MemFs {
         /// Pfad → `None` = Ordner, `Some(daten)` = Datei.
         nodes: BTreeMap<String, Option<Vec<u8>>>,
+        /// Schreiben scheitert, sobald eine Datei grösser würde (simuliert volle Platte / Abbruch).
+        fail_above: Option<usize>,
     }
 
     struct Server {
@@ -372,8 +413,12 @@ mod tests {
         }
         async fn write(&mut self, id: u32, handle: String, offset: u64, data: Vec<u8>) -> Result<Status, StatusCode> {
             let mut fs = self.fs.lock().unwrap();
+            let fs_limit = fs.fail_above;
             let Some(Some(f)) = fs.nodes.get_mut(&handle) else { return Err(StatusCode::Failure) };
             let end = offset as usize + data.len();
+            if fs_limit.is_some_and(|l| end > l) {
+                return Err(StatusCode::Failure);
+            }
             if f.len() < end {
                 f.resize(end, 0);
             }
@@ -392,6 +437,42 @@ mod tests {
         async fn close(&mut self, id: u32, _: String) -> Result<Status, StatusCode> {
             Ok(ok(id))
         }
+        async fn rename(&mut self, id: u32, from: String, to: String) -> Result<Status, StatusCode> {
+            let mut fs = self.fs.lock().unwrap();
+            if fs.nodes.contains_key(&to) {
+                return Err(StatusCode::Failure);
+            }
+            let moved: Vec<_> = fs.nodes.keys().filter(|k| *k == &from || k.starts_with(&format!("{from}/"))).cloned().collect();
+            if moved.is_empty() {
+                return Err(StatusCode::NoSuchFile);
+            }
+            for k in moved {
+                let v = fs.nodes.remove(&k).unwrap();
+                fs.nodes.insert(format!("{to}{}", &k[from.len()..]), v);
+            }
+            Ok(ok(id))
+        }
+        async fn remove(&mut self, id: u32, path: String) -> Result<Status, StatusCode> {
+            let mut fs = self.fs.lock().unwrap();
+            match fs.nodes.get(&path) {
+                Some(Some(_)) => {
+                    fs.nodes.remove(&path);
+                    Ok(ok(id))
+                }
+                _ => Err(StatusCode::NoSuchFile),
+            }
+        }
+        async fn rmdir(&mut self, id: u32, path: String) -> Result<Status, StatusCode> {
+            let mut fs = self.fs.lock().unwrap();
+            let prefix = format!("{path}/");
+            if fs.nodes.keys().any(|k| k.starts_with(&prefix)) {
+                return Err(StatusCode::Failure);
+            }
+            match fs.nodes.remove(&path) {
+                Some(None) => Ok(ok(id)),
+                _ => Err(StatusCode::NoSuchFile),
+            }
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -400,7 +481,7 @@ mod tests {
         fs.lock().unwrap().nodes.insert("/home".into(), None);
         let (client, server) = tokio::io::duplex(1 << 20);
         russh_sftp::server::run(server, Server { fs: fs.clone(), listed: HashSet::new() }).await;
-        let sftp = Sftp { s: SftpSession::new(client).await.unwrap(), _ssh: None };
+        let sftp = Arc::new(Sftp { s: SftpSession::new(client).await.unwrap(), _ssh: None });
 
         // Lokaler Ordner mit Unterordner und einer Datei über mehrere Puffer (256 KB).
         let base = std::env::temp_dir().join(format!("sesam-xfer-{}", std::process::id()));
@@ -434,6 +515,20 @@ mod tests {
         assert_eq!(std::fs::read_to_string(base.join("projekt (2)").join("a.txt")).unwrap(), "Grüezi");
 
         assert!(download(&sftp, "/home/fehlt", &base, |_| {}).await.is_err());
+
+        // Keine Teildateien übrig, weder hier noch dort.
+        assert!(!fs.lock().unwrap().nodes.keys().any(|k| k.ends_with(PARTIAL)));
+        let walk = |d: &Path| std::fs::read_dir(d).unwrap().flatten().any(|e| e.file_name().to_string_lossy().ends_with(PARTIAL));
+        assert!(!walk(&base.join("projekt (2)")) && !walk(&base.join("projekt (2)").join("unter")));
+
+        // Scheitert das Schreiben mittendrin, verschwindet die halbe Datei.
+        fs.lock().unwrap().fail_above = Some(300_000);
+        let e = upload(&sftp, &src.join("unter").join("gross.bin"), "/home", |_| {}).await;
+        assert!(e.is_err());
+        tokio::time::sleep(Duration::from_millis(50)).await; // Aufräumen läuft im Hintergrund
+        let fs2 = fs.lock().unwrap();
+        assert!(!fs2.nodes.keys().any(|k| k.ends_with(PARTIAL) || k == "/home/gross.bin"), "{:?}", fs2.nodes.keys().collect::<Vec<_>>());
+        drop(fs2);
         std::fs::remove_dir_all(&base).unwrap();
     }
 
