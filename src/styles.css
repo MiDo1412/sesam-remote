@@ -417,3 +417,4 @@ fieldset.svc legend { float: none; padding: 0; }
 .sheet.uses-cred .own-cred, .sheet.uses-cred #key-row { display: none; }
 .row-actions { display: flex; gap: 12px; }
 #cred-form { width: 480px; }
+.svc-fields:has(input[name=rdpOwn]:not(:checked)) #rdp-own, .svc-fields:has(input[name=vncOwn]:not(:checked)) #vnc-own { display: none; }

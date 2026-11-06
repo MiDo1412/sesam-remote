@@ -120,7 +120,7 @@ export function initQuick(onSaveAsConnection: (c: Connection) => void) {
     const c: Connection = {
       id: "quick", name: `${address} (schnell)`, group: "", address,
       vncPort: k === "vnc" ? port : null, sshPort: k === "shell" || k === "files" ? port : null, rdpPort: k === "rdp" ? port : null,
-      rdpDomain: "", desktopProtocol: k === "vnc" ? "vnc" : "rdp", user,
+      rdpDomain: "", rdpUser: "", desktopProtocol: k === "vnc" ? "vnc" : "rdp", user,
       defaultView: k === "shell" ? "shell" : k === "files" ? "files" : "desktop", orientation: "landscape",
       sharedClipboard: true, fitToWindow: true, playAudio: true, sharedFolder: "", skipCertCheck: false, os: "", customThumb: false, credentialId: null, rdpNoNtlm: false, rdpKdc: "", rdpGateway: "", rdpGatewayUser: "", hasGatewayPassword: false, fileTransfer: "auto", sshLegacy: false, sshKeepalive: 0, sshCompression: false, forwards: [], jumpHost: "", sshAgent: false, agentForward: false,
       hasPassword: false, hasVncPassword: false, hasRdpPassword: false, hasKey: false, lastUsed: null,

@@ -18,6 +18,8 @@ pub struct Connection {
     pub rdp_port: Option<u16>,
     /// Windows-Domäne für RDP (leer = keine).
     pub rdp_domain: String,
+    /// Eigener RDP-Benutzer (leer = Benutzer der Verbindung), z. B. GNOME-Freigabe.
+    pub rdp_user: String,
     /// Bei VNC *und* RDP: womit «Desktop» verbindet ("vnc" | "rdp").
     pub desktop_protocol: String,
     pub user: String,
@@ -82,6 +84,7 @@ impl Default for Connection {
             ssh_port: Some(22),
             rdp_port: None,
             rdp_domain: String::new(),
+            rdp_user: String::new(),
             desktop_protocol: "vnc".into(),
             user: String::new(),
             default_view: "desktop".into(),

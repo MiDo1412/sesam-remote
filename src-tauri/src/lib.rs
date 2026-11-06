@@ -872,6 +872,11 @@ async fn rdp_open(
     let c = find(&path, &id)?;
     let port = c.rdp_port.ok_or("Desktop über RDP ist für diese Verbindung ausgeschaltet")?;
     let password = vault::get(&c.id, Kind::RdpPassword)?.or(login_secret(&c, Kind::Password)?).unwrap_or_default();
+    // «Eigene Zugangsdaten für RDP»: eigener Benutzer, sonst der der Verbindung.
+    let user = match c.rdp_user.trim() {
+        "" => c.user.clone(),
+        u => u.to_string(),
+    };
     let domain = (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string());
     let gateway = match c.rdp_gateway.trim() {
         "" => None,
@@ -879,8 +884,8 @@ async fn rdp_open(
             endpoint: gw.to_string(),
             // «Gleiche wie Verbindung»: Domäne wie bei mstsc vor den Benutzer.
             user: match &domain {
-                Some(d) if !c.user.contains(['@', '\\']) => format!("{d}\\{}", c.user),
-                _ => c.user.clone(),
+                Some(d) if !user.contains(['@', '\\']) => format!("{d}\\{}", user),
+                _ => user.clone(),
             },
             password: password.clone(),
         }),
@@ -896,7 +901,7 @@ async fn rdp_open(
     let target = rdp::Target {
         host: c.address.clone(),
         port,
-        user: c.user.clone(),
+        user,
         domain,
         password,
         expected_cert: trust.clone().or_else(|| pins.get(&pin_key).cloned()),

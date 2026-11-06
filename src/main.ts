@@ -269,6 +269,7 @@ const blank = (): Connection => ({
   vncPort: null,
   rdpPort: 3389,
   rdpDomain: "",
+  rdpUser: "",
   desktopProtocol: "rdp",
   sshPort: 22,
   user: "",
@@ -315,6 +316,9 @@ function edit(c: Connection | null, asNew = false) {
   f.rdpOn.checked = editing.rdpPort !== null;
   f.rdpPort.value = String(editing.rdpPort ?? 3389);
   f.rdpDomain.value = editing.rdpDomain;
+  f.rdpUser.value = editing.rdpUser ?? "";
+  f.rdpOwn.checked = editing.hasRdpPassword || !!editing.rdpUser;
+  f.vncOwn.checked = editing.hasVncPassword;
   f.rdpPassword.value = "";
   form.querySelector<HTMLInputElement>(`[name=desktopProtocol][value=${editing.desktopProtocol}]`)!.checked = true;
   f.sshOn.checked = editing.sshPort !== null;
@@ -442,6 +446,7 @@ form.onsubmit = async (ev) => {
   const fd = new FormData(form);
   const s = (k: string) => String(fd.get(k) ?? "").trim();
   const port = (on: string, k: string) => (fd.get(on) ? Number(s(k)) || null : null);
+  const ed = editing;
   const c: Connection = {
     ...editing,
     name: s("name"),
@@ -451,6 +456,7 @@ form.onsubmit = async (ev) => {
     sshPort: port("sshOn", "sshPort"),
     rdpPort: port("rdpOn", "rdpPort"),
     rdpDomain: s("rdpDomain"),
+    rdpUser: fd.get("rdpOwn") ? s("rdpUser") : "",
     desktopProtocol: (s("desktopProtocol") || "rdp") as Connection["desktopProtocol"],
     user: s("user"),
     sharedClipboard: fd.get("sharedClipboard") !== null,
@@ -483,7 +489,10 @@ form.onsubmit = async (ev) => {
   const sshKey = keyMode === "none" ? "" : keyMode === "import" ? String(fd.get("key") ?? "").trim() + "\n" : undefined;
   if (keyMode === "import" && sshKey!.trim() === "") return void ($("editor-error").textContent = "Bitte den privaten Schlüssel einfügen.");
   // Neuer Wert > «Entfernen» (leerer String löscht im Tresor) > unverändert.
-  const secret = (k: string) => String(fd.get(k) ?? "") || (clearing.has(k) ? "" : undefined);
+  // Schalter «Eigene Zugangsdaten» aus: gespeichertes Dienst-Passwort entfernen.
+  const own: Record<string, string> = { rdpPassword: "rdpOwn", vncPassword: "vncOwn" };
+  const secret = (k: string) =>
+    own[k] && !fd.get(own[k]) ? ((k === "rdpPassword" ? ed.hasRdpPassword : ed.hasVncPassword) ? "" : undefined) : String(fd.get(k) ?? "") || (clearing.has(k) ? "" : undefined);
   try {
     const saved = await api.save(c, { password: secret("password"), vncPassword: secret("vncPassword"), rdpPassword: secret("rdpPassword"), gatewayPassword: secret("gatewayPassword"), sshKey });
     if (pendingThumb) await invoke("thumb_import", { id: saved.id, file: pendingThumb }).catch((e) => console.warn(e));

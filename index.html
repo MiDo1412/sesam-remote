@@ -116,10 +116,14 @@
           <div class="svc-fields">
             <label data-tip="Standard 3389. GNOME-Bildschirmfreigabe einzelner Benutzer: der Port aus der Übersicht des Setup-Scripts (z. B. 3390).">Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
             <label data-tip="Nur in Windows-Domänen, sonst leer lassen. Beispiel: FIRMA.">Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="meist leer" /></label>
-            <label data-tip="Leer = Passwort oben. Nötig bei GNOME (Ubuntu): das Passwort aus Einstellungen › System › Remote-Desktop, nicht dein Ubuntu-Passwort.">RDP-Passwort
-              <input name="rdpPassword" type="password" autocomplete="new-password" placeholder="wie oben" />
-              <span class="hint"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
-            </label>
+            <label class="option span"><span><b>Eigene Zugangsdaten für RDP</b><small>Nur wenn RDP einen anderen Benutzer oder ein anderes Passwort braucht, z. B. bei GNOME (Ubuntu): die Angaben aus Einstellungen › System › Remote-Desktop.</small></span><input type="checkbox" name="rdpOwn" /></label>
+            <div class="pair span own-svc" id="rdp-own">
+              <label>RDP-Benutzername<input name="rdpUser" autocomplete="off" spellcheck="false" placeholder="wie oben" /></label>
+              <label>RDP-Passwort
+                <input name="rdpPassword" type="password" autocomplete="new-password" />
+                <span class="hint"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
+              </label>
+            </div>
             <label class="span" data-tip="Optional. Dieser Ordner erscheint auf dem entfernten Rechner als Laufwerk. Standardmässig aus.">Ordner als Laufwerk freigeben
               <span class="pick">
                 <input name="sharedFolder" class="mono" placeholder="aus" readonly />
@@ -150,10 +154,13 @@
           <label class="switch"><input type="checkbox" name="vncOn" /> Ein</label>
           <div class="svc-fields">
             <label data-tip="Standard 5900. Für macOS-Bildschirmfreigabe und wayvnc.">Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
-            <label data-tip="Nur wenn der VNC-Server ein eigenes Passwort ohne Benutzername hat. Nicht bei macOS und wayvnc: dort gilt Benutzername und Passwort oben.">VNC-Passwort
-              <input name="vncPassword" type="password" autocomplete="new-password" placeholder="keins" />
-              <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
-            </label>
+            <label class="option span"><span><b>Eigenes VNC-Passwort</b><small>Nur bei VNC-Servern mit eigenem Passwort ohne Benutzername. Nicht bei macOS und wayvnc: dort gilt die Anmeldung oben.</small></span><input type="checkbox" name="vncOwn" /></label>
+            <div class="pair span own-svc" id="vnc-own">
+              <label>VNC-Passwort
+                <input name="vncPassword" type="password" autocomplete="new-password" />
+                <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
+              </label>
+            </div>
           </div>
         </fieldset>
         <fieldset class="span svc">

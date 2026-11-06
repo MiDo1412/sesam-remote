@@ -9,6 +9,8 @@ export interface Connection {
   sshPort: number | null;
   rdpPort: number | null;
   rdpDomain: string;
+  /** Eigener RDP-Benutzer; leer = Benutzer der Verbindung */
+  rdpUser: string;
   desktopProtocol: "vnc" | "rdp";
   user: string;
   defaultView: "desktop" | "shell" | "files";
