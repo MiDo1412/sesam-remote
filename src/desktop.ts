@@ -1,6 +1,6 @@
 import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize, primaryMonitor } from "@tauri-apps/api/window";
 import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol, type Connection } from "./api";
-import { ask, showView } from "./ui";
+import { choose, showView } from "./ui";
 import { keysym } from "./keysym";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -337,10 +337,11 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     }
   };
 
+  let remember = true;
   const openSession = (trust: string | null) => {
-    if (!rdp) return api.vncOpen(c.id, trust, onFrame);
+    if (!rdp) return api.vncOpen(c.id, trust, remember, onFrame);
     const [w, h] = mode === "fit" ? wanted() : [1920, 1080];
-    return api.rdpOpen(c.id, trust, Math.max(w, 640), Math.max(h, 480), onFrame);
+    return api.rdpOpen(c.id, trust, remember, Math.max(w, 640), Math.max(h, 480), onFrame);
   };
 
   let trust: string | null = null;
@@ -356,16 +357,19 @@ export async function openDesktop(c: Connection, onBack: () => void) {
       const changed = msg.startsWith(CERT_CHANGED);
       if (trust === null && (changed || msg.startsWith(CERT_UNKNOWN))) {
         const fp = msg.slice((changed ? CERT_CHANGED : CERT_UNKNOWN).length);
-        const ok = await ask(
+        const port = rdp ? c.rdpPort : c.vncPort;
+        const choice = await choose(
           changed ? "Zertifikat hat sich geändert" : "Unbekanntes Zertifikat",
-          (changed
-            ? `Das TLS-Zertifikat von ${c.address} ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn du das Zertifikat selbst erneuert hast.`
-            : `${c.address} verschlüsselt mit einem eigenen Zertifikat. Vergleiche den Fingerabdruck mit dem Server, bevor du ihm vertraust.`) +
-            `\n\nSHA-256:\n${fp.replace(/^SHA256:/, "").toLowerCase()}`,
+          changed
+            ? `Das Zertifikat von ${c.address}:${port} ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn das Zertifikat auf dem Server erneuert wurde.`
+            : `${c.address}:${port} nutzt ein eigenes Zertifikat. Vergleiche den Fingerabdruck mit dem Server (z. B. Übersicht des Setup-Scripts oder grdctl), bevor du ihm vertraust.`,
+          `SHA-256\n${fp.replace(/^SHA256:/, "").toLowerCase()}`,
           changed ? "Neuem Zertifikat vertrauen" : "Vertrauen und verbinden",
+          "Nur dieses Mal verbinden",
         );
-        if (ok) {
+        if (choice) {
           trust = fp;
+          remember = choice === "ok";
           continue;
         }
         status.textContent = "Verbindung abgebrochen: Zertifikat nicht bestätigt.";

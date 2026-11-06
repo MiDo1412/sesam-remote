@@ -2,6 +2,22 @@ import { HOSTKEY_UNKNOWN } from "./api";
 
 const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+/** Rückfrage mit drittem Knopf und Festbreiten-Detail; Ergebnis "ok", "alt" oder null. */
+export function choose(title: string, text: string, detail: string, ok: string, alt: string): Promise<"ok" | "alt" | null> {
+  const d = byId("ask-detail");
+  const a = byId("ask-alt");
+  d.hidden = false;
+  d.textContent = detail;
+  a.hidden = false;
+  a.textContent = alt;
+  const dlg = byId<HTMLDialogElement>("ask");
+  const done = ask(title, text, ok).then(() => (dlg.returnValue === "ok" ? "ok" : dlg.returnValue === "alt" ? "alt" : null));
+  return done.finally(() => {
+    d.hidden = true;
+    a.hidden = true;
+  });
+}
+
 /** Eigener Dialog statt alert/confirm: die nativen fehlen in WKWebView (macOS/iPad). */
 export function ask(title: string, text: string, ok = "OK", cancel: string | null = "Abbrechen"): Promise<boolean> {
   const dlg = byId<HTMLDialogElement>("ask");

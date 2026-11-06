@@ -136,6 +136,7 @@ const blank = (): Connection => ({
   sharedClipboard: true,
   playAudio: true,
   sharedFolder: "",
+  skipCertCheck: false,
   fitToWindow: true,
   hasPassword: false,
   hasVncPassword: false,
@@ -175,6 +176,8 @@ function edit(c: Connection | null) {
   f.sharedClipboard.checked = editing.sharedClipboard;
   f.playAudio.checked = editing.playAudio;
   f.sharedFolder.value = editing.sharedFolder;
+  f.skipCertCheck.checked = editing.skipCertCheck;
+  ($("advanced") as HTMLDetailsElement).open = editing.skipCertCheck;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -250,6 +253,7 @@ form.onsubmit = async (ev) => {
     sharedClipboard: fd.get("sharedClipboard") !== null,
     playAudio: fd.get("playAudio") !== null,
     sharedFolder: s("sharedFolder"),
+    skipCertCheck: fd.get("skipCertCheck") !== null,
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],

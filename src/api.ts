@@ -15,6 +15,8 @@ export interface Connection {
   orientation: "landscape" | "portrait";
   sharedClipboard: boolean;
   playAudio: boolean;
+  /** Zertifikat nicht prüfen (unsicher, nur für Tests). */
+  skipCertCheck: boolean;
   sharedFolder: string;
   fitToWindow: boolean;
   hasPassword: boolean;
@@ -69,20 +71,21 @@ export const api = {
   shellResize: (sid: string, cols: number, rows: number) => invoke<void>("shell_resize", { sid, cols, rows }),
   shellClose: (sid: string) => invoke<void>("shell_close", { sid }),
   /** Binärrahmen: 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis, 6 Mauszeiger (siehe lib.rs `frame`). */
-  vncOpen: (id: string, trust: string | null, onFrame: (buf: ArrayBuffer) => void) => {
+  /** remember: bestätigten Fingerabdruck speichern (sonst nur diese Verbindung). */
+  vncOpen: (id: string, trust: string | null, remember: boolean, onFrame: (buf: ArrayBuffer) => void) => {
     const ch = new Channel<ArrayBuffer>();
     ch.onmessage = onFrame;
-    return invoke<string>("vnc_open", { id, trust, onEvent: ch });
+    return invoke<string>("vnc_open", { id, trust, remember, onEvent: ch });
   },
   vncPointer: (sid: string, mask: number, x: number, y: number) => invoke<void>("vnc_pointer", { sid, mask, x, y }),
   vncKey: (sid: string, down: boolean, keysym: number) => invoke<void>("vnc_key", { sid, down, keysym }),
   vncSetSize: (sid: string, width: number, height: number) => invoke<boolean>("vnc_set_size", { sid, width, height }),
   vncClipboardSync: (sid: string) => invoke<void>("vnc_clipboard_sync", { sid }),
   vncClose: (sid: string) => invoke<void>("vnc_close", { sid }),
-  rdpOpen: (id: string, trust: string | null, width: number, height: number, onFrame: (buf: ArrayBuffer) => void) => {
+  rdpOpen: (id: string, trust: string | null, remember: boolean, width: number, height: number, onFrame: (buf: ArrayBuffer) => void) => {
     const ch = new Channel<ArrayBuffer>();
     ch.onmessage = onFrame;
-    return invoke<string>("rdp_open", { id, trust, width, height, onEvent: ch });
+    return invoke<string>("rdp_open", { id, trust, remember, width, height, onEvent: ch });
   },
   rdpPointer: (sid: string, x: number, y: number, buttons: number) => invoke<void>("rdp_pointer", { sid, x, y, buttons }),
   rdpWheel: (sid: string, vertical: boolean, units: number) => invoke<void>("rdp_wheel", { sid, vertical, units }),

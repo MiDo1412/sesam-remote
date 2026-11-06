@@ -111,7 +111,9 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
 .hint { display: flex; align-items: baseline; gap: 8px; }
 .pick { display: flex; gap: 8px; }
 .sheet .note { font-size: 12px; font-weight: 400; color: var(--muted); margin: 0; }
-#extra-creds summary { cursor: default; color: var(--accent); font-size: 13px; }
+#extra-creds summary, #advanced summary { cursor: default; color: var(--accent); font-size: 13px; }
+#advanced .option { margin-top: 8px; }
+label.option.warn:has(input:checked) { border-color: var(--danger); }
 #extra-creds .pair { gap: 16px; margin-top: 8px; }
 #extra-creds label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
 #extra-creds input { font-weight: 400; color: var(--text); font-size: 13px; }
@@ -150,10 +152,13 @@ label.option small { margin-top: 2px; }
 .status:empty { display: none; }
 
 /* ---------- Rückfrage ---------- */
-.alert { width: 380px; padding: 20px; display: flex; flex-direction: column; gap: 12px; text-align: center; }
+.alert { width: min(480px, calc(100vw - 48px)); padding: 20px; display: flex; flex-direction: column; gap: 12px; text-align: center; }
 .alert h2 { margin: 0; font-size: 15px; }
 .alert p { margin: 0; font-size: 13px; white-space: pre-line; overflow-wrap: anywhere; }
 .alert .pair:has(#ask-cancel[hidden]) { grid-template-columns: 1fr; }
+.alert .pair { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.alert .pair button { height: auto; min-height: 32px; padding: 6px 14px; white-space: normal; flex: 1 1 auto; }
+#ask-detail { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); font-family: "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; text-align: left; user-select: text; }
 
 /* ---------- Desktop (VNC) ---------- */
 .grow { flex: 1; }

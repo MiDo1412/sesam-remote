@@ -24,12 +24,18 @@ pub struct Pinned {
     pub expected: Option<String>,
     /// Was der Server gezeigt hat, für die Fehlermeldung.
     pub seen: Mutex<Option<String>>,
+    accept_any: bool,
     provider: Arc<CryptoProvider>,
 }
 
 impl Pinned {
     pub fn new(expected: Option<String>) -> Arc<Self> {
-        Arc::new(Self { expected, seen: Mutex::new(None), provider: Arc::new(rustls::crypto::ring::default_provider()) })
+        Arc::new(Self { expected, seen: Mutex::new(None), accept_any: false, provider: Arc::new(rustls::crypto::ring::default_provider()) })
+    }
+
+    /// Jedes Zertifikat annehmen (Einstellung «Zertifikat nicht prüfen»).
+    pub fn accept_any() -> Arc<Self> {
+        Arc::new(Self { expected: None, seen: Mutex::new(None), accept_any: true, provider: Arc::new(rustls::crypto::ring::default_provider()) })
     }
 
     pub fn config(self: &Arc<Self>) -> Result<ClientConfig, String> {
@@ -62,7 +68,7 @@ impl ServerCertVerifier for Pinned {
     ) -> Result<ServerCertVerified, rustls::Error> {
         let fp = fingerprint(end_entity);
         *self.seen.lock().unwrap() = Some(fp.clone());
-        if self.expected.as_deref() == Some(fp.as_str()) {
+        if self.accept_any || self.expected.as_deref() == Some(fp.as_str()) {
             Ok(ServerCertVerified::assertion())
         } else {
             Err(rustls::Error::General("Zertifikat nicht bestätigt".into()))

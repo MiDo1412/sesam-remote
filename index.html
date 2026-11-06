@@ -121,6 +121,10 @@
         <label class="span" id="key-row" hidden>Privater ed25519-Schlüssel (OpenSSH-Format)
           <textarea name="key" rows="4" class="mono" spellcheck="false"></textarea>
         </label>
+        <details id="advanced" class="span">
+          <summary>Erweitert</summary>
+          <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
+        </details>
         <details id="extra-creds" class="span">
           <summary>Abweichende Zugangsdaten …</summary>
           <p class="note">Nur nötig, wenn ein Dienst ein anderes Passwort hat. Sonst gilt das Passwort oben für alle.</p>
@@ -179,9 +183,11 @@
       <form method="dialog" class="alert">
         <h2 id="ask-title"></h2>
         <p id="ask-text"></p>
+        <pre id="ask-detail" hidden></pre>
         <input id="ask-input" hidden autocomplete="off" spellcheck="false" aria-labelledby="ask-text" />
         <div class="pair">
           <button value="cancel" id="ask-cancel">Abbrechen</button>
+          <button value="alt" id="ask-alt" hidden></button>
           <button value="ok" id="ask-ok" class="primary">OK</button>
         </div>
       </form>

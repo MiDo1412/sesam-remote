@@ -37,6 +37,8 @@ pub struct Target {
     pub password: String,
     /// Erwarteter SHA256 des TLS-Zertifikats (gespeichert oder gerade bestätigt).
     pub expected_cert: Option<String>,
+    /// Zertifikat nicht prüfen (Einstellung pro Verbindung, unsicher).
+    pub skip_cert_check: bool,
     pub width: u16,
     pub height: u16,
     /// Zwischenablage (cliprdr); für jede Verbindung, auch nach Umleitungen, ein neues Backend.
@@ -428,9 +430,13 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     // Zertifikate mit gültiger Kette akzeptiert rustls selbst; sonst entscheidet das Pinning.
     let expected = t.expected_cert.clone();
     let seen2 = seen.clone();
+    let skip = t.skip_cert_check;
+    if skip {
+        tracing::warn!("RDP: Zertifikatsprüfung ist für diese Verbindung ausgeschaltet");
+    }
     let callback: ironrdp_tls::CertificateValidationCallback = Arc::new(move |der: &[u8], _: &str, _: &str| {
         let fp = fingerprint(der);
-        let ok = expected.as_deref() == Some(fp.as_str());
+        let ok = skip || expected.as_deref() == Some(fp.as_str());
         *seen2.lock().unwrap() = Some(fp);
         ok
     });
@@ -951,6 +957,7 @@ mod tests {
             domain: None,
             password: "alt".into(),
             expected_cert: None,
+            skip_cert_check: false,
             width: 800,
             height: 600,
             clipboard: None,
@@ -1026,6 +1033,7 @@ mod probe {
             domain: None,
             password: "absichtlich-falsch".into(),
             expected_cert: None,
+            skip_cert_check: false,
             width: 1280,
             height: 800,
             clipboard: None,

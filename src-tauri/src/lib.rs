@@ -269,6 +269,7 @@ async fn vnc_open(
     desktops: State<'_, Desktops>,
     id: String,
     trust: Option<String>,
+    remember: Option<bool>,
     on_event: Channel<InvokeResponseBody>,
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
@@ -278,7 +279,11 @@ async fn vnc_open(
     let pins_path = path.0.with_file_name("known_certs.json");
     let mut pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
-    let cert = vnc::tls::Pinned::new(trust.clone().or_else(|| pins.get(&pin_key).cloned()));
+    let cert = if c.skip_cert_check {
+        vnc::tls::Pinned::accept_any()
+    } else {
+        vnc::tls::Pinned::new(trust.clone().or_else(|| pins.get(&pin_key).cloned()))
+    };
     let login = vnc::Login { host: &c.address, user: &c.user, password: password.as_deref(), vnc_password: vnc_password.as_deref(), cert };
     let timeout = std::time::Duration::from_secs(15);
     let stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((c.address.as_str(), port)))
@@ -290,7 +295,7 @@ async fn vnc_open(
         .await
         .map_err(|_| "Zeitüberschreitung bei der Anmeldung".to_string())??;
     // Bestätigtes Zertifikat merken, aber nur wenn TLS es wirklich gesehen hat.
-    if let Some(fp) = trust.filter(|fp| login.cert.seen.lock().unwrap().as_ref() == Some(fp)) {
+    if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && login.cert.seen.lock().unwrap().as_ref() == Some(fp)) {
         pins.insert(pin_key, fp);
         let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
     }
@@ -486,6 +491,7 @@ async fn rdp_open(
     sessions: State<'_, RdpSessions>,
     id: String,
     trust: Option<String>,
+    remember: Option<bool>,
     width: u16,
     height: u16,
     on_event: Channel<InvokeResponseBody>,
@@ -503,6 +509,7 @@ async fn rdp_open(
         domain: (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string()),
         password,
         expected_cert: trust.clone().or_else(|| pins.get(&pin_key).cloned()),
+        skip_cert_check: c.skip_cert_check,
         width: width.clamp(200, 8192),
         height: height.clamp(200, 8192),
         clipboard: None,
@@ -524,7 +531,7 @@ async fn rdp_open(
             return Err(e);
         }
     };
-    if let Some(fp) = trust.filter(|fp| seen.lock().unwrap().as_ref() == Some(fp)) {
+    if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && seen.lock().unwrap().as_ref() == Some(fp)) {
         pins.insert(pin_key, fp);
         let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
     }
