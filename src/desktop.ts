@@ -7,6 +7,7 @@ import { keysym } from "./keysym";
 import { ICON } from "./icons";
 import { enhanceSelect } from "./menu";
 import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
+import { desktopTouch } from "./touch";
 
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
@@ -240,6 +241,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   canvas.addEventListener("keydown", onKey);
   canvas.addEventListener("keyup", onKey);
   canvas.addEventListener("blur", releaseAll);
+  const touch = desktopTouch({ pane: ctx.pane, wrap, canvas, pointer, send });
 
   // ---------- Vollbild und Zwischenablage ----------
   const win = getCurrentWindow();
@@ -336,6 +338,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   spanBtn.hidden = !rdp;
   ctx.toolbar.prepend(orientBtn, toolSep());
   ctx.toolbar.append(
+    ...touch.buttons,
     toolButton(ICON.typeClipboard, "Zwischenablage abtippen", typeClipboard),
     toolButton(ICON.screenshot, "Bildschirmfoto", screenshot),
     toolSep(),
@@ -351,6 +354,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
 
   const close = () => {
     ro.disconnect();
+    touch.dispose();
     releaseAll();
     window.removeEventListener("keydown", onF11);
     window.removeEventListener("focus", syncClipboard);
@@ -448,6 +452,6 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   return {
     close,
     onShow: () => requestAnimationFrame(() => (layout(), requestSize(), canvas.focus())),
-    onHide: () => releaseAll(),
+    onHide: () => (touch.hide(), releaseAll()),
   };
 }
