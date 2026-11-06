@@ -73,6 +73,18 @@ impl Framebuffer {
     }
 }
 
+/// Cursor-Pseudo-Encoding: Pixel (R,G,B,X) plus 1-Bit-Maske (Zeilen auf Byte aufgefüllt) → RGBA.
+pub fn cursor(px: &[u8], mask: &[u8], w: u16, h: u16) -> Vec<u8> {
+    let (w, stride) = (w as usize, (w as usize).div_ceil(8));
+    let mut out = Vec::with_capacity(w * h as usize * 4);
+    for (i, p) in px.chunks_exact(4).enumerate() {
+        let (row, col) = (i / w, i % w);
+        let visible = mask[row * stride + col / 8] >> (7 - col % 8) & 1 == 1;
+        out.extend_from_slice(&[p[0], p[1], p[2], if visible { 255 } else { 0 }]);
+    }
+    out
+}
+
 /// ZRLE nutzt einen zlib-Strom über die ganze Verbindung.
 pub struct Zrle {
     z: Decompress,
@@ -271,6 +283,15 @@ mod tests {
         z.decode(&mut fb, Rect { x: 0, y: 1, w: 3, h: 1 }, &both).unwrap();
         assert_eq!(px(&fb, 0, 1), [8, 8, 8, 255]);
         assert_eq!(px(&fb, 2, 1), [7, 7, 7, 255]);
+    }
+
+    #[test]
+    fn cursor_mask_sets_alpha() {
+        // 9×1: zweites Maskenbyte nötig.
+        let px = [7u8; 9 * 4];
+        let rgba = cursor(&px, &[0b1000_0001, 0b1000_0000], 9, 1);
+        let alpha: Vec<u8> = rgba.chunks(4).map(|p| p[3]).collect();
+        assert_eq!(alpha, [255, 0, 0, 0, 0, 0, 0, 255, 255]);
     }
 
     #[test]

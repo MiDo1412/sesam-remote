@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { api, type Connection } from "./api";
+import { api, CERT_CHANGED, CERT_UNKNOWN, type Connection } from "./api";
+import { ask } from "./ui";
 import { keysym } from "./keysym";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -193,16 +194,49 @@ export async function openDesktop(c: Connection, onBack: () => void) {
       case 5:
         status.textContent = text();
         break;
+      case 6: {
+        const [hx, hy, w, h] = [v.getUint16(1), v.getUint16(3), v.getUint16(5), v.getUint16(7)];
+        if (!w || !h) {
+          canvas.style.cursor = "none";
+          break;
+        }
+        const c2 = document.createElement("canvas");
+        [c2.width, c2.height] = [w, h];
+        c2.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(buf, 9, w * h * 4), w, h), 0, 0);
+        canvas.style.cursor = `url(${c2.toDataURL()}) ${hx} ${hy}, default`;
+        break;
+      }
     }
   };
 
-  try {
-    sid = await api.vncOpen(c.id, onFrame);
-    status.textContent = "";
-    canvas.focus();
-    syncClipboard();
-    requestSize();
-  } catch (e) {
-    status.textContent = `Keine Verbindung: ${e}`;
+  let trust: string | null = null;
+  for (;;) {
+    try {
+      sid = await api.vncOpen(c.id, trust, onFrame);
+      status.textContent = "";
+      canvas.focus();
+      syncClipboard();
+      requestSize();
+    } catch (e) {
+      const msg = String(e);
+      const changed = msg.startsWith(CERT_CHANGED);
+      if (trust === null && (changed || msg.startsWith(CERT_UNKNOWN))) {
+        const fp = msg.slice((changed ? CERT_CHANGED : CERT_UNKNOWN).length);
+        const ok = await ask(
+          changed ? "Zertifikat hat sich geändert" : "Unbekanntes Zertifikat",
+          (changed
+            ? `Das TLS-Zertifikat von ${c.address} ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn du das Zertifikat selbst erneuert hast.`
+            : `${c.address} verschlüsselt mit einem eigenen Zertifikat. Vergleiche den Fingerabdruck mit dem Server, bevor du ihm vertraust.`) +
+            `\n\n${fp}`,
+          changed ? "Neuem Zertifikat vertrauen" : "Vertrauen und verbinden",
+        );
+        if (ok) {
+          trust = fp;
+          continue;
+        }
+        status.textContent = "Verbindung abgebrochen: Zertifikat nicht bestätigt.";
+      } else status.textContent = `Keine Verbindung: ${msg}`;
+    }
+    break;
   }
 }

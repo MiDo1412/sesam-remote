@@ -34,6 +34,10 @@ md5 = "0.8"
 num-bigint = "0.5"
 getrandom = "0.3"
 flate2 = "1"
+# VeNCrypt (TLS) mit Zertifikat-Pinning, ring wie bei russh
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+sha2 = "0.10"
 tauri-plugin-clipboard-manager = "2"
 
 [dev-dependencies]

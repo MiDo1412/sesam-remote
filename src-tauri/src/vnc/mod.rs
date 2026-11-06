@@ -4,6 +4,7 @@
 pub mod auth;
 pub mod clipboard;
 pub mod decode;
+pub mod tls;
 
 use decode::{Framebuffer, Rect, Zrle};
 use std::sync::{Arc, Mutex};
@@ -16,6 +17,7 @@ const ENC_ZRLE: i32 = 16;
 const ENC_DESKTOP_SIZE: i32 = -223;
 const ENC_LAST_RECT: i32 = -224;
 const ENC_EXT_DESKTOP_SIZE: i32 = -308;
+const ENC_CURSOR: i32 = -239;
 const ENC_EXT_CLIPBOARD: i32 = 0xC0A1E5CEu32 as i32;
 
 /// Grenze für Längenangaben vom Server (Namen, Fehlertexte, Raw-Daten).
@@ -27,6 +29,8 @@ pub enum Event {
     Rect { rect: Rect, rgba: Vec<u8> },
     Clipboard(String),
     Bell,
+    /// Lokaler Mauszeiger: Hotspot, Grösse, RGBA (0×0 = unsichtbar).
+    Cursor { hot_x: u16, hot_y: u16, w: u16, h: u16, rgba: Vec<u8> },
     /// Hinweis für die Statuszeile, z. B. abgelehnte Grössenänderung.
     Info(String),
     Closed(String),
@@ -64,13 +68,80 @@ fn security_name(t: u8) -> String {
     }
 }
 
+pub trait Io: AsyncRead + AsyncWrite + Send + Unpin {}
+impl<T: AsyncRead + AsyncWrite + Send + Unpin> Io for T {}
+/// Klartext- oder TLS-Verbindung, je nach Anmeldeverfahren.
+pub type Stream = Box<dyn Io>;
+
+pub struct Login<'a> {
+    pub host: &'a str,
+    pub user: &'a str,
+    pub password: Option<&'a str>,
+    /// Zertifikat-Pinning für VeNCrypt/TLS.
+    pub cert: Arc<tls::Pinned>,
+}
+
+fn io(e: std::io::Error) -> String {
+    format!("Verbindung unterbrochen: {e}")
+}
+
+async fn vnc_auth(s: &mut Stream, pw: Option<&str>) -> Result<(), String> {
+    let mut ch = [0u8; 16];
+    s.read_exact(&mut ch).await.map_err(io)?;
+    let pw = pw.ok_or("Der Server verlangt ein VNC-Passwort")?;
+    s.write_all(&auth::vnc_response(pw.as_bytes(), &ch)).await.map_err(io)
+}
+
+/// VeNCrypt: Untertyp aushandeln, TLS starten, darin anmelden.
+async fn vencrypt(mut s: Stream, l: &Login<'_>, pw: Option<&str>) -> Result<Stream, String> {
+    let mut v = [0u8; 2];
+    s.read_exact(&mut v).await.map_err(io)?;
+    if v[0] != 0 || v[1] < 2 {
+        return Err(format!("VeNCrypt-Version {}.{} wird nicht unterstützt", v[0], v[1]));
+    }
+    s.write_all(&[0, 2]).await.map_err(io)?;
+    if s.read_u8().await.map_err(io)? != 0 {
+        return Err("Server lehnt VeNCrypt 0.2 ab".into());
+    }
+    let n = s.read_u8().await.map_err(io)?;
+    let mut subs = Vec::with_capacity(n as usize);
+    for _ in 0..n {
+        subs.push(s.read_u32().await.map_err(io)?);
+    }
+    // X509Plain, X509Vnc, X509None. Klartext (256) und anonymes TLS (257–259) bieten wir bewusst nicht an.
+    let pick = [262u32, 261, 260].into_iter().find(|t| subs.contains(t) && (*t == 260 || pw.is_some()));
+    let Some(sub) = pick else {
+        return Err(if pw.is_none() && (subs.contains(&262) || subs.contains(&261)) {
+            "Der Server verlangt ein Passwort. Bitte in der Verbindung hinterlegen.".into()
+        } else {
+            format!("Kein unterstütztes VeNCrypt-Verfahren (Server bietet: {subs:?}; nötig: X509 mit Zertifikat)")
+        });
+    };
+    s.write_u32(sub).await.map_err(io)?;
+    if s.read_u8().await.map_err(io)? != 1 {
+        return Err("Server lehnt das VeNCrypt-Verfahren ab".into());
+    }
+    let connector = tokio_rustls::TlsConnector::from(Arc::new(l.cert.config()?));
+    let tls = connector.connect(tls::server_name(l.host)?, s).await.map_err(|e| l.cert.explain(e))?;
+    let mut s: Stream = Box::new(tls);
+    match sub {
+        262 => {
+            let (u, p) = (l.user.as_bytes(), pw.unwrap_or_default().as_bytes());
+            let mut m = (u.len() as u32).to_be_bytes().to_vec();
+            m.extend((p.len() as u32).to_be_bytes());
+            m.extend_from_slice(u);
+            m.extend_from_slice(p);
+            s.write_all(&m).await.map_err(io)?;
+        }
+        261 => vnc_auth(&mut s, pw).await?,
+        _ => {}
+    }
+    Ok(s)
+}
+
 /// Version aushandeln, anmelden, ClientInit/ServerInit, Pixelformat und Kodierungen setzen.
-pub async fn handshake<S: AsyncRead + AsyncWrite + Unpin>(
-    s: &mut S,
-    user: &str,
-    password: Option<&str>,
-) -> Result<ServerInit, String> {
-    let io = |e: std::io::Error| format!("Verbindung unterbrochen: {e}");
+pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stream, ServerInit), String> {
+    let mut s: Stream = Box::new(stream);
     let mut v = [0u8; 12];
     s.read_exact(&mut v).await.map_err(io)?;
     let v = std::str::from_utf8(&v).ok().filter(|v| v.starts_with("RFB ") && v.ends_with('\n')).ok_or("Kein VNC-Server")?;
@@ -79,23 +150,24 @@ pub async fn handshake<S: AsyncRead + AsyncWrite + Unpin>(
     let minor = if minor >= 8 { 8 } else if minor == 7 { 7 } else { 3 };
     s.write_all(format!("RFB 003.00{minor}\n").as_bytes()).await.map_err(io)?;
 
-    let pw = password.filter(|p| !p.is_empty());
+    let pw = l.password.filter(|p| !p.is_empty());
     let chosen = if minor == 3 {
         let t = s.read_u32().await.map_err(io)?;
         if t == 0 {
-            return Err(read_reason(s).await);
+            return Err(read_reason(&mut s).await);
         }
         u8::try_from(t).map_err(|_| "Unbekanntes Anmeldeverfahren")?
     } else {
         let n = s.read_u8().await.map_err(io)?;
         if n == 0 {
-            return Err(read_reason(s).await);
+            return Err(read_reason(&mut s).await);
         }
         let mut types = vec![0; n as usize];
         s.read_exact(&mut types).await.map_err(io)?;
-        let pick = [1u8, 30, 2].into_iter().find(|t| {
+        // Verschlüsselt (VeNCrypt) zuerst, dann Apple, VNC-Passwort, ohne Anmeldung.
+        let pick = [19u8, 30, 2, 1].into_iter().find(|t| {
             types.contains(t) && match t {
-                30 => pw.is_some() && !user.is_empty(),
+                30 => pw.is_some() && !l.user.is_empty(),
                 2 => pw.is_some(),
                 _ => true,
             }
@@ -114,12 +186,8 @@ pub async fn handshake<S: AsyncRead + AsyncWrite + Unpin>(
 
     match chosen {
         1 => {}
-        2 => {
-            let mut ch = [0u8; 16];
-            s.read_exact(&mut ch).await.map_err(io)?;
-            let pw = pw.ok_or("Der Server verlangt ein VNC-Passwort")?;
-            s.write_all(&auth::vnc_response(pw.as_bytes(), &ch)).await.map_err(io)?;
-        }
+        2 => vnc_auth(&mut s, pw).await?,
+        19 => s = vencrypt(s, l, pw).await?,
         30 => {
             let mut g = [0u8; 2];
             s.read_exact(&mut g).await.map_err(io)?;
@@ -128,18 +196,16 @@ pub async fn handshake<S: AsyncRead + AsyncWrite + Unpin>(
             let mut y = vec![0; len];
             s.read_exact(&mut p).await.map_err(io)?;
             s.read_exact(&mut y).await.map_err(io)?;
-            let resp = auth::ard_response(&g, &p, &y, user, pw.unwrap_or_default())?;
+            let resp = auth::ard_response(&g, &p, &y, l.user, pw.unwrap_or_default())?;
             s.write_all(&resp).await.map_err(io)?;
         }
         t => return Err(format!("Anmeldeverfahren {} wird nicht unterstützt", security_name(t))),
     }
 
     // RFB 3.8 schickt immer ein Ergebnis, 3.3/3.7 nur nach einer echten Anmeldung.
-    if minor == 8 || chosen != 1 {
-        if s.read_u32().await.map_err(io)? != 0 {
-            let reason = if minor == 8 { read_reason(s).await } else { String::new() };
-            return Err(format!("Anmeldung abgelehnt. {reason}").trim().to_string());
-        }
+    if (minor == 8 || chosen != 1) && s.read_u32().await.map_err(io)? != 0 {
+        let reason = if minor == 8 { read_reason(&mut s).await } else { String::new() };
+        return Err(format!("Anmeldung abgelehnt. {reason}").trim().to_string());
     }
 
     s.write_u8(1).await.map_err(io)?; // ClientInit: geteilte Sitzung
@@ -159,11 +225,13 @@ pub async fn handshake<S: AsyncRead + AsyncWrite + Unpin>(
         ENC_EXT_DESKTOP_SIZE,
         ENC_DESKTOP_SIZE,
         ENC_LAST_RECT,
+        ENC_CURSOR,
         ENC_EXT_CLIPBOARD,
     ]))
     .await
     .map_err(io)?;
-    Ok(ServerInit { width, height, name: String::from_utf8_lossy(&name).into_owned() })
+    s.flush().await.map_err(io)?;
+    Ok((s, ServerInit { width, height, name: String::from_utf8_lossy(&name).into_owned() }))
 }
 
 // ---------- Client-Nachrichten ----------
@@ -386,6 +454,15 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                             }
                         }
                         ENC_LAST_RECT => break,
+                        ENC_CURSOR => {
+                            let n = r.w as u32 * r.h as u32;
+                            let px = self.bytes(n * 4).await?;
+                            let mask = self.bytes((r.w as u32).div_ceil(8) * r.h as u32).await?;
+                            let rgba = decode::cursor(&px, &mask, r.w, r.h);
+                            if !emit(Event::Cursor { hot_x: r.x, hot_y: r.y, w: r.w, h: r.h, rgba }) {
+                                return Ok(false);
+                            }
+                        }
                         e => return Err(format!("Server nutzt nicht angefragte Kodierung {e}")),
                     }
                     if let Some((w, h)) = new_size.take() {
@@ -462,15 +539,61 @@ mod tests {
         m
     }
 
+    fn login(user: &'static str, password: Option<&'static str>) -> Login<'static> {
+        Login { host: "localhost", user, password, cert: tls::Pinned::new(None) }
+    }
+
+    #[tokio::test]
+    async fn vencrypt_refuses_cleartext_and_anonymous_tls() {
+        let (c, mut s) = duplex(4096);
+        tokio::spawn(async move {
+            s.write_all(b"RFB 003.008\n").await.unwrap();
+            let mut v = [0u8; 12];
+            s.read_exact(&mut v).await.unwrap();
+            s.write_all(&[1, 19]).await.unwrap();
+            assert_eq!(s.read_u8().await.unwrap(), 19);
+            s.write_all(&[0, 2]).await.unwrap();
+            let mut v = [0u8; 2];
+            s.read_exact(&mut v).await.unwrap();
+            assert_eq!(v, [0, 2]);
+            s.write_all(&[0, 2]).await.unwrap(); // ok, 2 Untertypen
+            s.write_u32(256).await.unwrap(); // Plain (Klartext)
+            s.write_u32(259).await.unwrap(); // TLSPlain (anonym)
+        });
+        let e = handshake(c, &login("mike", Some("pw"))).await.err().unwrap();
+        assert!(e.contains("X509"), "{e}");
+    }
+
+    #[test]
+    fn cert_pinning_explains_unknown_and_changed() {
+        use rustls::client::danger::ServerCertVerifier;
+        use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+        let der = CertificateDer::from(vec![1u8, 2, 3]);
+        let fp = tls::fingerprint(&der);
+        let name = ServerName::try_from("host").unwrap();
+        let check = |p: &tls::Pinned| p.verify_server_cert(&der, &[], &name, &[], UnixTime::now()).is_ok();
+        let err = || std::io::Error::other("x");
+
+        let unknown = tls::Pinned::new(None);
+        assert!(!check(&unknown));
+        assert_eq!(unknown.explain(err()), format!("{}{fp}", tls::CERT_UNKNOWN));
+
+        let changed = tls::Pinned::new(Some("SHA256:anders".into()));
+        assert!(!check(&changed));
+        assert!(changed.explain(err()).starts_with(tls::CERT_CHANGED));
+
+        assert!(check(&tls::Pinned::new(Some(fp))));
+    }
+
     #[tokio::test]
     async fn handshake_38_with_vnc_password() {
-        let (mut c, mut s) = duplex(4096);
+        let (c, mut s) = duplex(4096);
         let server = tokio::spawn(async move {
             s.write_all(b"RFB 003.008\n").await.unwrap();
             let mut v = [0u8; 12];
             s.read_exact(&mut v).await.unwrap();
             assert_eq!(&v, b"RFB 003.008\n");
-            s.write_all(&[2, 19, 2]).await.unwrap(); // VeNCrypt, VNC
+            s.write_all(&[2, 16, 2]).await.unwrap(); // Tight (nicht unterstützt), VNC
             assert_eq!(s.read_u8().await.unwrap(), 2);
             let ch = [5u8; 16];
             s.write_all(&ch).await.unwrap();
@@ -485,14 +608,14 @@ mod tests {
             assert_eq!(pf[0], 0);
             assert_eq!(s.read_u8().await.unwrap(), 2); // SetEncodings
         });
-        let init = handshake(&mut c, "", Some("geheim")).await.unwrap();
+        let (_, init) = handshake(c, &login("", Some("geheim"))).await.unwrap();
         assert_eq!(init, ServerInit { width: 800, height: 600, name: "Test".into() });
         server.await.unwrap();
     }
 
     #[tokio::test]
     async fn handshake_macos_version_and_errors() {
-        let (mut c, mut s) = duplex(4096);
+        let (c, mut s) = duplex(4096);
         tokio::spawn(async move {
             s.write_all(b"RFB 003.889\n").await.unwrap();
             let mut v = [0u8; 12];
@@ -500,13 +623,13 @@ mod tests {
             assert_eq!(&v, b"RFB 003.008\n");
             s.write_all(&[2, 30, 2]).await.unwrap();
         });
-        let e = handshake(&mut c, "mike", None).await.unwrap_err();
+        let e = handshake(c, &login("mike", None)).await.err().unwrap();
         assert!(e.contains("Passwort"), "{e}");
     }
 
     #[tokio::test]
     async fn handshake_33_without_auth() {
-        let (mut c, mut s) = duplex(4096);
+        let (c, mut s) = duplex(4096);
         tokio::spawn(async move {
             s.write_all(b"RFB 003.003\n").await.unwrap();
             let mut v = [0u8; 12];
@@ -515,10 +638,10 @@ mod tests {
             s.write_u32(1).await.unwrap();
             assert_eq!(s.read_u8().await.unwrap(), 1);
             s.write_all(&server_init(2, 2)).await.unwrap();
-            let mut rest = vec![0u8; 20 + 4 + 7 * 4];
+            let mut rest = vec![0u8; 20 + 4 + 8 * 4];
             s.read_exact(&mut rest).await.unwrap();
         });
-        assert_eq!(handshake(&mut c, "", None).await.unwrap().width, 2);
+        assert_eq!(handshake(c, &login("", None)).await.unwrap().1.width, 2);
     }
 
     #[tokio::test]

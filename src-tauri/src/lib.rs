@@ -136,7 +136,12 @@ struct Desktop {
 #[derive(Default)]
 struct Desktops(Mutex<HashMap<String, Desktop>>);
 
-/// Binärrahmen ans Frontend (Big Endian): 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis.
+/// Gepinnte TLS-Zertifikate der VNC-Server: "host:port" → SHA256.
+fn load_pins(path: &std::path::Path) -> HashMap<String, String> {
+    std::fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+/// Binärrahmen ans Frontend (Big Endian): 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis, 6 Mauszeiger.
 fn frame(kind: u8, nums: &[u16], tail: &[u8]) -> InvokeResponseBody {
     let mut b = Vec::with_capacity(1 + nums.len() * 2 + tail.len());
     b.push(kind);
@@ -151,20 +156,31 @@ async fn vnc_open(
     path: State<'_, LibraryPath>,
     desktops: State<'_, Desktops>,
     id: String,
+    trust: Option<String>,
     on_event: Channel<InvokeResponseBody>,
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
     let port = c.vnc_port.ok_or("Desktop (VNC) ist für diese Verbindung ausgeschaltet")?;
     let password = vault::get(&c.id, Kind::Password)?;
+    let pins_path = path.0.with_file_name("known_certs.json");
+    let mut pins = load_pins(&pins_path);
+    let pin_key = format!("{}:{port}", c.address);
+    let cert = vnc::tls::Pinned::new(trust.clone().or_else(|| pins.get(&pin_key).cloned()));
+    let login = vnc::Login { host: &c.address, user: &c.user, password: password.as_deref(), cert };
     let timeout = std::time::Duration::from_secs(15);
-    let mut stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((c.address.as_str(), port)))
+    let stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((c.address.as_str(), port)))
         .await
         .map_err(|_| "Zeitüberschreitung beim Verbinden".to_string())?
         .map_err(|e| format!("Verbindung fehlgeschlagen: {e}"))?;
     let _ = stream.set_nodelay(true);
-    let init = tokio::time::timeout(timeout, vnc::handshake(&mut stream, &c.user, password.as_deref()))
+    let (stream, init) = tokio::time::timeout(timeout, vnc::handshake(stream, &login))
         .await
         .map_err(|_| "Zeitüberschreitung bei der Anmeldung".to_string())??;
+    // Bestätigtes Zertifikat merken, aber nur wenn TLS es wirklich gesehen hat.
+    if let Some(fp) = trust.filter(|fp| login.cert.seen.lock().unwrap().as_ref() == Some(fp)) {
+        pins.insert(pin_key, fp);
+        let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+    }
 
     let last_clip = Arc::new(Mutex::new(String::new()));
     let (clip, share) = (last_clip.clone(), c.shared_clipboard);
@@ -175,6 +191,7 @@ async fn vnc_open(
             vnc::Event::Closed(why) => frame(3, &[], why.as_bytes()),
             vnc::Event::Bell => frame(4, &[], &[]),
             vnc::Event::Info(t) => frame(5, &[], t.as_bytes()),
+            vnc::Event::Cursor { hot_x, hot_y, w, h, rgba } => frame(6, &[hot_x, hot_y, w, h], &rgba),
             vnc::Event::Clipboard(t) => {
                 if share && app.clipboard().write_text(t.clone()).is_ok() {
                     *clip.lock().unwrap() = t;

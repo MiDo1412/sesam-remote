@@ -21,6 +21,9 @@ export type ShellEvent = { kind: "data"; data: number[] } | { kind: "closed"; re
 
 /** Präfix eines Fehlers bei unbekanntem Host: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>` */
 export const HOSTKEY_UNKNOWN = "HOSTKEY_UNKNOWN:";
+/** VNC über TLS: `CERT_UNKNOWN:<SHA256>` bzw. `CERT_CHANGED:<SHA256>` */
+export const CERT_UNKNOWN = "CERT_UNKNOWN:";
+export const CERT_CHANGED = "CERT_CHANGED:";
 
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
@@ -36,11 +39,11 @@ export const api = {
   shellWrite: (sid: string, data: Uint8Array) => invoke<void>("shell_write", { sid, data: Array.from(data) }),
   shellResize: (sid: string, cols: number, rows: number) => invoke<void>("shell_resize", { sid, cols, rows }),
   shellClose: (sid: string) => invoke<void>("shell_close", { sid }),
-  /** Binärrahmen: 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis (siehe lib.rs `frame`). */
-  vncOpen: (id: string, onFrame: (buf: ArrayBuffer) => void) => {
+  /** Binärrahmen: 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis, 6 Mauszeiger (siehe lib.rs `frame`). */
+  vncOpen: (id: string, trust: string | null, onFrame: (buf: ArrayBuffer) => void) => {
     const ch = new Channel<ArrayBuffer>();
     ch.onmessage = onFrame;
-    return invoke<string>("vnc_open", { id, onEvent: ch });
+    return invoke<string>("vnc_open", { id, trust, onEvent: ch });
   },
   vncPointer: (sid: string, mask: number, x: number, y: number) => invoke<void>("vnc_pointer", { sid, mask, x, y }),
   vncKey: (sid: string, down: boolean, keysym: number) => invoke<void>("vnc_key", { sid, down, keysym }),
