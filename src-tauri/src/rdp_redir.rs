@@ -19,6 +19,8 @@ pub struct Redir {
     /// DER des Zertifikats, das das Ziel zeigen wird (ohne erneute Rückfrage annehmen).
     pub target_cert: Option<Vec<u8>>,
     pub password_pk_encrypted: bool,
+    /// Für RDSTLS unverändert zurückzuschicken.
+    pub redirection_guid: Option<Vec<u8>>,
 }
 
 const SEC_REDIRECTION_PKT: u16 = 0x0400;
@@ -50,6 +52,7 @@ impl From<&ironrdp_pdu::rdp::server_redirection::ServerRedirectionPdu> for Redir
             target_net_addresses: p.target_net_addresses.clone().unwrap_or_default(),
             target_cert: p.target_certificate.as_ref().and_then(|c| c.certificate_der()).map(<[u8]>::to_vec),
             password_pk_encrypted: p.flags.contains(F::PASSWORD_IS_PK_ENCRYPTED),
+            redirection_guid: p.redirection_guid.clone(),
         }
     }
 }
@@ -143,7 +146,7 @@ pub fn decode(b: &[u8]) -> Option<Redir> {
         c.field()?;
     }
     if flags & F_GUID != 0 {
-        c.field()?;
+        r.redirection_guid = Some(c.field()?.to_vec());
     }
     if flags & F_CERT != 0 {
         r.target_cert = target_cert(c.field()?);

@@ -3,6 +3,7 @@ mod diag;
 mod library;
 mod rdp;
 mod rdp_redir;
+mod rdstls;
 mod sftp;
 mod ssh;
 mod vault;

@@ -241,6 +241,8 @@ struct Hop {
     session_id: u32,
     routing_token: Option<String>,
     cookie: Option<Vec<u8>>,
+    /// Umleitung mit verschlüsseltem Passwort: Anmeldung über RDSTLS statt NLA.
+    rdstls: Option<crate::rdstls::Creds>,
 }
 
 fn utf16_text(b: &[u8]) -> Option<String> {
@@ -253,9 +255,8 @@ fn utf16_text(b: &[u8]) -> Option<String> {
 
 /// Ziel und Anmeldung für den nächsten Versuch anpassen ([MS-RDPBCGR] 3.2.5.13.1).
 fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &Redir) -> Result<(), String> {
-    if r.password_pk_encrypted && r.password.is_some() {
-        return Err("Der Server leitet mit verschlüsseltem Passwort (RDSTLS) um; das wird nicht unterstützt".into());
-    }
+    // Verschlüsseltes Passwort (GNOME-Übergabe): RDSTLS, Blob unverändert zurück.
+    let encrypted = r.password_pk_encrypted && r.password.is_some();
     let routing_token = match r.load_balance_info.as_deref() {
         Some(lb) => {
             let tok = lb.strip_suffix(b"\r\n").unwrap_or(lb);
@@ -282,8 +283,8 @@ fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &Redir) -> Result<(), String
     if let Some(d) = &r.domain {
         t.domain = (!d.is_empty()).then(|| d.clone());
     }
-    // GNOME (und FreeRDP) nutzen das Passwort aus der Umleitung auch für NLA.
-    if let Some(pw) = r.password.as_deref().and_then(utf16_text) {
+    // Sonst nutzen GNOME (und FreeRDP) das Passwort aus der Umleitung auch für NLA.
+    if let Some(pw) = r.password.as_deref().filter(|_| !encrypted).and_then(utf16_text) {
         diag::add_secret(&pw);
         t.password = pw;
     }
@@ -296,11 +297,19 @@ fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &Redir) -> Result<(), String
         host = ?host,
         routing_token = routing_token.is_some(),
         cookie = r.password.is_some(),
+        rdstls = encrypted,
         target_cert = r.target_cert.is_some(),
         user = ?r.username,
         "Umleitung übernommen"
     );
-    *hop = Hop { host, session_id: r.session_id, routing_token, cookie: r.password.clone() };
+    let rdstls = encrypted.then(|| crate::rdstls::Creds {
+        redirection_guid: r.redirection_guid.clone().unwrap_or_default(),
+        user: t.user.clone(),
+        domain: t.domain.clone().unwrap_or_default(),
+        password_blob: r.password.clone().unwrap_or_default(),
+    });
+    let cookie = if encrypted { None } else { r.password.clone() };
+    *hop = Hop { host, session_id: r.session_id, routing_token, cookie, rdstls };
     Ok(())
 }
 
@@ -403,8 +412,17 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     }
 
     let mut framed = TokioFramed::new(tcp);
-    tracing::info!("RDP: Aushandlung (X.224)");
-    let should_upgrade = ironrdp_tokio::connect_begin(&mut framed, &mut connector).await.map_err(|e| phase("Aushandlung", e))?;
+    tracing::info!(rdstls = hop.rdstls.is_some(), "RDP: Aushandlung (X.224)");
+    let should_upgrade = if hop.rdstls.is_some() {
+        // IronRDP fordert RDSTLS nicht an: Aushandlung selbst, Connector dann direkt beim TLS-Upgrade weiter.
+        rdstls_negotiate(&mut framed, hop).await?;
+        connector.state = ironrdp_connector::ClientConnectorState::EnhancedSecurityUpgrade {
+            selected_protocol: ironrdp_pdu::nego::SecurityProtocol::RDSTLS,
+        };
+        ironrdp_tokio::skip_connect_begin(&mut connector)
+    } else {
+        ironrdp_tokio::connect_begin(&mut framed, &mut connector).await.map_err(|e| phase("Aushandlung", e))?
+    };
     let (tcp, leftover) = framed.into_inner();
 
     // Zertifikate mit gültiger Kette akzeptiert rustls selbst; sonst entscheidet das Pinning.
@@ -426,6 +444,11 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
             _ => format!("TLS: Verbindung fehlgeschlagen: {e}"),
         }
     })?;
+    let mut tls = tls;
+    if let Some(creds) = &hop.rdstls {
+        tracing::info!("RDP: RDSTLS-Anmeldung");
+        crate::rdstls::handshake(&mut tls, creds).await?;
+    }
     let upgraded = ironrdp_tokio::mark_as_upgraded(should_upgrade, &mut connector);
     let key = ironrdp_tls::extract_tls_server_public_key(&cert).ok_or("Öffentlicher Schlüssel des Servers fehlt")?.to_vec();
     let mut framed = TokioFramed::new_with_leftover(tls, leftover);
@@ -443,6 +466,33 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     .map_err(login_err)?;
     tracing::info!(redirected = matches!(outcome, ConnectionOutcome::Redirected(_)), "RDP: verbunden");
     Ok((outcome, framed))
+}
+
+/// X.224-Aushandlung mit PROTOCOL_RDSTLS und Routing-Token; der Server muss RDSTLS wählen.
+async fn rdstls_negotiate(framed: &mut TokioFramed<TcpStream>, hop: &Hop) -> Result<(), String> {
+    use ironrdp_pdu::nego::{ConnectionConfirm, ConnectionRequest, ConnectionRequestWithOpaqueRoutingToken, OpaqueRoutingToken, RequestFlags, SecurityProtocol};
+    use ironrdp_pdu::x224::X224;
+    let request = ConnectionRequest {
+        nego_data: None,
+        flags: RequestFlags::empty(),
+        protocol: SecurityProtocol::RDSTLS | SecurityProtocol::SSL,
+        correlation_info: None,
+    };
+    let bytes = match &hop.routing_token {
+        Some(tok) => ironrdp_pdu::encode_vec(&X224(ConnectionRequestWithOpaqueRoutingToken { request, routing_token: OpaqueRoutingToken(tok.clone()) })),
+        None => ironrdp_pdu::encode_vec(&X224(request)),
+    }
+    .map_err(|e| format!("Aushandlung: {e}"))?;
+    framed.write_all(&bytes).await.map_err(|e| format!("Aushandlung: {e}"))?;
+    let (_, frame) = framed.read_pdu().await.map_err(|e| format!("Aushandlung: {e}"))?;
+    match ironrdp_pdu::decode::<X224<ConnectionConfirm>>(&frame).map_err(|e| format!("Aushandlung: {e}"))?.0 {
+        ConnectionConfirm::Response { protocol, .. } if protocol.contains(SecurityProtocol::RDSTLS) => {
+            tracing::info!(?protocol, "RDSTLS gewählt");
+            Ok(())
+        }
+        ConnectionConfirm::Response { protocol, .. } => Err(format!("Aushandlung: Server wählt {protocol:?} statt RDSTLS für die Übergabe")),
+        ConnectionConfirm::Failure { code } => Err(format!("Aushandlung: Server lehnt ab ({code:?})")),
+    }
 }
 
 /// Name des Laufwerks auf dem Server: Ordnername, nur einfache Zeichen.
@@ -924,6 +974,23 @@ mod tests {
         assert_eq!(hop.cookie, Some(pw));
         assert_eq!(t.password, "einmal");
         assert_eq!(t.expected_cert, Some(fingerprint(&[0x30, 1, 2])), "Ziel-Zertifikat gilt ohne Rückfrage");
+        assert!(hop.rdstls.is_none());
+
+        // GNOME-Übergabe: verschlüsseltes Passwort → RDSTLS, Blob und GUID unverändert, kein NLA-Passwort.
+        let r = Redir {
+            session_id: 9,
+            load_balance_info: Some(b"Cookie: msts=xyz\r\n".to_vec()),
+            username: Some("mike".into()),
+            password: Some(vec![9, 9, 9]),
+            password_pk_encrypted: true,
+            redirection_guid: Some(vec![7, 7]),
+            ..Default::default()
+        };
+        apply_redirect(&mut t, &mut hop, &r).unwrap();
+        let c = hop.rdstls.clone().unwrap();
+        assert_eq!((c.password_blob, c.redirection_guid, c.user.as_str()), (vec![9, 9, 9], vec![7, 7], "mike"));
+        assert_eq!(hop.cookie, None);
+        assert_eq!(t.password, "einmal", "verschlüsseltes Passwort ersetzt nichts");
 
         let bad = Redir { load_balance_info: Some(vec![1, 2, 3]), ..Default::default() };
         assert!(apply_redirect(&mut t, &mut hop, &bad).is_err());
@@ -935,6 +1002,17 @@ mod tests {
 #[cfg(test)]
 mod probe {
     use super::*;
+
+    /// Prüft nur die eigene X.224-Aushandlung mit RDSTLS gegen einen echten Server.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn probe_rdstls_negotiation() {
+        let Ok(addr) = std::env::var("SESAM_RDP_PROBE") else { return };
+        let tcp = TcpStream::connect(addr.as_str()).await.unwrap();
+        let mut framed = TokioFramed::new(tcp);
+        let hop = Hop { routing_token: Some("Cookie: msts=sesam-probe".into()), ..Default::default() };
+        println!("RDSTLS-Aushandlung: {:?}", rdstls_negotiate(&mut framed, &hop).await);
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
