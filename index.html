@@ -70,7 +70,7 @@
             <option value="import">Schlüssel importieren …</option>
           </select>
         </label>
-        <label class="span" id="key-row" hidden>Privater Schlüssel (OpenSSH-Format)
+        <label class="span" id="key-row" hidden>Privater ed25519-Schlüssel (OpenSSH-Format)
           <textarea name="key" rows="4" class="mono" spellcheck="false"></textarea>
         </label>
         <label class="span">Passwort
@@ -98,6 +98,17 @@
           <button type="button" id="editor-delete" class="danger">Löschen</button>
           <button type="button" id="editor-cancel">Abbrechen</button>
           <button type="submit" class="primary">Sichern</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="ask" aria-labelledby="ask-title">
+      <form method="dialog" class="alert">
+        <h2 id="ask-title"></h2>
+        <p id="ask-text"></p>
+        <div class="pair">
+          <button value="cancel" id="ask-cancel">Abbrechen</button>
+          <button value="ok" id="ask-ok" class="primary">OK</button>
         </div>
       </form>
     </dialog>

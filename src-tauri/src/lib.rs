@@ -27,6 +27,9 @@ fn library_save(
     ssh_key: Option<String>,
 ) -> Result<Connection, String> {
     connection.validate()?;
+    if let Some(k) = ssh_key.as_deref().filter(|k| !k.trim().is_empty()) {
+        ssh::check_private_key(k)?;
+    }
     let _g = LIBRARY_LOCK.lock().unwrap();
     let mut items = library::load(&path.0)?;
     let old = items.iter().find(|c| c.id == connection.id);
@@ -72,6 +75,7 @@ async fn shell_open(
     id: String,
     cols: u32,
     rows: u32,
+    trust: Option<String>,
     on_event: Channel<ssh::ShellEvent>,
 ) -> Result<String, String> {
     let c = library::load(&path.0)?
@@ -85,6 +89,7 @@ async fn shell_open(
         user: &c.user,
         password: vault::get(&c.id, Kind::Password)?,
         key: vault::get(&c.id, Kind::SshKey)?,
+        trusted: trust,
     };
     let shell = ssh::open(target, cols, rows, on_event).await?;
     let sid = format!("{}-{}", c.id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());

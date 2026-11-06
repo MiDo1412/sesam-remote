@@ -9,8 +9,7 @@ const SERVICE: &str = "ch.sesam.remote";
 pub enum Kind {
     /// Login-Passwort (SSH/VNC) bzw. Passphrase des Schlüssels.
     Password,
-    /// Privater SSH-Schlüssel im OpenSSH-Format.
-    // shortcut: Windows erlaubt höchstens 2560 Byte pro Eintrag; reicht für ed25519/ECDSA, nicht für RSA-4096. Bei Bedarf Schlüssel aufteilen oder verschlüsselt im Datenordner ablegen.
+    /// Privater SSH-Schlüssel im OpenSSH-Format, nur ed25519 (Windows erlaubt höchstens 2560 Byte pro Eintrag).
     SshKey,
 }
 

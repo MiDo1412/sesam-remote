@@ -26,6 +26,8 @@ pub struct Shells(pub tokio::sync::Mutex<HashMap<String, Shell>>);
 struct Client {
     host: String,
     port: u16,
+    /// Vom Benutzer bestätigter Fingerabdruck (SHA256) für einen noch unbekannten Host.
+    trusted: Option<String>,
     /// Grund für eine Ablehnung des Server-Schlüssels, damit die Meldung verständlich ist.
     rejected: Arc<Mutex<Option<String>>>,
 }
@@ -38,10 +40,14 @@ impl client::Handler for Client {
             *self.rejected.lock().unwrap() = Some("Server-Zertifikate werden noch nicht unterstützt".into());
             return Ok(false);
         };
-        // shortcut: unbekannte Hosts werden beim ersten Mal ohne Rückfrage gelernt (wie OpenSSH «accept-new»); später Fingerabdruck im UI bestätigen lassen.
         match keys::check_known_hosts(&self.host, self.port, key) {
             Ok(true) => Ok(true),
             Ok(false) => {
+                let fp = key.fingerprint(keys::HashAlg::Sha256).to_string();
+                if self.trusted.as_deref() != Some(fp.as_str()) {
+                    *self.rejected.lock().unwrap() = Some(format!("{HOSTKEY_UNKNOWN}{}|{fp}", key.algorithm()));
+                    return Ok(false);
+                }
                 if let Err(e) = keys::known_hosts::learn_known_hosts(&self.host, self.port, key) {
                     *self.rejected.lock().unwrap() = Some(format!("known_hosts nicht schreibbar: {e}"));
                     return Ok(false);
@@ -62,12 +68,28 @@ impl client::Handler for Client {
     }
 }
 
+/// Fehler-Präfix, auf das das Frontend mit einer Rückfrage reagiert: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>`.
+pub const HOSTKEY_UNKNOWN: &str = "HOSTKEY_UNKNOWN:";
+
+/// Nur ed25519: klein genug für jeden Tresor (Windows: max. 2560 Byte pro Eintrag).
+pub fn check_private_key(pem: &str) -> Result<(), String> {
+    let k = keys::PrivateKey::from_openssh(pem).map_err(|_| "Kein gültiger privater Schlüssel im OpenSSH-Format".to_string())?;
+    if k.algorithm() != keys::Algorithm::Ed25519 {
+        return Err(format!(
+            "Nur ed25519-Schlüssel werden unterstützt ({} ist zu gross für den Tresor). Neuen Schlüssel erzeugen: ssh-keygen -t ed25519",
+            k.algorithm()
+        ));
+    }
+    Ok(())
+}
+
 pub struct Target<'a> {
     pub host: &'a str,
     pub port: u16,
     pub user: &'a str,
     pub password: Option<String>,
     pub key: Option<String>,
+    pub trusted: Option<String>,
 }
 
 async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), String> {
@@ -95,7 +117,7 @@ async fn authenticate(h: &mut Handle<Client>, t: &Target<'_>) -> Result<(), Stri
 
 pub async fn open(t: Target<'_>, cols: u32, rows: u32, on_event: Channel<ShellEvent>) -> Result<Shell, String> {
     let rejected = Arc::new(Mutex::new(None));
-    let client = Client { host: t.host.into(), port: t.port, rejected: rejected.clone() };
+    let client = Client { host: t.host.into(), port: t.port, trusted: t.trusted.clone(), rejected: rejected.clone() };
     let config = Arc::new(client::Config::default());
     let mut handle = client::connect(config, (t.host, t.port), client).await.map_err(|e| {
         rejected.lock().unwrap().take().unwrap_or_else(|| format!("Verbindung fehlgeschlagen: {e}"))
@@ -138,5 +160,37 @@ impl Shell {
     pub async fn close(self) {
         let _ = self.writer.close().await;
         let _ = self.handle.disconnect(russh::Disconnect::ByApplication, "", "de").await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_private_key;
+
+    // Wegwerf-Testschlüssel, nirgends verwendet.
+    const ED25519: &str = "-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACDlDxZLMtTky1GJaepWawf/6ZTZAVqZ4zqwxnxFmCZ0OQAAAJBRyIM9UciD
+PQAAAAtzc2gtZWQyNTUxOQAAACDlDxZLMtTky1GJaepWawf/6ZTZAVqZ4zqwxnxFmCZ0OQ
+AAAEDAbRRpxNt1PGb4ZeEvBw1crpg9Y5mqVYKHTBZweIBJ7OUPFksy1OTLUYlp6lZrB//p
+lNkBWpnjOrDGfEWYJnQ5AAAACnNlc2FtLXRlc3QBAgM=
+-----END OPENSSH PRIVATE KEY-----
+";
+    const ECDSA: &str = "-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAaAAAABNlY2RzYS
+1zaGEyLW5pc3RwMjU2AAAACG5pc3RwMjU2AAAAQQRKr8yoDtulBrXt8SPDr+vVtLZsTEmX
+/gDNDAyvH5zXQWw/N0yi3dd2BrzKRC5Djrdn7anDvXcclM1APbmmnQM+AAAAqHb8ffd2/H
+33AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEqvzKgO26UGte3x
+I8Ov69W0tmxMSZf+AM0MDK8fnNdBbD83TKLd13YGvMpELkOOt2ftqcO9dxyUzUA9uaadAz
+4AAAAhAK7qO10O11s59dxFopO6hn49e9Jb8n5SZkexWdm6MOW/AAAACnNlc2FtLXRlc3QB
+AgMEBQ==
+-----END OPENSSH PRIVATE KEY-----
+";
+
+    #[test]
+    fn accepts_only_ed25519() {
+        assert!(check_private_key(ED25519).is_ok(), "{:?}", check_private_key(ED25519));
+        assert!(check_private_key(ECDSA).unwrap_err().contains("Nur ed25519"));
+        assert!(check_private_key("kein Schlüssel").is_err());
     }
 }

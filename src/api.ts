@@ -19,16 +19,19 @@ export interface Connection {
 
 export type ShellEvent = { kind: "data"; data: number[] } | { kind: "closed"; reason: string };
 
+/** Präfix eines Fehlers bei unbekanntem Host: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>` */
+export const HOSTKEY_UNKNOWN = "HOSTKEY_UNKNOWN:";
+
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
   /** password/sshKey: undefined = unverändert, "" = löschen */
   save: (connection: Connection, password?: string, sshKey?: string) =>
     invoke<Connection>("library_save", { connection, password, sshKey }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
-  shellOpen: (id: string, cols: number, rows: number, onEvent: (e: ShellEvent) => void) => {
+  shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void) => {
     const ch = new Channel<ShellEvent>();
     ch.onmessage = onEvent;
-    return invoke<string>("shell_open", { id, cols, rows, onEvent: ch });
+    return invoke<string>("shell_open", { id, cols, rows, trust, onEvent: ch });
   },
   shellWrite: (sid: string, data: Uint8Array) => invoke<void>("shell_write", { sid, data: Array.from(data) }),
   shellResize: (sid: string, cols: number, rows: number) => invoke<void>("shell_resize", { sid, cols, rows }),

@@ -1,5 +1,6 @@
 import { api, type Connection } from "./api";
 import { openShell } from "./shell";
+import { ask, tell } from "./ui";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -18,7 +19,7 @@ async function reload() {
   try {
     items = await api.list();
   } catch (e) {
-    alert(String(e));
+    tell("Bibliothek nicht lesbar", String(e));
   }
   render();
 }
@@ -104,7 +105,7 @@ function renderDetails() {
 function open(c: Connection, view: Connection["defaultView"]) {
   if (view === "shell") return openShell(c, reload);
   // shortcut: Desktop (VNC) und Dateien (SFTP) folgen in späteren Meilensteinen.
-  alert(view === "desktop" ? "Der VNC-Viewer folgt in einem späteren Meilenstein." : "Der Dateitransfer folgt in einem späteren Meilenstein.");
+  tell("Noch nicht verfügbar", view === "desktop" ? "Der VNC-Viewer folgt im nächsten Meilenstein." : "Der Dateitransfer folgt in einem späteren Meilenstein.");
 }
 
 // ---------- Sheet «Verbindung bearbeiten» ----------
@@ -162,7 +163,7 @@ keyMode.addEventListener("change", () => ($("key-row").hidden = keyMode.value !=
 $("editor-cancel").onclick = () => dlg.close();
 
 $("editor-delete").onclick = async () => {
-  if (!editing || !confirm(`«${editing.name}» und die gespeicherten Zugangsdaten löschen?`)) return;
+  if (!editing || !(await ask("Verbindung löschen?", `«${editing.name}» und die gespeicherten Zugangsdaten werden entfernt.`, "Löschen"))) return;
   try {
     await api.remove(editing.id);
     selected = null;

@@ -1,7 +1,8 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { api, type Connection } from "./api";
+import { api, HOSTKEY_UNKNOWN, type Connection } from "./api";
+import { ask } from "./ui";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -51,14 +52,35 @@ export async function openShell(c: Connection, onBack: () => void) {
     onBack();
   };
 
-  try {
-    sid = await api.shellOpen(c.id, term.cols, term.rows, (e) => {
-      if (e.kind === "data") term.write(new Uint8Array(e.data));
-      else status.textContent = e.reason;
-    });
-    status.textContent = "";
-    term.focus();
-  } catch (e) {
-    status.textContent = `Keine Verbindung: ${e}`;
+  const onEvent = (e: Parameters<Parameters<typeof api.shellOpen>[4]>[0]) => {
+    if (e.kind === "data") term.write(new Uint8Array(e.data));
+    else status.textContent = e.reason;
+  };
+  let trust: string | null = null;
+  for (;;) {
+    try {
+      sid = await api.shellOpen(c.id, term.cols, term.rows, trust, onEvent);
+      status.textContent = "";
+      term.focus();
+    } catch (e) {
+      const msg = String(e);
+      if (trust === null && msg.startsWith(HOSTKEY_UNKNOWN)) {
+        const [alg, fp] = msg.slice(HOSTKEY_UNKNOWN.length).split("|");
+        const ok = await ask(
+          "Unbekannter Server",
+          `${c.address} ist noch nicht bekannt. Vergleiche den Fingerabdruck mit dem Server (ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub), bevor du ihm vertraust.
+
+${alg}
+${fp}`,
+          "Vertrauen und verbinden",
+        );
+        if (ok) {
+          trust = fp;
+          continue;
+        }
+        status.textContent = "Verbindung abgebrochen: Server nicht bestätigt.";
+      } else status.textContent = `Keine Verbindung: ${msg}`;
+    }
+    break;
   }
 }
