@@ -11,6 +11,8 @@ pub enum Kind {
     Password,
     /// Eigenes VNC-Passwort (falls anders als das Kontopasswort).
     VncPassword,
+    /// Eigenes RDP-Passwort (falls anders als das Kontopasswort).
+    RdpPassword,
     /// Privater SSH-Schlüssel im OpenSSH-Format, nur ed25519 (Windows erlaubt höchstens 2560 Byte pro Eintrag).
     SshKey,
 }
@@ -19,6 +21,7 @@ fn entry(id: &str, kind: Kind) -> Result<Entry, String> {
     let k = match kind {
         Kind::Password => "password",
         Kind::VncPassword => "vnc-password",
+        Kind::RdpPassword => "rdp-password",
         Kind::SshKey => "ssh-key",
     };
     Entry::new(SERVICE, &format!("{id}:{k}")).map_err(|e| format!("Tresor nicht verfügbar: {e}"))

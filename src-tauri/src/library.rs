@@ -14,6 +14,12 @@ pub struct Connection {
     pub vnc_port: Option<u16>,
     /// `None` = Shell/Dateien (SSH) ausgeschaltet.
     pub ssh_port: Option<u16>,
+    /// `None` = Desktop über RDP ausgeschaltet.
+    pub rdp_port: Option<u16>,
+    /// Windows-Domäne für RDP (leer = keine).
+    pub rdp_domain: String,
+    /// Bei VNC *und* RDP: womit «Desktop» verbindet ("vnc" | "rdp").
+    pub desktop_protocol: String,
     pub user: String,
     /// "desktop" | "shell" | "files"
     pub default_view: String,
@@ -24,6 +30,7 @@ pub struct Connection {
     /// Nur Merker für die Anzeige; das Geheimnis selbst liegt im Tresor.
     pub has_password: bool,
     pub has_vnc_password: bool,
+    pub has_rdp_password: bool,
     pub has_key: bool,
     pub last_used: Option<String>,
 }
@@ -37,6 +44,9 @@ impl Default for Connection {
             address: String::new(),
             vnc_port: Some(5900),
             ssh_port: Some(22),
+            rdp_port: None,
+            rdp_domain: String::new(),
+            desktop_protocol: "vnc".into(),
             user: String::new(),
             default_view: "desktop".into(),
             orientation: "landscape".into(),
@@ -44,6 +54,7 @@ impl Default for Connection {
             fit_to_window: true,
             has_password: false,
             has_vnc_password: false,
+            has_rdp_password: false,
             has_key: false,
             last_used: None,
         }
@@ -61,11 +72,14 @@ impl Connection {
         if self.address.trim().is_empty() || self.address.chars().any(char::is_whitespace) {
             return Err("Adresse fehlt oder enthält Leerzeichen".into());
         }
-        if self.vnc_port == Some(0) || self.ssh_port == Some(0) {
+        if self.vnc_port == Some(0) || self.ssh_port == Some(0) || self.rdp_port == Some(0) {
             return Err("Port 0 ist ungültig".into());
         }
         if !["desktop", "shell", "files"].contains(&self.default_view.as_str()) {
             return Err("Unbekannte Standardansicht".into());
+        }
+        if !["vnc", "rdp"].contains(&self.desktop_protocol.as_str()) {
+            return Err("Unbekanntes Desktop-Protokoll".into());
         }
         if !["landscape", "portrait"].contains(&self.orientation.as_str()) {
             return Err("Unbekannte Ausrichtung".into());
@@ -137,6 +151,8 @@ mod tests {
         assert!(Connection { id: "../x".into(), ..ok.clone() }.validate().is_err());
         assert!(Connection { address: "a b".into(), ..ok.clone() }.validate().is_err());
         assert!(Connection { ssh_port: Some(0), ..ok.clone() }.validate().is_err());
+        assert!(Connection { rdp_port: Some(0), ..ok.clone() }.validate().is_err());
+        assert!(Connection { desktop_protocol: "x".into(), ..ok.clone() }.validate().is_err());
         assert!(Connection { default_view: "x".into(), ..ok }.validate().is_err());
     }
 
@@ -144,5 +160,6 @@ mod tests {
     fn old_json_without_new_fields_loads() {
         let c: Connection = serde_json::from_str(r#"{"id":"a","name":"n","address":"h"}"#).unwrap();
         assert_eq!(c.ssh_port, Some(22));
+        assert_eq!((c.rdp_port, c.desktop_protocol.as_str()), (None, "vnc"));
     }
 }

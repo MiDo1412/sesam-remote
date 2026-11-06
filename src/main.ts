@@ -1,4 +1,4 @@
-import { api, type Connection } from "./api";
+import { api, desktopProtocol, type Connection } from "./api";
 import { openShell } from "./shell";
 import { openDesktop } from "./desktop";
 import { openFiles } from "./files";
@@ -51,7 +51,8 @@ function render() {
 
   $("grid").replaceChildren(
     ...visible.map((c) => {
-      const kind = c.vncPort ? "Desktop" : c.sshPort ? "Shell" : "–";
+      const proto = desktopProtocol(c);
+      const kind = proto ? proto.toUpperCase() : c.sshPort ? "Shell" : "–";
       const card = el(
         "button",
         { type: "button", class: "card", "aria-pressed": String(c.id === selected) },
@@ -88,12 +89,12 @@ function renderDetails() {
       {},
       fact("Adresse", c.address),
       fact("Benutzer", c.user || "–"),
-      fact("Desktop", c.vncPort ? `VNC · ${c.vncPort}` : "aus"),
+      fact("Desktop", desktopProtocol(c) === "rdp" ? `RDP · ${c.rdpPort}` : c.vncPort ? `VNC · ${c.vncPort}` : "aus"),
       fact("Shell", c.sshPort ? `SSH · ${c.sshPort}` : "aus"),
-      fact("Anmeldung", c.hasPassword || c.hasKey || c.hasVncPassword ? "Im Tresor" : "Keine gespeichert"),
+      fact("Anmeldung", c.hasPassword || c.hasKey || c.hasVncPassword || c.hasRdpPassword ? "Im Tresor" : "Keine gespeichert"),
       fact("Schlüssel", c.hasKey ? "Im Tresor" : "–"),
     ),
-    btn("Desktop öffnen", "primary", () => open(c, "desktop"), !c.vncPort),
+    btn("Desktop öffnen", "primary", () => open(c, "desktop"), !desktopProtocol(c)),
     el(
       "div",
       { class: "pair" },
@@ -121,7 +122,10 @@ const blank = (): Connection => ({
   name: "",
   group: filter.kind === "group" ? filter.name : "",
   address: "",
-  vncPort: 5900,
+  vncPort: null,
+  rdpPort: 3389,
+  rdpDomain: "",
+  desktopProtocol: "rdp",
   sshPort: 22,
   user: "",
   defaultView: "desktop",
@@ -130,6 +134,7 @@ const blank = (): Connection => ({
   fitToWindow: true,
   hasPassword: false,
   hasVncPassword: false,
+  hasRdpPassword: false,
   hasKey: false,
   lastUsed: null,
 });
@@ -144,6 +149,11 @@ function edit(c: Connection | null) {
   f.address.value = editing.address;
   f.vncOn.checked = editing.vncPort !== null;
   f.vncPort.value = String(editing.vncPort ?? 5900);
+  f.rdpOn.checked = editing.rdpPort !== null;
+  f.rdpPort.value = String(editing.rdpPort ?? 3389);
+  f.rdpDomain.value = editing.rdpDomain;
+  f.rdpPassword.value = "";
+  form.querySelector<HTMLInputElement>(`[name=desktopProtocol][value=${editing.desktopProtocol}]`)!.checked = true;
   f.sshOn.checked = editing.sshPort !== null;
   f.sshPort.value = String(editing.sshPort ?? 22);
   f.user.value = editing.user;
@@ -153,6 +163,8 @@ function edit(c: Connection | null) {
   f.vncPassword.value = "";
   clearing.clear();
   showPwHint("vnc-pw", editing.hasVncPassword, "Nur nötig, wenn der Server ein eigenes VNC-Passwort hat. Sonst gilt das Passwort des Benutzers.");
+  showPwHint("rdp-pw", editing.hasRdpPassword, "Leer = Passwort des Benutzers.");
+  syncDesktopRow();
   showPwHint("pw", editing.hasPassword, "");
   f.sharedClipboard.checked = editing.sharedClipboard;
   f.fitToWindow.checked = editing.fitToWindow;
@@ -167,8 +179,8 @@ function edit(c: Connection | null) {
 /** Gespeicherte Passwörter, die beim Sichern entfernt werden (Feldname). */
 const clearing = new Set<string>();
 
-function showPwHint(prefix: "pw" | "vnc-pw", stored: boolean, emptyText: string) {
-  const field = prefix === "pw" ? "password" : "vncPassword";
+function showPwHint(prefix: "pw" | "vnc-pw" | "rdp-pw", stored: boolean, emptyText: string) {
+  const field = ({ pw: "password", "vnc-pw": "vncPassword", "rdp-pw": "rdpPassword" } as const)[prefix];
   const hint = $(`${prefix}-hint`);
   const btn = $(`${prefix}-clear`);
   hint.textContent = stored ? "Verschlüsselt im Tresor gespeichert. Leer lassen, um es zu behalten." : emptyText;
@@ -179,6 +191,13 @@ function showPwHint(prefix: "pw" | "vnc-pw", stored: boolean, emptyText: string)
     btn.hidden = true;
   };
 }
+
+/** «Desktop über» nur zeigen, wenn VNC und RDP beide an sind. */
+function syncDesktopRow() {
+  const on = (n: string) => (form.elements.namedItem(n) as HTMLInputElement).checked;
+  $("desktop-protocol-row").hidden = !(on("vncOn") && on("rdpOn"));
+}
+for (const n of ["vncOn", "rdpOn"]) (form.elements.namedItem(n) as HTMLInputElement).addEventListener("change", syncDesktopRow);
 
 const keyMode = form.elements.namedItem("keyMode") as HTMLSelectElement;
 keyMode.addEventListener("change", () => ($("key-row").hidden = keyMode.value !== "import"));
@@ -209,6 +228,9 @@ form.onsubmit = async (ev) => {
     address: s("address"),
     vncPort: port("vncOn", "vncPort"),
     sshPort: port("sshOn", "sshPort"),
+    rdpPort: port("rdpOn", "rdpPort"),
+    rdpDomain: s("rdpDomain"),
+    desktopProtocol: (s("desktopProtocol") || "rdp") as Connection["desktopProtocol"],
     user: s("user"),
     sharedClipboard: fd.get("sharedClipboard") !== null,
     fitToWindow: fd.get("fitToWindow") !== null,
@@ -221,7 +243,7 @@ form.onsubmit = async (ev) => {
   // Neuer Wert > «Entfernen» (leerer String löscht im Tresor) > unverändert.
   const secret = (k: string) => String(fd.get(k) ?? "") || (clearing.has(k) ? "" : undefined);
   try {
-    const saved = await api.save(c, { password: secret("password"), vncPassword: secret("vncPassword"), sshKey });
+    const saved = await api.save(c, { password: secret("password"), vncPassword: secret("vncPassword"), rdpPassword: secret("rdpPassword"), sshKey });
     selected = saved.id;
     dlg.close();
     reload();

@@ -9,7 +9,7 @@ const sided: Record<string, [number, number]> = {
   Shift: [0xffe1, 0xffe2], Control: [0xffe3, 0xffe4], Alt: [0xffe9, 0xffea], Meta: [0xffeb, 0xffec],
 };
 
-export function keysym(e: KeyboardEvent): number | undefined {
+export function keysym(e: Pick<KeyboardEvent, "key" | "code">): number | undefined {
   if (e.key in sided) return sided[e.key][e.code.endsWith("Right") ? 1 : 0];
   if (e.key in special) return special[e.key];
   const f = /^F(\d{1,2})$/.exec(e.key);

@@ -1,5 +1,6 @@
 mod clipshare;
 mod library;
+mod rdp;
 mod sftp;
 mod ssh;
 mod vault;
@@ -31,6 +32,7 @@ fn library_save(
     mut connection: Connection,
     password: Option<String>,
     vnc_password: Option<String>,
+    rdp_password: Option<String>,
     ssh_key: Option<String>,
 ) -> Result<Connection, String> {
     connection.validate()?;
@@ -42,10 +44,12 @@ fn library_save(
     let old = items.iter().find(|c| c.id == connection.id);
     connection.has_password = old.is_some_and(|c| c.has_password);
     connection.has_vnc_password = old.is_some_and(|c| c.has_vnc_password);
+    connection.has_rdp_password = old.is_some_and(|c| c.has_rdp_password);
     connection.has_key = old.is_some_and(|c| c.has_key);
     for (secret, kind, flag) in [
         (password, Kind::Password, &mut connection.has_password),
         (vnc_password, Kind::VncPassword, &mut connection.has_vnc_password),
+        (rdp_password, Kind::RdpPassword, &mut connection.has_rdp_password),
         (ssh_key, Kind::SshKey, &mut connection.has_key),
     ] {
         match secret.as_deref() {
@@ -73,6 +77,7 @@ fn library_delete(path: State<LibraryPath>, id: String) -> Result<(), String> {
         vault::delete(&id, Kind::Password)?;
         vault::delete(&id, Kind::SshKey)?;
         vault::delete(&id, Kind::VncPassword)?;
+        vault::delete(&id, Kind::RdpPassword)?;
         library::save(&path.0, &items)?;
     }
     Ok(())
@@ -416,6 +421,101 @@ fn vnc_close(desktops: State<Desktops>, sid: String) {
     }
 }
 
+// ---------- RDP ----------
+
+#[derive(Default)]
+struct RdpSessions(Mutex<HashMap<String, rdp::Session>>);
+
+fn screen_frame(e: vnc::Event) -> Option<InvokeResponseBody> {
+    Some(match e {
+        vnc::Event::Rect { rect: r, rgba } => frame(0, &[r.x, r.y, r.w, r.h], &rgba),
+        vnc::Event::Resize { width, height } => frame(1, &[width, height], &[]),
+        vnc::Event::Closed(why) => frame(3, &[], why.as_bytes()),
+        vnc::Event::Bell => frame(4, &[], &[]),
+        vnc::Event::Info(t) => frame(5, &[], t.as_bytes()),
+        vnc::Event::Cursor { hot_x, hot_y, w, h, rgba } => frame(6, &[hot_x, hot_y, w, h], &rgba),
+        vnc::Event::Clipboard(_) => return None,
+    })
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn rdp_open(
+    path: State<'_, LibraryPath>,
+    sessions: State<'_, RdpSessions>,
+    id: String,
+    trust: Option<String>,
+    width: u16,
+    height: u16,
+    on_event: Channel<InvokeResponseBody>,
+) -> Result<String, String> {
+    let c = find(&path, &id)?;
+    let port = c.rdp_port.ok_or("Desktop über RDP ist für diese Verbindung ausgeschaltet")?;
+    let password = vault::get(&c.id, Kind::RdpPassword)?.or(vault::get(&c.id, Kind::Password)?).unwrap_or_default();
+    let pins_path = path.0.with_file_name("known_certs.json");
+    let mut pins = load_pins(&pins_path);
+    let pin_key = format!("{}:{port}", c.address);
+    let target = rdp::Target {
+        host: c.address.clone(),
+        port,
+        user: c.user.clone(),
+        domain: (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string()),
+        password,
+        expected_cert: trust.clone().or_else(|| pins.get(&pin_key).cloned()),
+        width: width.clamp(200, 8192),
+        height: height.clamp(200, 8192),
+    };
+    let seen: rdp::SeenCert = Default::default();
+    let session = rdp::open(target, seen.clone(), move |e| screen_frame(e).is_none_or(|f| on_event.send(f).is_ok())).await?;
+    if let Some(fp) = trust.filter(|fp| seen.lock().unwrap().as_ref() == Some(fp)) {
+        pins.insert(pin_key, fp);
+        let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+    }
+    let sid = new_sid(&c.id);
+    sessions.0.lock().unwrap().insert(sid.clone(), session);
+    Ok(sid)
+}
+
+fn rdp_send(s: &RdpSessions, sid: &str, i: rdp::Input) -> Result<(), String> {
+    s.0.lock().unwrap().get(sid).map(|x| x.send(i)).ok_or_else(|| "RDP-Sitzung geschlossen".into())
+}
+
+#[tauri::command]
+fn rdp_pointer(sessions: State<RdpSessions>, sid: String, x: u16, y: u16, buttons: u8) -> Result<(), String> {
+    rdp_send(&sessions, &sid, rdp::Input::Pointer { x, y, buttons })
+}
+
+#[tauri::command]
+fn rdp_wheel(sessions: State<RdpSessions>, sid: String, vertical: bool, units: i16) -> Result<(), String> {
+    rdp_send(&sessions, &sid, rdp::Input::Wheel { vertical, units })
+}
+
+/// Scancode oder Unicode je nach Taste (siehe `rdp::key_input`).
+#[tauri::command]
+fn rdp_key(sessions: State<RdpSessions>, sid: String, code: String, key: String, down: bool, altgr: bool) -> Result<(), String> {
+    match rdp::key_input(&code, &key, down, altgr) {
+        Some(i) => rdp_send(&sessions, &sid, i),
+        None => Ok(()),
+    }
+}
+
+#[tauri::command]
+fn rdp_release_all(sessions: State<RdpSessions>, sid: String) -> Result<(), String> {
+    rdp_send(&sessions, &sid, rdp::Input::ReleaseAll)
+}
+
+#[tauri::command]
+fn rdp_set_size(sessions: State<RdpSessions>, sid: String, width: u16, height: u16) -> Result<(), String> {
+    rdp_send(&sessions, &sid, rdp::Input::Resize { width, height })
+}
+
+#[tauri::command]
+fn rdp_close(sessions: State<RdpSessions>, sid: String) {
+    if let Some(s) = sessions.0.lock().unwrap().remove(&sid) {
+        s.close();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -426,6 +526,7 @@ pub fn run() {
             app.manage(ssh::Shells::default());
             app.manage(Desktops::default());
             app.manage(Files::default());
+            app.manage(RdpSessions::default());
             app.manage(Transfers::default());
             Ok(())
         })
@@ -452,7 +553,14 @@ pub fn run() {
             local_list,
             local_home,
             transfer_start,
-            transfer_cancel
+            transfer_cancel,
+            rdp_open,
+            rdp_pointer,
+            rdp_wheel,
+            rdp_key,
+            rdp_release_all,
+            rdp_set_size,
+            rdp_close
         ])
         .run(tauri::generate_context!())
         .expect("Sesam Remote konnte nicht starten");

@@ -88,6 +88,16 @@
           </label>
         </fieldset>
         <fieldset>
+          <legend>Desktop <small>RDP</small></legend>
+          <label class="switch"><input type="checkbox" name="rdpOn" /> Aktiv</label>
+          <label>Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
+          <label>Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="optional" /></label>
+          <label>RDP-Passwort
+            <input name="rdpPassword" type="password" autocomplete="new-password" />
+          </label>
+          <span class="hint span"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
+        </fieldset>
+        <fieldset>
           <legend>Shell und Dateien <small>SSH mit SFTP</small></legend>
           <label class="switch"><input type="checkbox" name="sshOn" /> Aktiv</label>
           <label>Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
@@ -115,6 +125,12 @@
           <div class="segmented" role="radiogroup" aria-label="Ausrichtung des Monitors">
             <label><input type="radio" name="orientation" value="landscape" />Querformat</label>
             <label><input type="radio" name="orientation" value="portrait" />Hochformat</label>
+          </div>
+        </div>
+        <div class="row" id="desktop-protocol-row"><span>Desktop über</span>
+          <div class="segmented" role="radiogroup" aria-label="Desktop über">
+            <label><input type="radio" name="desktopProtocol" value="rdp" />RDP</label>
+            <label><input type="radio" name="desktopProtocol" value="vnc" />VNC</label>
           </div>
         </div>
         <div class="row"><span>Bei Doppelklick öffnen</span>

@@ -7,6 +7,9 @@ export interface Connection {
   address: string;
   vncPort: number | null;
   sshPort: number | null;
+  rdpPort: number | null;
+  rdpDomain: string;
+  desktopProtocol: "vnc" | "rdp";
   user: string;
   defaultView: "desktop" | "shell" | "files";
   orientation: "landscape" | "portrait";
@@ -14,6 +17,7 @@ export interface Connection {
   fitToWindow: boolean;
   hasPassword: boolean;
   hasVncPassword: boolean;
+  hasRdpPassword: boolean;
   hasKey: boolean;
   lastUsed: string | null;
 }
@@ -44,10 +48,14 @@ export type Progress =
   | { state: "done"; target: string }
   | { state: "failed"; error: string };
 
+/** Womit «Desktop» verbindet: RDP, wenn nur RDP an ist oder bei beiden RDP gewählt ist. */
+export const desktopProtocol = (c: Connection): "vnc" | "rdp" | null =>
+  c.rdpPort && (!c.vncPort || c.desktopProtocol === "rdp") ? "rdp" : c.vncPort ? "vnc" : null;
+
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
   /** Geheimnisse: undefined = unverändert, "" = löschen */
-  save: (connection: Connection, secrets: { password?: string; vncPassword?: string; sshKey?: string }) =>
+  save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; sshKey?: string }) =>
     invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
   shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void) => {
@@ -69,6 +77,17 @@ export const api = {
   vncSetSize: (sid: string, width: number, height: number) => invoke<boolean>("vnc_set_size", { sid, width, height }),
   vncClipboardSync: (sid: string) => invoke<void>("vnc_clipboard_sync", { sid }),
   vncClose: (sid: string) => invoke<void>("vnc_close", { sid }),
+  rdpOpen: (id: string, trust: string | null, width: number, height: number, onFrame: (buf: ArrayBuffer) => void) => {
+    const ch = new Channel<ArrayBuffer>();
+    ch.onmessage = onFrame;
+    return invoke<string>("rdp_open", { id, trust, width, height, onEvent: ch });
+  },
+  rdpPointer: (sid: string, x: number, y: number, buttons: number) => invoke<void>("rdp_pointer", { sid, x, y, buttons }),
+  rdpWheel: (sid: string, vertical: boolean, units: number) => invoke<void>("rdp_wheel", { sid, vertical, units }),
+  rdpKey: (sid: string, code: string, key: string, down: boolean, altgr: boolean) => invoke<void>("rdp_key", { sid, code, key, down, altgr }),
+  rdpReleaseAll: (sid: string) => invoke<void>("rdp_release_all", { sid }),
+  rdpSetSize: (sid: string, width: number, height: number) => invoke<void>("rdp_set_size", { sid, width, height }),
+  rdpClose: (sid: string) => invoke<void>("rdp_close", { sid }),
   sftpOpen: (id: string, trust: string | null) => invoke<string>("sftp_open", { id, trust }),
   sftpList: (sid: string, path: string) => invoke<Listing>("sftp_list", { sid, path }),
   sftpMkdir: (sid: string, dir: string, name: string) => invoke<string>("sftp_mkdir", { sid, dir, name }),

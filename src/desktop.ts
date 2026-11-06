@@ -1,18 +1,21 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { api, CERT_CHANGED, CERT_UNKNOWN, type Connection } from "./api";
+import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol, type Connection } from "./api";
 import { ask, showView } from "./ui";
 import { keysym } from "./keysym";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 type Mode = "fit" | "scale" | "native";
+type Key = Pick<KeyboardEvent, "code" | "key">;
 let close: (() => void) | null = null;
 
+/** Desktop über VNC oder RDP; Anzeige, Modi und Eingabe-Logik sind gemeinsam. */
 export async function openDesktop(c: Connection, onBack: () => void) {
   close?.();
   showView("desktop");
+  const rdp = desktopProtocol(c) === "rdp";
   $("session-title").textContent = c.name;
-  $("session-sub").textContent = `VNC · ${c.address}:${c.vncPort}`;
+  $("session-sub").textContent = rdp ? `RDP · ${c.address}:${c.rdpPort}` : `VNC · ${c.address}:${c.vncPort}`;
   const status = $("session-status");
   status.textContent = "Verbinde …";
 
@@ -39,15 +42,22 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     canvas.style.height = `${Math.floor(canvas.height * s)}px`;
   };
 
-  /** «An Fenster anpassen»: entfernte Auflösung = Fenstergrösse (bei Hochformat hochkant). */
+  /** Gewünschte entfernte Auflösung: Fenstergrösse, bei Hochformat hochkant. */
+  const wanted = () => {
+    let w = wrap.clientWidth & ~1, h = wrap.clientHeight & ~1;
+    if (c.orientation === "portrait" && w > h) [w, h] = [h, w];
+    return [w, h];
+  };
+
+  /** «An Fenster anpassen»: entfernte Auflösung folgt der Fenstergrösse. */
   let sizeTimer = 0;
   const requestSize = () => {
     clearTimeout(sizeTimer);
     if (mode !== "fit" || !sid || !resizable) return;
     sizeTimer = window.setTimeout(async () => {
-      let w = wrap.clientWidth & ~1, h = wrap.clientHeight & ~1;
-      if (c.orientation === "portrait" && w > h) [w, h] = [h, w];
-      if (w < 64 || h < 64 || (w === canvas.width && h === canvas.height)) return;
+      const [w, h] = wanted();
+      if (w < 200 || h < 200 || (w === canvas.width && h === canvas.height)) return;
+      if (rdp) return void api.rdpSetSize(sid!, w, h).catch(() => {}); // Absage kommt als Hinweis
       resizable = await api.vncSetSize(sid!, w, h).catch(() => false);
       if (!resizable) status.textContent = "Der Server kann seine Auflösung nicht anpassen; die Anzeige wird skaliert.";
     }, 300);
@@ -66,27 +76,30 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     };
   }
 
-  // ---------- Eingaben ----------
+  // ---------- Maus ----------
   const toRemote = (e: MouseEvent) => {
     const b = canvas.getBoundingClientRect();
     const x = Math.round(((e.clientX - b.left) * canvas.width) / b.width);
     const y = Math.round(((e.clientY - b.top) * canvas.height) / b.height);
     return [Math.max(0, Math.min(canvas.width - 1, x)), Math.max(0, Math.min(canvas.height - 1, y))];
   };
-  // Browser: 1 links, 2 rechts, 4 Mitte  →  RFB: 1 links, 2 Mitte, 4 rechts
-  const mask = (b: number) => (b & 1) | ((b & 4) >> 1) | ((b & 2) << 1);
+  // Browser: 1 links, 2 rechts, 4 Mitte  →  RFB: 1 links, 2 Mitte, 4 rechts (RDP nimmt die Browser-Maske)
+  const vncMask = (b: number) => (b & 1) | ((b & 4) >> 1) | ((b & 2) << 1);
+  const pointer = (x: number, y: number, buttons: number) => {
+    if (!sid) return;
+    (rdp ? api.rdpPointer(sid, x, y, buttons) : api.vncPointer(sid, vncMask(buttons), x, y)).catch(() => {});
+  };
   let pending: [number, number, number] | null = null;
   const flushPointer = () => {
-    if (pending && sid) api.vncPointer(sid, ...pending).catch(() => {});
+    if (pending) pointer(...pending);
     pending = null;
   };
   const onPointer = (e: PointerEvent) => {
     e.preventDefault();
     const [x, y] = toRemote(e);
-    const m = mask(e.buttons);
     // Bewegungen pro Bildschirmbild bündeln, Klicks sofort senden.
     const first = pending === null;
-    pending = [m, x, y];
+    pending = [x, y, e.buttons];
     if (e.type !== "pointermove") flushPointer();
     else if (first) requestAnimationFrame(flushPointer);
   };
@@ -99,30 +112,44 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     (e) => {
       e.preventDefault();
       if (!sid) return;
+      const vertical = Math.abs(e.deltaY) >= Math.abs(e.deltaX);
+      const delta = vertical ? e.deltaY : e.deltaX;
+      if (rdp) return void api.rdpWheel(sid, vertical, delta < 0 ? 120 : -120).catch(() => {});
       const [x, y] = toRemote(e);
-      const m = mask(e.buttons);
-      const bit = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? (e.deltaY < 0 ? 8 : 16) : e.deltaX < 0 ? 32 : 64;
+      const m = vncMask(e.buttons);
+      const bit = vertical ? (delta < 0 ? 8 : 16) : delta < 0 ? 32 : 64;
       api.vncPointer(sid, m | bit, x, y).then(() => api.vncPointer(sid!, m, x, y)).catch(() => {});
     },
     { passive: false },
   );
 
+  // ---------- Tastatur ----------
+  /** Gedrückte Tasten (code → Keysym bei VNC), damit Loslassen und «alles loslassen» stimmen. */
   const down = new Map<string, number>();
-  const send = (isDown: boolean, code: string, sym: number) => {
-    if (isDown) down.set(code, sym);
-    else down.delete(code);
-    if (sid) api.vncKey(sid, isDown, sym).catch(() => {});
+  let altGr = false;
+  const send = (isDown: boolean, k: Key) => {
+    if (!sid) return;
+    if (rdp) {
+      if (isDown) down.set(k.code, 0);
+      else down.delete(k.code);
+      return void api.rdpKey(sid, k.code, k.key, isDown, altGr).catch(() => {});
+    }
+    const sym = isDown ? keysym(k) : down.get(k.code);
+    if (sym === undefined) return;
+    if (isDown) down.set(k.code, sym);
+    else down.delete(k.code);
+    api.vncKey(sid, isDown, sym).catch(() => {});
   };
   // Windows meldet AltGr als «Strg links» + «Alt rechts» kurz nacheinander. Strg darum kurz
   // zurückhalten und verwerfen, wenn AltGr folgt. AltGr selbst senden wir nicht: das erzeugte
-  // Zeichen (z. B. «@») kommt ohnehin als eigener Keysym.
+  // Zeichen (z. B. «@») kommt als eigener Keysym (VNC) bzw. Unicode-Ereignis (RDP).
   const isWindows = navigator.userAgent.includes("Windows");
-  let heldCtrl: { sym: number; timer: number } | null = null;
+  let heldCtrl: { key: Key; timer: number } | null = null;
   let swallowedCtrl = false;
   const flushCtrl = () => {
     if (!heldCtrl) return;
     clearTimeout(heldCtrl.timer);
-    send(true, "ControlLeft", heldCtrl.sym);
+    send(true, heldCtrl.key);
     heldCtrl = null;
   };
   const onKey = (e: KeyboardEvent) => {
@@ -131,6 +158,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     if (!sid) return;
     const isDown = e.type === "keydown";
     if (e.key === "AltGraph") {
+      altGr = isDown;
       if (isDown && heldCtrl) {
         clearTimeout(heldCtrl.timer);
         heldCtrl = null;
@@ -140,7 +168,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     }
     if (isWindows && e.code === "ControlLeft" && !down.has("ControlLeft")) {
       if (isDown) {
-        if (!heldCtrl && !swallowedCtrl) heldCtrl = { sym: keysym(e)!, timer: window.setTimeout(flushCtrl, 30) };
+        if (!heldCtrl && !swallowedCtrl) heldCtrl = { key: { code: e.code, key: e.key }, timer: window.setTimeout(flushCtrl, 30) };
         return;
       }
       if (swallowedCtrl) {
@@ -150,34 +178,38 @@ export async function openDesktop(c: Connection, onBack: () => void) {
       flushCtrl();
     }
     if (isDown) flushCtrl();
-    const sym = isDown ? keysym(e) : down.get(e.code);
-    if (sym !== undefined) send(isDown, e.code, sym);
+    send(isDown, e);
   };
   const releaseAll = () => {
     if (heldCtrl) clearTimeout(heldCtrl.timer);
     heldCtrl = null;
     swallowedCtrl = false;
-    for (const sym of down.values()) if (sid) api.vncKey(sid, false, sym).catch(() => {});
+    altGr = false;
+    if (sid && rdp) api.rdpReleaseAll(sid).catch(() => {});
+    else for (const sym of down.values()) if (sid) api.vncKey(sid, false, sym).catch(() => {});
     down.clear();
   };
 
-  // Tastenkombinationen, die das lokale System selbst abfängt.
-  const combos: Record<string, number[]> = {
-    cad: [0xffe3, 0xffe9, 0xffff], // Strg+Alt+Entf
-    cse: [0xffe3, 0xffe1, 0xff1b], // Strg+Umschalt+Esc
-    alttab: [0xffe9, 0xff09],
-    altf4: [0xffe9, 0xffc1],
-    super: [0xffeb],
-    print: [0xff61],
+  // Tastenkombinationen, die das lokale System selbst abfängt (physische Tasten).
+  const combos: Record<string, string[]> = {
+    cad: ["ControlLeft", "AltLeft", "Delete"],
+    cse: ["ControlLeft", "ShiftLeft", "Escape"],
+    alttab: ["AltLeft", "Tab"],
+    altf4: ["AltLeft", "F4"],
+    super: ["MetaLeft"],
+    print: ["PrintScreen"],
+  };
+  // Keysyms derselben Tasten für VNC (keysym() braucht key, nicht code).
+  const comboKey: Record<string, string> = {
+    ControlLeft: "Control", AltLeft: "Alt", ShiftLeft: "Shift", MetaLeft: "Meta",
+    Delete: "Delete", Escape: "Escape", Tab: "Tab", F4: "F4", PrintScreen: "PrintScreen",
   };
   const sendKeys = $<HTMLSelectElement>("send-keys");
   sendKeys.value = "";
   sendKeys.onchange = () => {
-    const syms = combos[sendKeys.value] ?? [];
-    if (sid) {
-      for (const s of syms) api.vncKey(sid, true, s).catch(() => {});
-      for (const s of [...syms].reverse()) api.vncKey(sid, false, s).catch(() => {});
-    }
+    const codes = combos[sendKeys.value] ?? [];
+    for (const code of codes) send(true, { code, key: comboKey[code] });
+    for (const code of [...codes].reverse()) send(false, { code, key: comboKey[code] });
     sendKeys.value = "";
     canvas.focus();
   };
@@ -201,7 +233,8 @@ export async function openDesktop(c: Connection, onBack: () => void) {
   };
   window.addEventListener("keydown", onF11);
   $("fullscreen").onclick = toggleFullscreen;
-  const syncClipboard = () => sid && c.sharedClipboard && api.vncClipboardSync(sid).catch(() => {});
+  // shortcut: Zwischenablage über RDP (cliprdr) folgt; bis dahin nur bei VNC.
+  const syncClipboard = () => sid && !rdp && c.sharedClipboard && api.vncClipboardSync(sid).catch(() => {});
   window.addEventListener("focus", syncClipboard);
   canvas.addEventListener("focus", syncClipboard);
 
@@ -210,7 +243,7 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     releaseAll();
     window.removeEventListener("keydown", onF11);
     window.removeEventListener("focus", syncClipboard);
-    if (sid) api.vncClose(sid);
+    if (sid) (rdp ? api.rdpClose(sid) : api.vncClose(sid)).catch(() => {});
     sid = null;
     win.setFullscreen(false);
     $("session").classList.remove("fullscreen");
@@ -247,7 +280,8 @@ export async function openDesktop(c: Connection, onBack: () => void) {
       case 6: {
         const [hx, hy, w, h] = [v.getUint16(1), v.getUint16(3), v.getUint16(5), v.getUint16(7)];
         if (!w || !h) {
-          canvas.style.cursor = "none";
+          // 0×0: unsichtbar; mit hx = 1 der Standardzeiger (RDP).
+          canvas.style.cursor = hx === 1 ? "default" : "none";
           break;
         }
         const c2 = document.createElement("canvas");
@@ -259,10 +293,16 @@ export async function openDesktop(c: Connection, onBack: () => void) {
     }
   };
 
+  const openSession = (trust: string | null) => {
+    if (!rdp) return api.vncOpen(c.id, trust, onFrame);
+    const [w, h] = mode === "fit" ? wanted() : [1920, 1080];
+    return api.rdpOpen(c.id, trust, Math.max(w, 640), Math.max(h, 480), onFrame);
+  };
+
   let trust: string | null = null;
   for (;;) {
     try {
-      sid = await api.vncOpen(c.id, trust, onFrame);
+      sid = await openSession(trust);
       status.textContent = "";
       canvas.focus();
       syncClipboard();
