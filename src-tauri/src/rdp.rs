@@ -1,4 +1,4 @@
-//! RDP über IronRDP: TLS mit Zertifikat-Pinning, NLA (CredSSP/NTLM), Graphics Pipeline (EGFX),
+//! RDP über IronRDP: TLS mit Zertifikat-Pinning, NLA (CredSSP: Kerberos, NTLM als Rückfall), RD-Gateway, Graphics Pipeline (EGFX, H.264 über das System),
 //! Display Control (Auflösung folgt dem Fenster) und Server-Redirection (GNOME-Übergabe nach dem Login).
 //! Bild und Ereignisse gehen über dieselben `vnc::Event`s wie bei VNC, damit die Anzeige gleich bleibt.
 
