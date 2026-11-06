@@ -148,16 +148,15 @@ dialog { border: 0; padding: 0; border-radius: 14px; background: var(--card); co
 dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
 .sheet { width: 576px; padding: 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; font-size: 13px; }
 .sheet h2 { grid-column: span 2; margin: 0; font-size: 15px; text-align: center; }
-.sheet > label, fieldset label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
-.sheet > label > input, .sheet > label > select, .sheet > label > textarea, fieldset input { font-weight: 400; color: var(--text); font-size: 13px; }
+.sheet > label, fieldset label, details.more label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.sheet > label > input, .sheet > label > select, .sheet > label > textarea, fieldset input, details.more input { font-weight: 400; color: var(--text); font-size: 13px; }
 .sheet small { font-weight: 400; color: var(--muted); }
 .hint { display: flex; align-items: baseline; gap: 8px; }
 .pick { display: flex; gap: 8px; }
 .sheet .note { font-size: 12px; font-weight: 400; color: var(--muted); margin: 0; }
 details.more summary { cursor: default; color: var(--accent); font-size: 13px; }
-#advanced .option { margin-top: 8px; }
 label.option.warn:has(input:checked) { border-color: var(--danger); }
-details.more[open] { display: grid; gap: 10px; }
+details.more > :not(summary) { margin-top: 12px; }
 details.more .pair { gap: 16px; }
 #extra-creds label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
 #extra-creds input { font-weight: 400; color: var(--text); font-size: 13px; }
