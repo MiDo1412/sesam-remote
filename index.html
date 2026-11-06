@@ -38,8 +38,18 @@
           <h1 id="session-title"></h1>
           <div id="session-sub" class="sub"></div>
         </div>
+        <div class="grow"></div>
+        <div id="desktop-tools" class="tools" hidden>
+          <div class="segmented dark" role="radiogroup" aria-label="Anzeige">
+            <label title="Entfernte Auflösung folgt der Fenstergrösse"><input type="radio" name="viewMode" value="fit" />An Fenster anpassen</label>
+            <label><input type="radio" name="viewMode" value="scale" />Skalieren</label>
+            <label><input type="radio" name="viewMode" value="native" />1:1</label>
+          </div>
+          <button id="fullscreen" type="button" class="plain" title="Vollbild (F11)">Vollbild</button>
+        </div>
       </header>
       <div id="terminal" class="terminal"></div>
+      <div id="desktop" class="desktop" hidden></div>
       <div id="session-status" role="status" class="status"></div>
     </div>
 

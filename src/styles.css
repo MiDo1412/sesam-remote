@@ -141,3 +141,15 @@ label.option small { margin-top: 2px; }
 .alert h2 { margin: 0; font-size: 15px; }
 .alert p { margin: 0; font-size: 13px; white-space: pre-line; overflow-wrap: anywhere; }
 .alert .pair:has(#ask-cancel[hidden]) { grid-template-columns: 1fr; }
+
+/* ---------- Desktop (VNC) ---------- */
+.grow { flex: 1; }
+.tools { display: flex; align-items: center; gap: 8px; }
+.segmented.dark { background: #1e1e20; }
+.segmented.dark label { color: #c7c7cc; padding: 0 10px; }
+.segmented.dark label:has(input:checked) { background: #48484c; color: #f5f5f7; }
+.desktop { flex: 1; min-height: 0; overflow: hidden; display: grid; place-items: center; background: #0f0f11; }
+.desktop.native { overflow: auto; place-items: start; }
+.desktop canvas { display: block; outline: none; cursor: default; image-rendering: auto; }
+.desktop.native canvas { image-rendering: pixelated; }
+:fullscreen .session-bar, .fullscreen .session-bar { display: none; }

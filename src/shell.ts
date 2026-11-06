@@ -12,6 +12,9 @@ export async function openShell(c: Connection, onBack: () => void) {
   close?.();
   $("library").hidden = true;
   $("session").hidden = false;
+  $("terminal").hidden = false;
+  $("desktop").hidden = true;
+  $("desktop-tools").hidden = true;
   $("session-title").textContent = c.name;
   $("session-sub").textContent = `SSH · ${c.user}@${c.address}:${c.sshPort}`;
   const status = $("session-status");

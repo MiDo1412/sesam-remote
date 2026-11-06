@@ -4,9 +4,12 @@ mod vault;
 mod vnc;
 
 use library::Connection;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use tauri::ipc::Channel;
-use tauri::{Manager, State};
+use std::sync::{Arc, Mutex};
+use tauri::ipc::{Channel, InvokeResponseBody};
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use vault::Kind;
 
 struct LibraryPath(PathBuf);
@@ -69,6 +72,14 @@ fn library_delete(path: State<LibraryPath>, id: String) -> Result<(), String> {
     Ok(())
 }
 
+fn new_sid(id: &str) -> String {
+    format!("{id}-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())
+}
+
+fn find(path: &LibraryPath, id: &str) -> Result<Connection, String> {
+    library::load(&path.0)?.into_iter().find(|c| c.id == id).ok_or_else(|| "Verbindung nicht gefunden".into())
+}
+
 #[tauri::command]
 async fn shell_open(
     path: State<'_, LibraryPath>,
@@ -79,10 +90,7 @@ async fn shell_open(
     trust: Option<String>,
     on_event: Channel<ssh::ShellEvent>,
 ) -> Result<String, String> {
-    let c = library::load(&path.0)?
-        .into_iter()
-        .find(|c| c.id == id)
-        .ok_or("Verbindung nicht gefunden")?;
+    let c = find(&path, &id)?;
     let port = c.ssh_port.ok_or("SSH ist für diese Verbindung ausgeschaltet")?;
     let target = ssh::Target {
         host: &c.address,
@@ -93,7 +101,7 @@ async fn shell_open(
         trusted: trust,
     };
     let shell = ssh::open(target, cols, rows, on_event).await?;
-    let sid = format!("{}-{}", c.id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+    let sid = new_sid(&c.id);
     shells.0.lock().await.insert(sid.clone(), shell);
     Ok(sid)
 }
@@ -116,14 +124,121 @@ async fn shell_close(shells: State<'_, ssh::Shells>, sid: String) -> Result<(), 
     Ok(())
 }
 
+// ---------- VNC ----------
+
+struct Desktop {
+    session: vnc::Session,
+    shared_clipboard: bool,
+    /// Zuletzt abgeglichener Text, damit nichts im Kreis läuft.
+    last_clip: Arc<Mutex<String>>,
+}
+
+#[derive(Default)]
+struct Desktops(Mutex<HashMap<String, Desktop>>);
+
+/// Binärrahmen ans Frontend (Big Endian): 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis.
+fn frame(kind: u8, nums: &[u16], tail: &[u8]) -> InvokeResponseBody {
+    let mut b = Vec::with_capacity(1 + nums.len() * 2 + tail.len());
+    b.push(kind);
+    nums.iter().for_each(|n| b.extend(n.to_be_bytes()));
+    b.extend_from_slice(tail);
+    InvokeResponseBody::Raw(b)
+}
+
+#[tauri::command]
+async fn vnc_open(
+    app: AppHandle,
+    path: State<'_, LibraryPath>,
+    desktops: State<'_, Desktops>,
+    id: String,
+    on_event: Channel<InvokeResponseBody>,
+) -> Result<String, String> {
+    let c = find(&path, &id)?;
+    let port = c.vnc_port.ok_or("Desktop (VNC) ist für diese Verbindung ausgeschaltet")?;
+    let password = vault::get(&c.id, Kind::Password)?;
+    let timeout = std::time::Duration::from_secs(15);
+    let mut stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((c.address.as_str(), port)))
+        .await
+        .map_err(|_| "Zeitüberschreitung beim Verbinden".to_string())?
+        .map_err(|e| format!("Verbindung fehlgeschlagen: {e}"))?;
+    let _ = stream.set_nodelay(true);
+    let init = tokio::time::timeout(timeout, vnc::handshake(&mut stream, &c.user, password.as_deref()))
+        .await
+        .map_err(|_| "Zeitüberschreitung bei der Anmeldung".to_string())??;
+
+    let last_clip = Arc::new(Mutex::new(String::new()));
+    let (clip, share) = (last_clip.clone(), c.shared_clipboard);
+    let session = vnc::Session::start(stream, init, move |e| {
+        let f = match e {
+            vnc::Event::Rect { rect: r, rgba } => frame(0, &[r.x, r.y, r.w, r.h], &rgba),
+            vnc::Event::Resize { width, height } => frame(1, &[width, height], &[]),
+            vnc::Event::Closed(why) => frame(3, &[], why.as_bytes()),
+            vnc::Event::Bell => frame(4, &[], &[]),
+            vnc::Event::Info(t) => frame(5, &[], t.as_bytes()),
+            vnc::Event::Clipboard(t) => {
+                if share && app.clipboard().write_text(t.clone()).is_ok() {
+                    *clip.lock().unwrap() = t;
+                }
+                return true;
+            }
+        };
+        on_event.send(f).is_ok()
+    });
+    let sid = new_sid(&c.id);
+    desktops.0.lock().unwrap().insert(sid.clone(), Desktop { session, shared_clipboard: c.shared_clipboard, last_clip });
+    Ok(sid)
+}
+
+fn with_desktop<T>(d: &Desktops, sid: &str, f: impl FnOnce(&Desktop) -> T) -> Result<T, String> {
+    d.0.lock().unwrap().get(sid).map(f).ok_or_else(|| "Desktop-Sitzung geschlossen".into())
+}
+
+#[tauri::command]
+fn vnc_pointer(desktops: State<Desktops>, sid: String, mask: u8, x: u16, y: u16) -> Result<(), String> {
+    with_desktop(&desktops, &sid, |d| d.session.send(vnc::pointer(mask, x, y)))
+}
+
+#[tauri::command]
+fn vnc_key(desktops: State<Desktops>, sid: String, down: bool, keysym: u32) -> Result<(), String> {
+    with_desktop(&desktops, &sid, |d| d.session.send(vnc::key(down, keysym)))
+}
+
+/// `false`, wenn der Server keine Grössenänderung kann.
+#[tauri::command]
+fn vnc_set_size(desktops: State<Desktops>, sid: String, width: u16, height: u16) -> Result<bool, String> {
+    with_desktop(&desktops, &sid, |d| d.session.set_size(width, height))
+}
+
+/// Lokale Zwischenablage an den Server geben, falls sie sich geändert hat (beim Fokussieren aufgerufen).
+#[tauri::command]
+fn vnc_clipboard_sync(app: AppHandle, desktops: State<Desktops>, sid: String) -> Result<(), String> {
+    let Ok(text) = app.clipboard().read_text() else { return Ok(()) };
+    with_desktop(&desktops, &sid, |d| {
+        let mut last = d.last_clip.lock().unwrap();
+        if d.shared_clipboard && *last != text {
+            d.session.clipboard(&text);
+            *last = text;
+        }
+    })
+}
+
+#[tauri::command]
+fn vnc_close(desktops: State<Desktops>, sid: String) {
+    if let Some(d) = desktops.0.lock().unwrap().remove(&sid) {
+        d.session.close();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             app.manage(LibraryPath(dir.join("library.json")));
             app.manage(ssh::Shells::default());
+            app.manage(Desktops::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -133,7 +248,13 @@ pub fn run() {
             shell_open,
             shell_write,
             shell_resize,
-            shell_close
+            shell_close,
+            vnc_open,
+            vnc_pointer,
+            vnc_key,
+            vnc_set_size,
+            vnc_clipboard_sync,
+            vnc_close
         ])
         .run(tauri::generate_context!())
         .expect("Sesam Remote konnte nicht starten");

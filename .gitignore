@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Feste Testversion für Mike, nicht versionieren
+test-build/

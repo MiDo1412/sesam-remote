@@ -36,4 +36,15 @@ export const api = {
   shellWrite: (sid: string, data: Uint8Array) => invoke<void>("shell_write", { sid, data: Array.from(data) }),
   shellResize: (sid: string, cols: number, rows: number) => invoke<void>("shell_resize", { sid, cols, rows }),
   shellClose: (sid: string) => invoke<void>("shell_close", { sid }),
+  /** Binärrahmen: 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis (siehe lib.rs `frame`). */
+  vncOpen: (id: string, onFrame: (buf: ArrayBuffer) => void) => {
+    const ch = new Channel<ArrayBuffer>();
+    ch.onmessage = onFrame;
+    return invoke<string>("vnc_open", { id, onEvent: ch });
+  },
+  vncPointer: (sid: string, mask: number, x: number, y: number) => invoke<void>("vnc_pointer", { sid, mask, x, y }),
+  vncKey: (sid: string, down: boolean, keysym: number) => invoke<void>("vnc_key", { sid, down, keysym }),
+  vncSetSize: (sid: string, width: number, height: number) => invoke<boolean>("vnc_set_size", { sid, width, height }),
+  vncClipboardSync: (sid: string) => invoke<void>("vnc_clipboard_sync", { sid }),
+  vncClose: (sid: string) => invoke<void>("vnc_close", { sid }),
 };
