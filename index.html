@@ -76,44 +76,38 @@
             <option value="raspberry">Raspberry Pi</option>
           </select>
         </label>
-        <label data-tip="Standard: das letzte Bild des Desktops, gespeichert beim Trennen. Optional ein eigenes Bild.">Bild
+        <label data-tip="Standard: das letzte Bild des Desktops, gespeichert beim Trennen. Optional ein eigenes Bild.">Vorschaubild
           <span class="pick"><span id="thumb-name" class="pick-name"></span><button type="button" id="thumb-pick">Wählen …</button><button type="button" id="thumb-clear" class="plain">Standard</button></span>
         </label>
+
+        <div class="row span"><span>Bei Doppelklick öffnen</span>
+          <div class="segmented" role="radiogroup" aria-label="Bei Doppelklick öffnen">
+            <label><input type="radio" name="defaultView" value="desktop" />Desktop</label>
+            <label><input type="radio" name="defaultView" value="shell" />Shell</label>
+            <label><input type="radio" name="defaultView" value="files" />Dateien</label>
+          </div>
+        </div>
 
         <h3 class="sec span">Anmeldung</h3>
         <label class="span" data-tip="«Eigene» gelten nur für diese Verbindung. Gespeicherte Zugangsdaten verwaltest du unter Einstellungen › Zugangsdaten und kannst sie mehreren Verbindungen zuweisen.">Zugangsdaten
           <select name="credentialId"><option value="">Eigene für diese Verbindung</option></select>
           <span class="hint"><button type="button" class="link" id="cred-adopt" hidden>Als gespeicherte Zugangsdaten sichern …</button></span>
         </label>
-        <label class="own-cred" data-tip="Benutzername auf dem Zielrechner. Bei RDP mit GNOME: der Benutzername aus «grdctl … set-credentials», nicht dein Ubuntu-Konto. Bei macOS: der Kurzname des Kontos.">Benutzername<input name="user" autocomplete="off" /></label>
-        <label class="own-cred" data-tip="Gilt für alle Dienste dieser Verbindung. Wird verschlüsselt im Schlüsselbund des Betriebssystems gespeichert. Leer lassen, um ein gespeichertes Passwort zu behalten.">Passwort
+        <label class="own-cred" data-tip="Benutzername auf dem Zielrechner. Bei macOS: der Kurzname des Kontos. Braucht RDP andere Zugangsdaten (z. B. GNOME), trägst du sie beim Dienst RDP ein.">Benutzername<input name="user" autocomplete="off" /></label>
+        <label class="own-cred" data-tip="Gilt für alle Dienste dieser Verbindung, ausser ein Dienst hat unten ein eigenes Passwort. Wird verschlüsselt im Schlüsselbund des Betriebssystems gespeichert. Leer lassen, um ein gespeichertes Passwort zu behalten.">Passwort
           <input name="password" type="password" autocomplete="new-password" />
           <span class="hint"><small id="pw-hint"></small><button type="button" class="link" id="pw-clear" hidden>Entfernen</button></span>
         </label>
-        <label class="span own-cred" data-tip="Nur für SSH. Mit Schlüssel meldet sich Sesam ohne Passwort an (ed25519, OpenSSH-Format). Ein Passwort oben dient dann als Passphrase des Schlüssels.">SSH-Schlüssel
+        <label class="span own-cred" data-tip="Nur für SSH. Mit Schlüssel meldet sich Sesam ohne Passwort an (ed25519 oder ECDSA, OpenSSH oder PuTTY). Ein Passwort oben dient dann als Passphrase des Schlüssels.">SSH-Schlüssel
           <select name="keyMode">
             <option value="keep">Unverändert</option>
             <option value="none">Keiner, nur Passwort</option>
             <option value="import">Schlüssel importieren …</option>
           </select>
         </label>
-        <label class="span" id="key-row" hidden>Privater Schlüssel (OpenSSH-Format)
+        <label class="span" id="key-row" hidden>Privater Schlüssel: ed25519 oder ECDSA, OpenSSH-Format oder PuTTY (.ppk)
           <textarea name="key" rows="4" class="mono" spellcheck="false"></textarea>
         </label>
-        <details id="extra-creds" class="span">
-          <summary>Abweichende Passwörter …</summary>
-          <p class="note">Nur nötig, wenn ein Dienst ein anderes Passwort hat. Sonst gilt das Passwort oben für alle.</p>
-          <div class="pair">
-            <label data-tip="Nur wenn der VNC-Server ein eigenes VNC-Passwort hat (nicht bei macOS).">VNC-Passwort
-              <input name="vncPassword" type="password" autocomplete="new-password" />
-              <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
-            </label>
-            <label data-tip="Nur wenn RDP ein anderes Passwort braucht als SSH.">RDP-Passwort
-              <input name="rdpPassword" type="password" autocomplete="new-password" />
-              <span class="hint"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
-            </label>
-          </div>
-        </details>
 
         <h3 class="sec span">Dienste</h3>
         <fieldset class="span svc">
@@ -121,8 +115,11 @@
           <label class="switch"><input type="checkbox" name="rdpOn" /> Ein</label>
           <div class="svc-fields">
             <label data-tip="Standard 3389. GNOME-Bildschirmfreigabe einzelner Benutzer: der Port aus der Übersicht des Setup-Scripts (z. B. 3390).">Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
-            <label data-tip="Nur in Windows-Domänen, sonst leer lassen. Beispiel: FIRMA.">Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="leer lassen" /></label>
-            <small class="span note">Bei GNOME (Ubuntu): Benutzername und Passwort aus grdctl, nicht dein Ubuntu-Passwort. Dein Ubuntu-Konto gibst du danach am Anmeldebildschirm ein.</small>
+            <label data-tip="Nur in Windows-Domänen, sonst leer lassen. Beispiel: FIRMA.">Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="meist leer" /></label>
+            <label data-tip="Leer = Passwort oben. Nötig bei GNOME (Ubuntu): das Passwort aus Einstellungen › System › Remote-Desktop, nicht dein Ubuntu-Passwort.">RDP-Passwort
+              <input name="rdpPassword" type="password" autocomplete="new-password" placeholder="wie oben" />
+              <span class="hint"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
+            </label>
             <label class="span" data-tip="Optional. Dieser Ordner erscheint auf dem entfernten Rechner als Laufwerk. Standardmässig aus.">Ordner als Laufwerk freigeben
               <span class="pick">
                 <input name="sharedFolder" class="mono" placeholder="aus" readonly />
@@ -130,6 +127,22 @@
                 <button type="button" id="share-clear" class="plain">Aus</button>
               </span>
             </label>
+            <label class="option span"><span><b>Ton abspielen</b><small>Ton des entfernten Rechners hier hören</small></span><input type="checkbox" name="playAudio" /></label>
+            <details id="rdp-advanced" class="more span">
+              <summary>Erweitert: Kerberos und Gateway</summary>
+            <label class="option"><span><b>NTLM nicht erlauben</b><small>RDP nur mit Kerberos anmelden. Benutzer als benutzer@domain.tld, Server mit Namen statt IP-Adresse.</small></span><input type="checkbox" name="rdpNoNtlm" /></label>
+            <div class="pair">
+              <label>Kerberos-KDC<input name="rdpKdc" class="mono" autocomplete="off" spellcheck="false" placeholder="automatisch per DNS" title="host[:port] oder KDC-Proxy https://…/KdcProxy" /></label>
+              <label>RD-Gateway<input name="rdpGateway" class="mono" autocomplete="off" spellcheck="false" placeholder="aus, sonst host[:port]" /></label>
+            </div>
+            <div class="pair">
+              <label>Gateway-Benutzer<input name="rdpGatewayUser" autocomplete="off" spellcheck="false" placeholder="gleiche wie Verbindung" /></label>
+              <label>Gateway-Passwort
+                <input name="gatewayPassword" type="password" autocomplete="new-password" />
+                <span class="hint"><small id="gw-pw-hint"></small><button type="button" class="link" id="gw-pw-clear" hidden>Entfernen</button></span>
+              </label>
+            </div>
+            </details>
           </div>
         </fieldset>
         <fieldset class="span svc">
@@ -137,6 +150,10 @@
           <label class="switch"><input type="checkbox" name="vncOn" /> Ein</label>
           <div class="svc-fields">
             <label data-tip="Standard 5900. Für macOS-Bildschirmfreigabe und wayvnc.">Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
+            <label data-tip="Nur wenn der VNC-Server ein eigenes Passwort ohne Benutzername hat. Nicht bei macOS und wayvnc: dort gilt Benutzername und Passwort oben.">VNC-Passwort
+              <input name="vncPassword" type="password" autocomplete="new-password" placeholder="keins" />
+              <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
+            </label>
           </div>
         </fieldset>
         <fieldset class="span svc">
@@ -144,24 +161,39 @@
           <label class="switch"><input type="checkbox" name="sshOn" /> Ein</label>
           <div class="svc-fields">
             <label data-tip="Standard 22.">Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
+            <details id="ssh-advanced" class="more span">
+              <summary>Erweitert: Dateiübertragung, Sprungserver, Weiterleitungen</summary>
+                <label class="span">Dateiübertragung
+                  <select name="fileTransfer">
+                    <option value="auto">Automatisch (SFTP, sonst SCP)</option>
+                    <option value="sftp">Nur SFTP</option>
+                    <option value="scp">Nur SCP</option>
+                  </select>
+                </label>
+                <label>SSH-Keepalive (Sekunden)<input name="sshKeepalive" type="number" min="0" max="3600" class="mono" placeholder="0 = aus" /></label>
+                <label class="option"><span><b>SSH-Kompression</b><small>Hilft bei langsamen Leitungen</small></span><input type="checkbox" name="sshCompression" /></label>
+                <label class="span">Sprungserver (ProxyJump)
+                  <select name="jumpHost"><option value="">Keiner, direkt verbinden</option></select>
+                </label>
+                <label class="option"><span><b>SSH-Agent verwenden</b><small>Zuerst die Schlüssel aus Pageant oder dem OpenSSH-Agenten von Windows probieren</small></span><input type="checkbox" name="sshAgent" /></label>
+                <label class="option warn"><span><b>Agent an den Server weiterreichen</b><small>Der Server kann deine Agent-Schlüssel benutzen, solange die Shell offen ist. Nur bei vertrauenswürdigen Servern.</small></span><input type="checkbox" name="agentForward" /></label>
+                <label class="span">Portweiterleitungen (aktiv, solange eine Shell offen ist)
+                  <textarea name="forwards" rows="3" class="mono" spellcheck="false" placeholder="L8080 localhost:80&#10;R9000 localhost:3000&#10;D1080"></textarea>
+                  <small class="note">Je Zeile eine Regel: L = lokaler Port über den Server, R = Server-Port hierher, D = SOCKS5-Proxy. Lokal nur auf 127.0.0.1.</small>
+                </label>
+                <label class="option warn"><span><b>Veraltete Algorithmen erlauben</b><small>Für alte Server: SHA-1, CBC, 3DES, ssh-rsa. Schwächer, nur wenn nötig.</small></span><input type="checkbox" name="sshLegacy" /></label>
+            </details>
           </div>
         </fieldset>
 
-        <h3 class="sec span">Anzeige</h3>
-        <div class="row" id="desktop-protocol-row"><span>Desktop über</span>
-          <div class="segmented" role="radiogroup" aria-label="Desktop über">
+        <h3 class="sec span">Desktop</h3>
+        <div class="row span" id="desktop-protocol-row"><span>Desktop öffnen mit</span>
+          <div class="segmented" role="radiogroup" aria-label="Desktop öffnen mit">
             <label><input type="radio" name="desktopProtocol" value="rdp" />RDP</label>
             <label><input type="radio" name="desktopProtocol" value="vnc" />VNC</label>
           </div>
         </div>
-        <div class="row"><span>Bei Doppelklick öffnen</span>
-          <div class="segmented" role="radiogroup" aria-label="Bei Doppelklick öffnen">
-            <label><input type="radio" name="defaultView" value="desktop" />Desktop</label>
-            <label><input type="radio" name="defaultView" value="shell" />Shell</label>
-            <label><input type="radio" name="defaultView" value="files" />Dateien</label>
-          </div>
-        </div>
-        <div class="row"><span>Ausrichtung</span>
+        <div class="row span"><span>Ausrichtung</span>
           <div class="segmented" role="radiogroup" aria-label="Ausrichtung">
             <label><input type="radio" name="orientation" value="landscape" />Querformat</label>
             <label><input type="radio" name="orientation" value="portrait" />Hochformat</label>
@@ -169,23 +201,9 @@
         </div>
         <label class="option"><span><b>An Fenster anpassen</b><small>Die Auflösung des entfernten Rechners folgt der Fenstergrösse</small></span><input type="checkbox" name="fitToWindow" /></label>
         <label class="option"><span><b>Gemeinsame Zwischenablage</b><small>Text, Bilder und Dateien hier kopieren, dort einfügen</small></span><input type="checkbox" name="sharedClipboard" /></label>
-        <label class="option"><span><b>Ton abspielen</b><small>Ton des entfernten Rechners hier hören (RDP)</small></span><input type="checkbox" name="playAudio" /></label>
-
-        <details id="advanced" class="span">
-          <summary>Erweitert</summary>
+        <details id="advanced" class="more span">
+          <summary>Erweitert: Zertifikat</summary>
           <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
-          <label class="option"><span><b>NTLM nicht erlauben</b><small>RDP nur mit Kerberos anmelden. Benutzer als benutzer@domain.tld, Server mit Namen statt IP-Adresse.</small></span><input type="checkbox" name="rdpNoNtlm" /></label>
-          <div class="pair">
-            <label>Kerberos-KDC<input name="rdpKdc" class="mono" autocomplete="off" spellcheck="false" placeholder="automatisch per DNS" title="host[:port] oder KDC-Proxy https://…/KdcProxy" /></label>
-            <label>RD-Gateway<input name="rdpGateway" class="mono" autocomplete="off" spellcheck="false" placeholder="aus, sonst host[:port]" /></label>
-          </div>
-          <div class="pair">
-            <label>Gateway-Benutzer<input name="rdpGatewayUser" autocomplete="off" spellcheck="false" placeholder="gleiche wie Verbindung" /></label>
-            <label>Gateway-Passwort
-              <input name="gatewayPassword" type="password" autocomplete="new-password" />
-              <span class="hint"><small id="gw-pw-hint"></small><button type="button" class="link" id="gw-pw-clear" hidden>Entfernen</button></span>
-            </label>
-          </div>
         </details>
 
         <p id="editor-error" class="error span" role="alert"></p>

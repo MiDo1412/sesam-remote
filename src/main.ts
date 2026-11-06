@@ -53,8 +53,12 @@ document.getElementById("cred-adopt")!.onclick = async () => {
     reload();
   }
 };
-const osMenu = enhanceSelect((document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("os") as HTMLSelectElement);
-const keyModeMenu = enhanceSelect((document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("keyMode") as HTMLSelectElement);
+const formEls = (document.getElementById("editor-form") as HTMLFormElement).elements;
+const keyModeMenu = enhanceSelect(formEls.namedItem("keyMode") as HTMLSelectElement);
+const fileTransferMenu = enhanceSelect(formEls.namedItem("fileTransfer") as HTMLSelectElement);
+const jumpHost = formEls.namedItem("jumpHost") as HTMLSelectElement;
+const jumpHostMenu = enhanceSelect(jumpHost);
+const osMenu = enhanceSelect(formEls.namedItem("os") as HTMLSelectElement);
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -287,6 +291,14 @@ const blank = (): Connection => ({
   hasRdpPassword: false,
   hasGatewayPassword: false,
   hasKey: false,
+  fileTransfer: "auto",
+  sshLegacy: false,
+  sshKeepalive: 0,
+  sshCompression: false,
+  forwards: [],
+  jumpHost: "",
+  sshAgent: false,
+  agentForward: false,
   lastUsed: null,
 });
 
@@ -314,9 +326,8 @@ function edit(c: Connection | null, asNew = false) {
   f.password.value = "";
   f.vncPassword.value = "";
   clearing.clear();
-  showPwHint("vnc-pw", editing.hasVncPassword, "Leer = Passwort oben.");
+  showPwHint("vnc-pw", editing.hasVncPassword, "Nur bei klassischem VNC ohne Benutzername.");
   showPwHint("rdp-pw", editing.hasRdpPassword, "Leer = Passwort oben.");
-  ($("extra-creds") as HTMLDetailsElement).open = editing.hasVncPassword || editing.hasRdpPassword;
   syncDesktopRow();
   showPwHint("pw", editing.hasPassword, "");
   f.sharedClipboard.checked = editing.sharedClipboard;
@@ -335,8 +346,33 @@ function edit(c: Connection | null, asNew = false) {
   f.rdpGatewayUser.value = editing.rdpGatewayUser;
   f.gatewayPassword.value = "";
   showPwHint("gw-pw", editing.hasGatewayPassword, "Nur mit eigenem Gateway-Benutzer.");
-  ($("advanced") as HTMLDetailsElement).open =
-    editing.skipCertCheck || editing.rdpNoNtlm || !!editing.rdpKdc || !!editing.rdpGateway;
+  ($("rdp-advanced") as HTMLDetailsElement).open = editing.rdpNoNtlm || !!editing.rdpKdc || !!editing.rdpGateway;
+  ($("advanced") as HTMLDetailsElement).open = editing.skipCertCheck;
+  f.fileTransfer.value = editing.fileTransfer ?? "auto";
+  fileTransferMenu.sync();
+  f.sshKeepalive.value = editing.sshKeepalive ? String(editing.sshKeepalive) : "";
+  f.sshCompression.checked = editing.sshCompression;
+  f.sshLegacy.checked = editing.sshLegacy;
+  f.forwards.value = (editing.forwards ?? []).join("\n");
+  f.sshAgent.checked = editing.sshAgent;
+  f.agentForward.checked = editing.agentForward;
+  // Sprungserver: andere Verbindungen mit SSH.
+  const self = editing.id;
+  jumpHost.replaceChildren(
+    el("option", { value: "" }, "Keiner, direkt verbinden"),
+    ...items.filter((x) => x.id !== self && x.sshPort).map((x) => el("option", { value: x.id }, `${x.name} (${x.address})`)),
+  );
+  jumpHost.value = editing.jumpHost ?? "";
+  jumpHostMenu.sync();
+  // Aufgeklappt, sobald etwas vom Standard abweicht.
+  ($("ssh-advanced") as HTMLDetailsElement).open =
+    f.fileTransfer.value !== "auto" ||
+    !!editing.sshKeepalive ||
+    editing.sshCompression ||
+    editing.sshLegacy ||
+    f.forwards.value !== "" ||
+    jumpHost.value !== "" ||
+    editing.sshAgent;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -428,6 +464,17 @@ form.onsubmit = async (ev) => {
     rdpKdc: s("rdpKdc"),
     rdpGateway: s("rdpGateway"),
     rdpGatewayUser: s("rdpGatewayUser"),
+    fileTransfer: (s("fileTransfer") || "auto") as Connection["fileTransfer"],
+    sshKeepalive: Math.max(0, Math.min(3600, Math.round(Number(s("sshKeepalive")) || 0))),
+    sshCompression: fd.get("sshCompression") !== null,
+    sshLegacy: fd.get("sshLegacy") !== null,
+    forwards: s("forwards")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean),
+    jumpHost: s("jumpHost"),
+    sshAgent: fd.get("sshAgent") !== null,
+    agentForward: fd.get("agentForward") !== null,
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],

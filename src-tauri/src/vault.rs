@@ -15,7 +15,7 @@ pub enum Kind {
     RdpPassword,
     /// Passwort für das RD-Gateway (falls eigener Gateway-Benutzer).
     GatewayPassword,
-    /// Privater SSH-Schlüssel im OpenSSH-Format, nur ed25519 (Windows erlaubt höchstens 2560 Byte pro Eintrag).
+    /// Privater SSH-Schlüssel (OpenSSH oder PuTTY .ppk), ed25519 oder ECDSA (Windows erlaubt höchstens 2560 Byte pro Eintrag).
     SshKey,
 }
 

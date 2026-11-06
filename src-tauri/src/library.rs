@@ -53,6 +53,21 @@ pub struct Connection {
     pub has_rdp_password: bool,
     pub has_gateway_password: bool,
     pub has_key: bool,
+    /// Dateiübertragung: "auto" (SFTP, sonst SCP) | "sftp" | "scp".
+    pub file_transfer: String,
+    /// SSH: veraltete Algorithmen erlauben (SHA-1, CBC, 3DES, ssh-rsa).
+    pub ssh_legacy: bool,
+    /// SSH-Keepalive in Sekunden, 0 = aus.
+    pub ssh_keepalive: u32,
+    pub ssh_compression: bool,
+    /// Portweiterleitungen der Shell, je eine Regel wie `L8080 localhost:80`, `R9000 localhost:3000`, `D1080`.
+    pub forwards: Vec<String>,
+    /// Sprungserver (ProxyJump): ID einer anderen Verbindung der Bibliothek, leer = direkt.
+    pub jump_host: String,
+    /// Zuerst mit dem SSH-Agenten anmelden (Pageant oder Windows-OpenSSH-Agent).
+    pub ssh_agent: bool,
+    /// Agenten an den Server weiterreichen (nur mit `ssh_agent`).
+    pub agent_forward: bool,
     pub last_used: Option<String>,
 }
 
@@ -88,6 +103,14 @@ impl Default for Connection {
             has_rdp_password: false,
             has_gateway_password: false,
             has_key: false,
+            file_transfer: "auto".into(),
+            ssh_legacy: false,
+            ssh_keepalive: 0,
+            ssh_compression: false,
+            forwards: Vec::new(),
+            jump_host: String::new(),
+            ssh_agent: false,
+            agent_forward: false,
             last_used: None,
         }
     }
@@ -112,6 +135,18 @@ impl Connection {
         }
         if !["vnc", "rdp"].contains(&self.desktop_protocol.as_str()) {
             return Err("Unbekanntes Desktop-Protokoll".into());
+        }
+        if !["auto", "sftp", "scp"].contains(&self.file_transfer.as_str()) {
+            return Err("Unbekannte Dateiübertragung".into());
+        }
+        if self.forwards.len() > 32 {
+            return Err("Höchstens 32 Weiterleitungen".into());
+        }
+        for f in &self.forwards {
+            crate::forward::parse(f)?;
+        }
+        if self.jump_host == self.id || !self.jump_host.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err("Ungültiger Sprungserver".into());
         }
         if !["landscape", "portrait"].contains(&self.orientation.as_str()) {
             return Err("Unbekannte Ausrichtung".into());
@@ -192,6 +227,11 @@ mod tests {
         assert!(Connection { rdp_kdc: "ftp://dc".into(), ..ok.clone() }.validate().is_err());
         assert!(Connection { rdp_gateway: "https://gw/x".into(), ..ok.clone() }.validate().is_err());
         assert!(Connection { rdp_kdc: "https://gw.contoso.ch/KdcProxy".into(), rdp_gateway: "gw.contoso.ch:443".into(), ..ok.clone() }.validate().is_ok());
+        assert!(Connection { file_transfer: "ftp".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { forwards: vec!["L8080 localhost:80".into(), "D1080".into()], ..ok.clone() }.validate().is_ok());
+        assert!(Connection { forwards: vec!["L8080".into()], ..ok.clone() }.validate().is_err());
+        assert!(Connection { jump_host: "x".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { jump_host: "bastion-1".into(), ..ok.clone() }.validate().is_ok());
         assert!(Connection { default_view: "x".into(), ..ok }.validate().is_err());
     }
 
@@ -200,5 +240,6 @@ mod tests {
         let c: Connection = serde_json::from_str(r#"{"id":"a","name":"n","address":"h"}"#).unwrap();
         assert_eq!(c.ssh_port, Some(22));
         assert_eq!((c.rdp_port, c.desktop_protocol.as_str()), (None, "vnc"));
+        assert_eq!(c.file_transfer, "auto");
     }
 }

@@ -154,10 +154,11 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
 .hint { display: flex; align-items: baseline; gap: 8px; }
 .pick { display: flex; gap: 8px; }
 .sheet .note { font-size: 12px; font-weight: 400; color: var(--muted); margin: 0; }
-#extra-creds summary, #advanced summary { cursor: default; color: var(--accent); font-size: 13px; }
+details.more summary { cursor: default; color: var(--accent); font-size: 13px; }
 #advanced .option { margin-top: 8px; }
 label.option.warn:has(input:checked) { border-color: var(--danger); }
-#extra-creds .pair { gap: 16px; margin-top: 8px; }
+details.more[open] { display: grid; gap: 10px; }
+details.more .pair { gap: 16px; }
 #extra-creds label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
 #extra-creds input { font-weight: 400; color: var(--text); font-size: 13px; }
 #extra-creds .note { margin-top: 6px; }
@@ -414,6 +415,6 @@ fieldset.svc legend { float: none; padding: 0; }
 .icon.txt { background: #6b8e7d; }
 
 /* ---------- Zugangsdaten ---------- */
-.sheet.uses-cred .own-cred, .sheet.uses-cred #extra-creds, .sheet.uses-cred #key-row { display: none; }
+.sheet.uses-cred .own-cred, .sheet.uses-cred #key-row { display: none; }
 .row-actions { display: flex; gap: 12px; }
 #cred-form { width: 480px; }

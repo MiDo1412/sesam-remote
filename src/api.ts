@@ -35,6 +35,21 @@ export interface Connection {
   hasRdpPassword: boolean;
   hasGatewayPassword: boolean;
   hasKey: boolean;
+  /** Dateiübertragung: SFTP, sonst SCP ("auto") oder fest. */
+  fileTransfer: "auto" | "sftp" | "scp";
+  /** Veraltete SSH-Algorithmen (SHA-1, CBC, 3DES, ssh-rsa) zusätzlich anbieten. */
+  sshLegacy: boolean;
+  /** Sekunden, 0 = aus */
+  sshKeepalive: number;
+  sshCompression: boolean;
+  /** Portweiterleitungen der Shell: «L8080 localhost:80», «R9000 localhost:3000», «D1080» */
+  forwards: string[];
+  /** Sprungserver: ID einer anderen Verbindung, "" = direkt */
+  jumpHost: string;
+  /** Zuerst mit dem SSH-Agenten anmelden (Pageant / Windows-OpenSSH-Agent). */
+  sshAgent: boolean;
+  /** Agent an den Server weiterreichen (nur Shell, nur mit sshAgent). */
+  agentForward: boolean;
   lastUsed: string | null;
 }
 
@@ -120,7 +135,8 @@ export const api = {
     invoke<void>("rdp_set_monitors", { sid, monitors }),
   rdpSetSize: (sid: string, width: number, height: number) => invoke<void>("rdp_set_size", { sid, width, height }),
   rdpClose: (sid: string) => invoke<void>("rdp_close", { sid }),
-  sftpOpen: (id: string, trust: string | null) => invoke<string>("sftp_open", { id, trust }),
+  /** scp: Server ohne SFTP, Übertragung über SCP (eingeschränkt). */
+  sftpOpen: (id: string, trust: string | null) => invoke<{ sid: string; scp: boolean }>("sftp_open", { id, trust }),
   sftpList: (sid: string, path: string) => invoke<Listing>("sftp_list", { sid, path }),
   sftpMkdir: (sid: string, dir: string, name: string) => invoke<string>("sftp_mkdir", { sid, dir, name }),
   sftpRename: (sid: string, path: string, name: string) => invoke<string>("sftp_rename", { sid, path, name }),
