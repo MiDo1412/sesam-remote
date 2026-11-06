@@ -126,8 +126,13 @@ die Anzeige (`desktop.ts`) ist für beide Protokolle dieselbe.
   und Tasten ohne Scancode als Unicode-Ereignisse.
 - **Passwort:** eigenes RDP-Passwort im Tresor, sonst das Passwort des Benutzers; Domäne optional.
 
-Noch offen: Zwischenablage (`ironrdp-cliprdr`), Audio (`ironrdp-rdpsnd`), Laufwerke (`ironrdp-rdpdr`),
-mehrere Monitore, H.264 (OpenH264). Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
+- **Zwischenablage:** `ironrdp-cliprdr` mit dem Windows-Backend aus `ironrdp-cliprdr-native` (Text, Bilder,
+  Dateien mit verzögerter Bereitstellung). Es braucht ein Fenster mit Nachrichtenschleife und lebt darum
+  auf dem Tauri-Hauptthread, je Sitzung eines. macOS hat noch kein Backend.
+- **Ton:** `ironrdp-rdpsnd` statisch und dynamisch (`AUDIO_PLAYBACK_DVC`), Ausgabe über cpal, nur PCM
+  (ohne Opus/AAC, damit keine C-Bibliotheken nötig sind).
+
+Noch offen: Laufwerke (`ironrdp-rdpdr`), mehrere Monitore, H.264 (OpenH264), Zwischenablage unter macOS. Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
 braucht aber den Server aus dem IronRDP-Git-Repository (die veröffentlichte Version passt nicht zu den
 Client-Crates).
 
