@@ -11,7 +11,7 @@ Frontend (TS)                       Rust-Kern
 main.ts   Bibliothek, Sheet  ──►  library_*  ─► library.rs ─► library.json (ohne Geheimnisse)
                                                └► vault.rs  ─► OS-Schlüsselbund
 shell.ts  xterm.js          ◄──►  shell_*    ─► ssh.rs (russh)
-(später)  canvas            ◄──►  vnc_*      ─► vnc/ (RFB)
+desktop.ts canvas           ◄──►  vnc_*      ─► vnc/ (RFB)
 (später)  Dateien 2-spaltig ◄──►  sftp_*     ─► sftp.rs (russh-sftp)
 ```
 
@@ -48,7 +48,21 @@ Text: VNC `ClientCutText`/`ServerCutText`, mit Extended Clipboard (Pseudo-Encodi
 Austauschverzeichnis, nur wenn SSH aktiv ist. Lokale Zwischenablage über
 `tauri-plugin-clipboard-manager`.
 
-### vnc (Spike, Entscheid siehe unten)
+### vnc (Meilenstein 2)
+Eigener RFB-Client in `src-tauri/src/vnc/`:
+- `mod.rs`: Handshake (3.3/3.7/3.8, macOS 003.889), Sitzung mit Lese- und Schreib-Task.
+- `auth.rs`: VNC-Passwort (Typ 2, DES) und Apple (Typ 30, DH + AES-128 + MD5).
+- `decode.rs`: Bildspeicher RGBA, Raw, CopyRect, ZRLE (ein zlib-Strom pro Verbindung).
+- `clipboard.rs`: Extended Clipboard (UTF-8), Rückfall auf Latin-1.
+
+Pixelformat fest 32 bpp/24 Bit, R/G/B-Shift 0/8/16: im Speicher R,G,B,X, also fast schon RGBA.
+Geänderte Rechtecke gehen als Binärrahmen über `ipc::Channel` ans Frontend
+(`0` Rechteck, `1` Grösse, `3` Ende, `4` Glocke, `5` Hinweis) und werden mit `putImageData` gezeichnet.
+Die Zwischenablage gleicht der Rust-Kern direkt mit dem Betriebssystem ab
+(`tauri-plugin-clipboard-manager`): Server → lokal sofort, lokal → Server beim Fokussieren.
+
+Noch offen: VeNCrypt/TLS (wayvnc mit Anmeldung), Cursor-Pseudo-Encoding (lokaler Mauszeiger),
+Tight/JPEG, VNC durch einen SSH-Tunnel, eigenes VNC-Passwort neben dem Kontopasswort.
 
 ## VNC: Crate-Entscheid
 
@@ -66,13 +80,13 @@ Anforderungen, die über «Bild zeigen» hinausgehen:
 Es fehlen Apple-Auth (Typ 30), SetDesktopSize und Extended Clipboard; die Auth- und
 Nachrichten-Typen sind nicht erweiterbar, wir müssten also forken.
 
-**Entscheid (Vorschlag): eigene RFB-Implementierung im Modul `vnc/`**, angelehnt an
+**Entscheid: eigene RFB-Implementierung im Modul `vnc/`**, angelehnt an
 RFC 6143. Der Protokollkern (Handshake, Auth, Nachrichten, Raw/CopyRect/ZRLE) ist
 überschaubar (~1500 Zeilen), und genau die Teile, die wir brauchen (Typ 30,
 ExtendedDesktopSize, Extended Clipboard), müssten wir bei `vnc-rs` ohnehin selbst bauen.
 `vnc-rs` dient als Referenz für die Dekoder.
 
-Spike-Plan (nächster Meilenstein):
+Ursprünglicher Spike-Plan:
 1. Handshake + VNC-Auth (Typ 2, DES) + Raw/CopyRect gegen wayvnc, Bild in `<canvas>`.
 2. Apple-Auth Typ 30 gegen macOS (DH-Schlüsseltausch, AES-128-ECB über MD5 des Schlüssels).
 3. ZRLE + Cursor-Pseudo-Encoding, dann ExtendedDesktopSize/SetDesktopSize.

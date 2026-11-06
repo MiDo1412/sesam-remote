@@ -18,15 +18,16 @@ SFTP-Dateitransfer in einer Bibliothek. Lizenz: GPL-3.0-or-later (siehe `LICENSE
 - **Gemeinsame Zwischenablage:** Text über VNC (Extended Clipboard für UTF-8), Dateien und
   Bilder über SFTP, wenn SSH vorhanden ist.
 
-## Stand (Meilenstein 1)
+## Stand
 
 | Bereich | Stand |
 |---|---|
 | Bibliothek + Tresor | läuft, mit Tests |
 | Verbindung anlegen/bearbeiten (Sheet) | läuft |
-| SSH-Shell | läuft (Passwort oder Schlüssel aus dem Tresor) |
-| VNC | geplant, siehe `docs/architektur.md` |
-| SFTP, Zwischenablage | offen |
+| SSH-Shell | läuft (Passwort oder ed25519-Schlüssel aus dem Tresor, Fingerabdruck bestätigen) |
+| VNC | Protokoll mit Tests fertig, Anzeige im Fenster; gegen echte Hosts noch ungetestet |
+| Zwischenablage (Text über VNC) | eingebaut, ungetestet |
+| SFTP, Dateien über die Zwischenablage | offen |
 
 ## Entwickeln
 
