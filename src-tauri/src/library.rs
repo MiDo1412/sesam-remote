@@ -28,6 +28,8 @@ pub struct Connection {
     pub shared_clipboard: bool,
     /// Ton des entfernten Rechners abspielen (RDP).
     pub play_audio: bool,
+    /// Lokaler Ordner, der per RDP als Laufwerk erscheint (leer = aus).
+    pub shared_folder: String,
     pub fit_to_window: bool,
     /// Nur Merker für die Anzeige; das Geheimnis selbst liegt im Tresor.
     pub has_password: bool,
@@ -54,6 +56,7 @@ impl Default for Connection {
             orientation: "landscape".into(),
             shared_clipboard: true,
             play_audio: true,
+            shared_folder: String::new(),
             fit_to_window: true,
             has_password: false,
             has_vnc_password: false,

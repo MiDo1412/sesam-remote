@@ -96,6 +96,13 @@
             <input name="rdpPassword" type="password" autocomplete="new-password" />
           </label>
           <span class="hint span"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
+          <label class="span">Ordner als Laufwerk freigeben
+            <span class="pick">
+              <input name="sharedFolder" class="mono" placeholder="aus" readonly />
+              <button type="button" id="share-pick">Wählen …</button>
+              <button type="button" id="share-clear" class="plain">Aus</button>
+            </span>
+          </label>
         </fieldset>
         <fieldset>
           <legend>Shell und Dateien <small>SSH mit SFTP</small> <button type="button" class="help-btn" data-help="ssh" aria-label="Hilfe zu SSH">?</button></legend>

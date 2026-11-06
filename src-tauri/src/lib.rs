@@ -504,6 +504,7 @@ async fn rdp_open(
         height: height.clamp(200, 8192),
         clipboard: None,
         audio: c.play_audio,
+        share: (!c.shared_folder.trim().is_empty()).then(|| PathBuf::from(c.shared_folder.trim())),
     };
     let sid = new_sid(&c.id);
     let (tx, rx) = rdp::channel();
@@ -573,6 +574,7 @@ fn rdp_close(app: AppHandle, sessions: State<RdpSessions>, sid: String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             use tauri::menu::{MenuBuilder, SubmenuBuilder};
             // IDs wie in src/help.ts.

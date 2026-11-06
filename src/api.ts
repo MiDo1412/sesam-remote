@@ -15,6 +15,7 @@ export interface Connection {
   orientation: "landscape" | "portrait";
   sharedClipboard: boolean;
   playAudio: boolean;
+  sharedFolder: string;
   fitToWindow: boolean;
   hasPassword: boolean;
   hasVncPassword: boolean;

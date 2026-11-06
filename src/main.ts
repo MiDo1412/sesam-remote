@@ -5,6 +5,7 @@ import { openFiles } from "./files";
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
 import { listen } from "@tauri-apps/api/event";
+import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -134,6 +135,7 @@ const blank = (): Connection => ({
   orientation: "landscape",
   sharedClipboard: true,
   playAudio: true,
+  sharedFolder: "",
   fitToWindow: true,
   hasPassword: false,
   hasVncPassword: false,
@@ -171,6 +173,7 @@ function edit(c: Connection | null) {
   showPwHint("pw", editing.hasPassword, "");
   f.sharedClipboard.checked = editing.sharedClipboard;
   f.playAudio.checked = editing.playAudio;
+  f.sharedFolder.value = editing.sharedFolder;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -202,6 +205,13 @@ function syncDesktopRow() {
   $("desktop-protocol-row").hidden = !(on("vncOn") && on("rdpOn"));
 }
 for (const n of ["vncOn", "rdpOn"]) (form.elements.namedItem(n) as HTMLInputElement).addEventListener("change", syncDesktopRow);
+
+const sharedFolder = form.elements.namedItem("sharedFolder") as HTMLInputElement;
+$("share-pick").onclick = async () => {
+  const dir = await pickFolder({ directory: true, title: "Ordner für das entfernte Laufwerk" });
+  if (typeof dir === "string") sharedFolder.value = dir;
+};
+$("share-clear").onclick = () => (sharedFolder.value = "");
 
 const keyMode = form.elements.namedItem("keyMode") as HTMLSelectElement;
 keyMode.addEventListener("change", () => ($("key-row").hidden = keyMode.value !== "import"));
@@ -238,6 +248,7 @@ form.onsubmit = async (ev) => {
     user: s("user"),
     sharedClipboard: fd.get("sharedClipboard") !== null,
     playAudio: fd.get("playAudio") !== null,
+    sharedFolder: s("sharedFolder"),
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],

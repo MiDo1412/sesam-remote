@@ -41,6 +41,8 @@ pub struct Target {
     pub clipboard: Option<ClipFactory>,
     /// Ton des entfernten Rechners hier abspielen.
     pub audio: bool,
+    /// Lokaler Ordner, der auf dem Server als Laufwerk erscheint.
+    pub share: Option<std::path::PathBuf>,
 }
 
 pub type ClipFactory = Arc<Mutex<Box<dyn CliprdrBackendFactory + Send>>>;
@@ -353,6 +355,9 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     if let Some(f) = &t.clipboard {
         connector = connector.with_static_channel(CliprdrClient::new(f.lock().unwrap().build_cliprdr_backend()));
     }
+    if let Some(dir) = &t.share {
+        connector = connector.with_static_channel(drive_channel(dir)?);
+    }
 
     let mut framed = TokioFramed::new(tcp);
     let should_upgrade = ironrdp_tokio::connect_begin(&mut framed, &mut connector).await.map_err(err)?;
@@ -389,6 +394,36 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     .await
     .map_err(err)?;
     Ok((outcome, framed))
+}
+
+/// Name des Laufwerks auf dem Server: Ordnername, nur einfache Zeichen.
+pub fn share_name(dir: &std::path::Path) -> String {
+    let n: String = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().chars().filter(|c| c.is_alphanumeric() || " -_".contains(*c)).take(32).collect())
+        .unwrap_or_default();
+    if n.trim().is_empty() { "Sesam".into() } else { n }
+}
+
+/// Neues rdpdr-Backend pro Verbindung (Handles gehören zur Sitzung).
+fn drive_channel(dir: &std::path::Path) -> Result<ironrdp_rdpdr::Rdpdr, String> {
+    use ironrdp_rdpdr::backend::RdpdrBackendFactory;
+    if !dir.is_absolute() || !dir.is_dir() {
+        return Err(format!("Freigegebener Ordner nicht gefunden: {}", dir.display()));
+    }
+    let name = share_name(dir);
+    #[cfg(windows)]
+    let factory = {
+        let drive = ironrdp_rdpdr_native::RedirectedDrive::new(ironrdp_rdpdr_native::FIRST_NAMED_DRIVE_DEVICE_ID, name, dir, false)
+            .map_err(|e| format!("Freigabe: {e}"))?;
+        ironrdp_rdpdr_native::WindowsRdpdrBackendFactory::new(drive)
+    };
+    #[cfg(not(windows))]
+    let factory = ironrdp_rdpdr_native::backend::NixRdpdrBackendFactory::new(dir.to_string_lossy().into_owned()).with_drive(1, name);
+    let product = factory.build_rdpdr_backend().map_err(|e| format!("Freigabe: {e}"))?;
+    let (backend, drives) = product.into_parts();
+    let drives = drives.iter().map(|d| (d.device_id(), d.name().to_string())).collect();
+    Ok(ironrdp_rdpdr::Rdpdr::new(backend, "Sesam Remote".into()).with_drives(Some(drives)))
 }
 
 fn err(e: impl std::fmt::Display) -> String {
@@ -703,6 +738,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn share_names_are_plain() {
+        assert_eq!(share_name(std::path::Path::new("C:/Users/mike/Austausch")), "Austausch");
+        assert_eq!(share_name(std::path::Path::new("/tmp/a:b*c")), "abc");
+        assert_eq!(share_name(std::path::Path::new("/")), "Sesam");
+        let dir = std::env::temp_dir();
+        assert!(drive_channel(&dir).is_ok());
+        assert!(drive_channel(std::path::Path::new("relativ")).is_err());
+    }
+
+    #[test]
     fn scancodes() {
         assert_eq!(scancode("KeyA"), Some(0x1E));
         assert_eq!(scancode("KeyZ"), Some(0x2C));
@@ -738,6 +783,7 @@ mod tests {
             height: 600,
             clipboard: None,
             audio: false,
+            share: None,
         };
         let mut hop = Hop::default();
         let pw: Vec<u8> = "einmal".encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
