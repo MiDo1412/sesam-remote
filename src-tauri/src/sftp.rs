@@ -11,8 +11,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub struct Sftp {
     pub s: SftpSession,
-    /// Hält die SSH-Verbindung offen.
-    _ssh: Handle<Client>,
+    /// Hält die SSH-Verbindung offen (in Tests ohne SSH).
+    _ssh: Option<Handle<Client>>,
 }
 
 fn err(e: impl std::fmt::Display) -> String {
@@ -24,7 +24,7 @@ pub async fn open(t: Target<'_>) -> Result<Sftp, String> {
     let ch = h.channel_open_session().await.map_err(err)?;
     ch.request_subsystem(true, "sftp").await.map_err(err)?;
     let s = SftpSession::new(ch.into_stream()).await.map_err(|e| format!("SFTP nicht verfügbar: {e}"))?;
-    Ok(Sftp { s, _ssh: h })
+    Ok(Sftp { s, _ssh: Some(h) })
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -285,6 +285,157 @@ pub async fn download(sftp: &Sftp, remote: &str, local_dir: &Path, report: impl 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use russh_sftp::protocol::{Attrs, Data, File, FileAttributes, Handle as H, Name, OpenFlags, Status, StatusCode, Version};
+    use std::collections::{BTreeMap, HashSet};
+    use std::sync::{Arc, Mutex};
+
+    /// Kleiner SFTP-Server im Arbeitsspeicher als Gegenstelle für Hoch-/Herunterladen.
+    #[derive(Default)]
+    struct MemFs {
+        /// Pfad → `None` = Ordner, `Some(daten)` = Datei.
+        nodes: BTreeMap<String, Option<Vec<u8>>>,
+    }
+
+    struct Server {
+        fs: Arc<Mutex<MemFs>>,
+        listed: HashSet<String>,
+    }
+
+    fn ok(id: u32) -> Status {
+        Status { id, status_code: StatusCode::Ok, error_message: "Ok".into(), language_tag: "en-US".into() }
+    }
+
+    fn attrs(node: &Option<Vec<u8>>) -> FileAttributes {
+        let mut a = FileAttributes::empty();
+        match node {
+            None => a.set_dir(true),
+            Some(d) => {
+                a.set_regular(true);
+                a.size = Some(d.len() as u64);
+            }
+        }
+        a
+    }
+
+    impl russh_sftp::server::Handler for Server {
+        type Error = StatusCode;
+        fn unimplemented(&self) -> StatusCode {
+            StatusCode::OpUnsupported
+        }
+        async fn init(&mut self, _: u32, _: std::collections::HashMap<String, String>) -> Result<Version, StatusCode> {
+            Ok(Version::new())
+        }
+        async fn realpath(&mut self, id: u32, path: String) -> Result<Name, StatusCode> {
+            let p = if path == "." { "/home".into() } else { path };
+            Ok(Name { id, files: vec![File::dummy(p)] })
+        }
+        async fn stat(&mut self, id: u32, path: String) -> Result<Attrs, StatusCode> {
+            let fs = self.fs.lock().unwrap();
+            fs.nodes.get(&path).map(|n| Attrs { id, attrs: attrs(n) }).ok_or(StatusCode::NoSuchFile)
+        }
+        async fn lstat(&mut self, id: u32, path: String) -> Result<Attrs, StatusCode> {
+            self.stat(id, path).await
+        }
+        async fn mkdir(&mut self, id: u32, path: String, _: FileAttributes) -> Result<Status, StatusCode> {
+            let mut fs = self.fs.lock().unwrap();
+            if fs.nodes.contains_key(&path) {
+                return Err(StatusCode::Failure);
+            }
+            fs.nodes.insert(path, None);
+            Ok(ok(id))
+        }
+        async fn opendir(&mut self, id: u32, path: String) -> Result<H, StatusCode> {
+            self.listed.remove(&path);
+            Ok(H { id, handle: path })
+        }
+        async fn readdir(&mut self, id: u32, handle: String) -> Result<Name, StatusCode> {
+            if !self.listed.insert(handle.clone()) {
+                return Err(StatusCode::Eof);
+            }
+            let fs = self.fs.lock().unwrap();
+            let prefix = format!("{}/", handle.trim_end_matches('/'));
+            let files = fs
+                .nodes
+                .iter()
+                .filter_map(|(p, n)| p.strip_prefix(&prefix).filter(|rest| !rest.contains('/')).map(|name| File::new(name, attrs(n))))
+                .collect();
+            Ok(Name { id, files })
+        }
+        async fn open(&mut self, id: u32, path: String, flags: OpenFlags, _: FileAttributes) -> Result<H, StatusCode> {
+            let mut fs = self.fs.lock().unwrap();
+            if flags.contains(OpenFlags::CREATE) {
+                fs.nodes.insert(path.clone(), Some(Vec::new()));
+            } else if !matches!(fs.nodes.get(&path), Some(Some(_))) {
+                return Err(StatusCode::NoSuchFile);
+            }
+            Ok(H { id, handle: path })
+        }
+        async fn write(&mut self, id: u32, handle: String, offset: u64, data: Vec<u8>) -> Result<Status, StatusCode> {
+            let mut fs = self.fs.lock().unwrap();
+            let Some(Some(f)) = fs.nodes.get_mut(&handle) else { return Err(StatusCode::Failure) };
+            let end = offset as usize + data.len();
+            if f.len() < end {
+                f.resize(end, 0);
+            }
+            f[offset as usize..end].copy_from_slice(&data);
+            Ok(ok(id))
+        }
+        async fn read(&mut self, id: u32, handle: String, offset: u64, len: u32) -> Result<Data, StatusCode> {
+            let fs = self.fs.lock().unwrap();
+            let Some(Some(f)) = fs.nodes.get(&handle) else { return Err(StatusCode::Failure) };
+            if offset as usize >= f.len() {
+                return Err(StatusCode::Eof);
+            }
+            let end = f.len().min(offset as usize + len as usize);
+            Ok(Data { id, data: f[offset as usize..end].to_vec() })
+        }
+        async fn close(&mut self, id: u32, _: String) -> Result<Status, StatusCode> {
+            Ok(ok(id))
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn upload_and_download_roundtrip() {
+        let fs = Arc::new(Mutex::new(MemFs::default()));
+        fs.lock().unwrap().nodes.insert("/home".into(), None);
+        let (client, server) = tokio::io::duplex(1 << 20);
+        russh_sftp::server::run(server, Server { fs: fs.clone(), listed: HashSet::new() }).await;
+        let sftp = Sftp { s: SftpSession::new(client).await.unwrap(), _ssh: None };
+
+        // Lokaler Ordner mit Unterordner und einer Datei über mehrere Puffer (256 KB).
+        let base = std::env::temp_dir().join(format!("sesam-xfer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let src = base.join("projekt");
+        std::fs::create_dir_all(src.join("unter")).unwrap();
+        std::fs::write(src.join("a.txt"), "Grüezi").unwrap();
+        let big: Vec<u8> = (0..700_000u32).map(|i| (i * 7 % 251) as u8).collect();
+        std::fs::write(src.join("unter").join("gross.bin"), &big).unwrap();
+
+        let last = Arc::new(Mutex::new(None));
+        let l2 = last.clone();
+        let target = upload(&sftp, &src, "/home", move |p| *l2.lock().unwrap() = Some(p)).await.unwrap();
+        assert_eq!(target, "/home/projekt");
+        assert!(matches!(last.lock().unwrap().take(), Some(Progress::Done { .. })));
+        {
+            let fs = fs.lock().unwrap();
+            assert_eq!(fs.nodes["/home/projekt/a.txt"].as_deref(), Some("Grüezi".as_bytes()));
+            assert_eq!(fs.nodes["/home/projekt/unter/gross.bin"].as_deref(), Some(big.as_slice()));
+        }
+
+        // Zweites Hochladen überschreibt nicht.
+        assert_eq!(upload(&sftp, &src, "/home", |_| {}).await.unwrap(), "/home/projekt (2)");
+        let names: Vec<_> = sftp.list("/home").await.unwrap().entries.into_iter().map(|e| (e.name, e.dir)).collect();
+        assert_eq!(names, [("projekt".to_string(), true), ("projekt (2)".to_string(), true)]);
+
+        // Zurück auf diesen Computer, neben das Original: wird «projekt (2)».
+        let back = download(&sftp, "/home/projekt", &base, |_| {}).await.unwrap();
+        assert_eq!(PathBuf::from(&back), base.join("projekt (2)"));
+        assert_eq!(std::fs::read(base.join("projekt (2)").join("unter").join("gross.bin")).unwrap(), big);
+        assert_eq!(std::fs::read_to_string(base.join("projekt (2)").join("a.txt")).unwrap(), "Grüezi");
+
+        assert!(download(&sftp, "/home/fehlt", &base, |_| {}).await.is_err());
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 
     #[test]
     fn remote_paths() {
