@@ -32,11 +32,20 @@ pub struct Connection {
     pub shared_folder: String,
     /// TLS-Zertifikat nicht prüfen (RDP/VNC). Unsicher, nur bewusst einschalten.
     pub skip_cert_check: bool,
+    /// RDP: nur Kerberos, kein Rückfall auf NTLM.
+    pub rdp_no_ntlm: bool,
+    /// RDP: KDC (`host[:port]`, `tcp://`, `udp://`) oder KDC-Proxy (`https://…/KdcProxy`); leer = per DNS.
+    pub rdp_kdc: String,
+    /// RDP: RD-Gateway `host[:port]` (leer = direkt).
+    pub rdp_gateway: String,
+    /// Eigener Gateway-Benutzer (leer = gleiche Zugangsdaten wie die Verbindung).
+    pub rdp_gateway_user: String,
     pub fit_to_window: bool,
     /// Nur Merker für die Anzeige; das Geheimnis selbst liegt im Tresor.
     pub has_password: bool,
     pub has_vnc_password: bool,
     pub has_rdp_password: bool,
+    pub has_gateway_password: bool,
     pub has_key: bool,
     pub last_used: Option<String>,
 }
@@ -60,10 +69,15 @@ impl Default for Connection {
             play_audio: true,
             shared_folder: String::new(),
             skip_cert_check: false,
+            rdp_no_ntlm: false,
+            rdp_kdc: String::new(),
+            rdp_gateway: String::new(),
+            rdp_gateway_user: String::new(),
             fit_to_window: true,
             has_password: false,
             has_vnc_password: false,
             has_rdp_password: false,
+            has_gateway_password: false,
             has_key: false,
             last_used: None,
         }
@@ -92,6 +106,10 @@ impl Connection {
         }
         if !["landscape", "portrait"].contains(&self.orientation.as_str()) {
             return Err("Unbekannte Ausrichtung".into());
+        }
+        crate::kdc::kdc_url(&self.rdp_kdc)?;
+        if self.rdp_gateway.contains(char::is_whitespace) || self.rdp_gateway.contains('/') {
+            return Err("RD-Gateway: nur host[:port]".into());
         }
         Ok(())
     }
@@ -162,6 +180,9 @@ mod tests {
         assert!(Connection { ssh_port: Some(0), ..ok.clone() }.validate().is_err());
         assert!(Connection { rdp_port: Some(0), ..ok.clone() }.validate().is_err());
         assert!(Connection { desktop_protocol: "x".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { rdp_kdc: "ftp://dc".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { rdp_gateway: "https://gw/x".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { rdp_kdc: "https://gw.contoso.ch/KdcProxy".into(), rdp_gateway: "gw.contoso.ch:443".into(), ..ok.clone() }.validate().is_ok());
         assert!(Connection { default_view: "x".into(), ..ok }.validate().is_err());
     }
 

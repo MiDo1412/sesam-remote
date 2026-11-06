@@ -1555,6 +1555,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "either"
+version = "1.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
+
+[[package]]
 name = "elliptic-curve"
 version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2418,6 +2424,7 @@ dependencies = [
  "http",
  "http-body",
  "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]
@@ -2455,6 +2462,21 @@ dependencies = [
  "smallvec",
  "tokio",
  "want",
+]
+
+[[package]]
+name = "hyper-rustls"
+version = "0.27.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfa8e654703247911e29c23fbeaa261834bd9bb74efba2f9acddc37bfb127f53"
+dependencies = [
+ "http",
+ "hyper",
+ "hyper-util",
+ "rustls",
+ "tokio",
+ "tokio-rustls",
+ "tower-service",
 ]
 
 [[package]]
@@ -2855,6 +2877,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "ironrdp-mstsgu"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef854d5418746c5d131ed98b4a59c17f3ceed10c8be4d7c182388b4413e0b6ae"
+dependencies = [
+ "base64 0.22.1",
+ "bitflags 2.13.2",
+ "futures-util",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "ironrdp-core",
+ "ironrdp-error",
+ "ironrdp-tls",
+ "log",
+ "sspi",
+ "tokio",
+ "tokio-socks",
+ "tokio-tungstenite",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "ironrdp-pdu"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2873,7 +2919,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "pkcs1 0.7.5",
- "sha1",
+ "sha1 0.11.0",
  "tap",
  "x509-cert",
 ]
@@ -2933,7 +2979,7 @@ dependencies = [
  "ironrdp-dvc",
  "ironrdp-pdu",
  "ironrdp-svc",
- "sha1",
+ "sha1 0.11.0",
  "tracing",
 ]
 
@@ -4280,7 +4326,7 @@ dependencies = [
  "rsa",
  "serde",
  "serde_json",
- "sha1",
+ "sha1 0.11.0",
  "sha2 0.11.1",
  "sha3",
  "thiserror 2.0.21",
@@ -4351,7 +4397,7 @@ dependencies = [
  "rand 0.10.3",
  "rand_core 0.10.1",
  "serde",
- "sha1",
+ "sha1 0.11.0",
  "thiserror 2.0.21",
  "uuid",
 ]
@@ -4521,6 +4567,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10ab3eb7f3becc3a1cbc4f2c6f20267996cfc1a6467a873763411b136a122715"
 dependencies = [
  "portable-atomic",
+]
+
+[[package]]
+name = "portpicker"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
+dependencies = [
+ "rand 0.8.8",
 ]
 
 [[package]]
@@ -4701,11 +4756,22 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
+dependencies = [
+ "libc",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "rand"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9ef1d0d795eb7d84685bca4f72f3649f064e6641543d3a8c415898726a57b41"
 dependencies = [
- "rand_chacha",
+ "rand_chacha 0.9.0",
  "rand_core 0.9.5",
 ]
 
@@ -4722,12 +4788,31 @@ dependencies = [
 
 [[package]]
 name = "rand_chacha"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "rand_chacha"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
 dependencies = [
  "ppv-lite86",
  "rand_core 0.9.5",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+dependencies = [
+ "getrandom 0.2.17",
 ]
 
 [[package]]
@@ -4827,6 +4912,44 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "reqwest"
+version = "0.12.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "js-sys",
+ "log",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sync_wrapper",
+ "tokio",
+ "tokio-rustls",
+ "tower",
+ "tower-http",
+ "tower-service",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
 
 [[package]]
 name = "reqwest"
@@ -4998,7 +5121,7 @@ dependencies = [
  "salsa20",
  "scrypt",
  "sec1",
- "sha1",
+ "sha1 0.11.0",
  "sha2 0.11.1",
  "sha3",
  "signature",
@@ -5148,6 +5271,12 @@ name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
+name = "ryu"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "safe_arch"
@@ -5455,6 +5584,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_urlencoded"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
+dependencies = [
+ "form_urlencoded",
+ "itoa",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "serde_with"
 version = "3.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5547,6 +5688,7 @@ dependencies = [
  "ironrdp-egfx",
  "ironrdp-graphics",
  "ironrdp-input",
+ "ironrdp-mstsgu",
  "ironrdp-pdu",
  "ironrdp-rdpdr",
  "ironrdp-rdpdr-native",
@@ -5573,6 +5715,18 @@ dependencies = [
  "tokio-rustls",
  "tracing",
  "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "sha1"
+version = "0.10.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a978451301f4db1d02937a4ab3ccce137717b81826e79b7d49ffe3244a13c3b8"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -5833,7 +5987,7 @@ dependencies = [
  "rand_core 0.10.1",
  "rsa",
  "sec1",
- "sha1",
+ "sha1 0.11.0",
  "sha2 0.11.1",
  "signature",
  "ssh-cipher",
@@ -5870,12 +6024,15 @@ dependencies = [
  "picky-asn1-x509",
  "picky-krb",
  "pkcs1 0.8.0-rc.4",
+ "portpicker",
  "rand 0.10.3",
  "rand_core 0.10.1",
+ "reqwest 0.12.28",
  "rsa",
  "rustls",
+ "rustls-native-certs",
  "serde",
- "sha1",
+ "sha1 0.11.0",
  "sha2 0.11.1",
  "time",
  "tokio",
@@ -6117,7 +6274,7 @@ dependencies = [
  "percent-encoding",
  "plist",
  "raw-window-handle",
- "reqwest",
+ "reqwest 0.13.5",
  "serde",
  "serde_json",
  "serde_repr",
@@ -6571,6 +6728,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-socks"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7e2948f60dbe26b35f2c7fb74ac2854c1fddded0fe9d7548fcc674a246f7615"
+dependencies = [
+ "either",
+ "futures-util",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f72a05e828585856dacd553fba484c242c46e391fb0e58917c942ee9202915c"
+dependencies = [
+ "futures-util",
+ "log",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls",
+ "tungstenite",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6795,6 +6980,24 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "tungstenite"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c01152af293afb9c7c2a57e4b559c5620b421f6d133261c60dd2d0cdb38e6b8"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.9.5",
+ "rustls",
+ "rustls-pki-types",
+ "sha1 0.10.7",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "typeid"
@@ -7623,7 +7826,7 @@ dependencies = [
  "picky",
  "picky-asn1-x509",
  "rsa",
- "sha1",
+ "sha1 0.11.0",
  "time",
  "tracing",
  "uuid",

@@ -17,11 +17,20 @@ export interface Connection {
   playAudio: boolean;
   /** Zertifikat nicht prüfen (unsicher, nur für Tests). */
   skipCertCheck: boolean;
+  /** RDP nur mit Kerberos. */
+  rdpNoNtlm: boolean;
+  /** KDC oder KDC-Proxy-URL; leer = per DNS. */
+  rdpKdc: string;
+  /** RD-Gateway host[:port]; leer = direkt. */
+  rdpGateway: string;
+  /** Leer = gleiche Zugangsdaten wie die Verbindung. */
+  rdpGatewayUser: string;
   sharedFolder: string;
   fitToWindow: boolean;
   hasPassword: boolean;
   hasVncPassword: boolean;
   hasRdpPassword: boolean;
+  hasGatewayPassword: boolean;
   hasKey: boolean;
   lastUsed: string | null;
 }
@@ -59,7 +68,7 @@ export const desktopProtocol = (c: Connection): "vnc" | "rdp" | null =>
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
   /** Geheimnisse: undefined = unverändert, "" = löschen */
-  save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; sshKey?: string }) =>
+  save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; gatewayPassword?: string; sshKey?: string }) =>
     invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
   shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void) => {

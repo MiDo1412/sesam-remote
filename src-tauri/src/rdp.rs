@@ -9,8 +9,7 @@ use crate::vnc::decode::Rect;
 use crate::vnc::tls::{CERT_CHANGED, CERT_UNKNOWN, fingerprint};
 use ironrdp_cliprdr::backend::{ClipboardMessage, ClipboardMessageProxy, CliprdrBackendFactory};
 use ironrdp_cliprdr::CliprdrClient;
-use ironrdp_connector::sspi::generator::NetworkRequest;
-use ironrdp_connector::{ClientConnector, ConnectionOutcome, ConnectionResult, ConnectorResult, Credentials, DesktopSize};
+use ironrdp_connector::{ClientConnector, ConnectionOutcome, ConnectionResult, Credentials, DesktopSize};
 use ironrdp_displaycontrol::client::DisplayControlClient;
 use ironrdp_displaycontrol::pdu::MonitorLayoutEntry;
 use ironrdp_egfx::client::{GraphicsPipelineClient, GraphicsPipelineHandler};
@@ -47,6 +46,21 @@ pub struct Target {
     pub audio: bool,
     /// Lokaler Ordner, der auf dem Server als Laufwerk erscheint.
     pub share: Option<std::path::PathBuf>,
+    /// KDC oder KDC-Proxy für Kerberos (`kdc::kdc_url`), sonst sucht sspi selbst.
+    pub kdc: Option<String>,
+    /// NTLM verbieten: nur Kerberos (sonst Kerberos zuerst, NTLM als Rückfall).
+    pub no_ntlm: bool,
+    /// Über ein RD-Gateway verbinden.
+    pub gateway: Option<Gateway>,
+}
+
+/// RD-Gateway (MS-TSGU, HTTPS/WebSocket). Benutzer als `DOMÄNE\benutzer` oder `benutzer@domain.tld`.
+#[derive(Clone)]
+pub struct Gateway {
+    /// `host[:port]`, Standard 443.
+    pub endpoint: String,
+    pub user: String,
+    pub password: String,
 }
 
 pub type ClipFactory = Arc<Mutex<Box<dyn CliprdrBackendFactory + Send>>>;
@@ -227,15 +241,6 @@ pub fn key_input(code: &str, key: &str, down: bool, altgr: bool) -> Option<Input
 
 // ---------- Verbindung ----------
 
-/// Kerberos braucht einen KDC-Zugang; wir melden uns per NTLM an.
-struct NoKdc;
-
-impl ironrdp_tokio::NetworkClient for NoKdc {
-    async fn send(&mut self, _: &NetworkRequest) -> ConnectorResult<Vec<u8>> {
-        Err(ironrdp_connector::general_err!("Kerberos wird nicht unterstützt"))
-    }
-}
-
 /// Was eine Server-Redirection für den nächsten Versuch ändert.
 #[derive(Default, Clone)]
 struct Hop {
@@ -372,20 +377,150 @@ fn connector_config(t: &Target) -> ironrdp_connector::Config {
 struct NoGfxCallbacks;
 impl GraphicsPipelineHandler for NoGfxCallbacks {}
 
-type Framed = TokioFramed<ironrdp_tls::TlsStream<TcpStream>>;
+/// TCP direkt oder Tunnel durch das RD-Gateway.
+enum Stream {
+    Tcp(TcpStream),
+    Gateway(Box<ironrdp_mstsgu::GwClient>),
+}
+
+macro_rules! by_stream {
+    ($self:ident, $s:ident => $e:expr) => {
+        match $self.get_mut() {
+            Stream::Tcp($s) => { let $s = std::pin::Pin::new($s); $e }
+            Stream::Gateway($s) => { let $s = std::pin::Pin::new($s.as_mut()); $e }
+        }
+    };
+}
+
+impl tokio::io::AsyncRead for Stream {
+    fn poll_read(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> std::task::Poll<std::io::Result<()>> {
+        by_stream!(self, s => s.poll_read(cx, buf))
+    }
+}
+
+impl tokio::io::AsyncWrite for Stream {
+    fn poll_write(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>, buf: &[u8]) -> std::task::Poll<std::io::Result<usize>> {
+        by_stream!(self, s => s.poll_write(cx, buf))
+    }
+    fn poll_flush(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        by_stream!(self, s => s.poll_flush(cx))
+    }
+    fn poll_shutdown(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        by_stream!(self, s => s.poll_shutdown(cx))
+    }
+}
+type Framed = TokioFramed<ironrdp_tls::TlsStream<Stream>>;
+
+/// Transport zum RDP-Server: direkt per TCP oder durch das RD-Gateway.
+async fn transport(t: &Target, host: &str) -> Result<(Stream, std::net::SocketAddr), String> {
+    if let Some(gw) = &t.gateway {
+        tracing::info!(gateway = %gw.endpoint, %host, port = t.port, "RDP: RD-Gateway");
+        let target = ironrdp_mstsgu::GwConnectTarget {
+            gw_endpoint: gw.endpoint.clone(),
+            gw_user: gw.user.clone(),
+            gw_pass: gw.password.clone(),
+            smart_card: None,
+            server: host.to_string(),
+        };
+        // Gateway-Zertifikat strikt gegen die Stammzertifikate des Systems (wie mstsc), kein Pinning.
+        let (gw, addr) = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            ironrdp_mstsgu::GwClient::connect_with_port(&target, "Sesam Remote", t.port),
+        )
+        .await
+        .map_err(|_| "RD-Gateway: Zeitüberschreitung".to_string())?
+        .map_err(|e| phase("RD-Gateway", e))?;
+        return Ok((Stream::Gateway(Box::new(gw)), addr));
+    }
+    tracing::info!(%host, port = t.port, "RDP: TCP");
+    let tcp = tokio::time::timeout(std::time::Duration::from_secs(15), TcpStream::connect((host, t.port)))
+        .await
+        .map_err(|_| "TCP: Zeitüberschreitung beim Verbinden".to_string())?
+        .map_err(|e| format!("TCP: Verbindung fehlgeschlagen: {e}"))?;
+    let _ = tcp.set_nodelay(true);
+    let addr = tcp.local_addr().map_err(|e| e.to_string())?;
+    Ok((Stream::Tcp(tcp), addr))
+}
+
+/// CredSSP wie in ironrdp-async, aber mit eigenem KDC-Transport, Rückfall auf NTLM bei KDC-Fehlern,
+/// NTLM-Sperre pro Verbindung und ohne Rückfall auf CredSSP-Versionen vor 5 (CVE-2018-0886).
+async fn credssp(t: &Target, server: &str, connector: &mut ClientConnector, framed: &mut Framed, key: Vec<u8>) -> Result<(), String> {
+    use ironrdp_connector::credssp::{CredsspSequence, KerberosConfig};
+    use ironrdp_connector::sspi::credssp::ClientState;
+    use ironrdp_connector::sspi::generator::GeneratorState;
+    use ironrdp_connector::sspi::{Error as SspiError, ErrorKind};
+    let ironrdp_connector::ClientConnectorState::Credssp { selected_protocol, .. } = connector.state else {
+        return Err("CredSSP: unerwarteter Zustand".into());
+    };
+    let kerberos = crate::kdc::wants_kerberos(&t.user, t.domain.as_deref(), t.kdc.is_some(), t.no_ntlm)
+        .then(|| KerberosConfig::new(t.kdc.clone(), crate::kdc::computer_name()))
+        .transpose()
+        .map_err(login_err)?;
+    tracing::info!(kerberos = kerberos.is_some(), kdc = ?t.kdc, no_ntlm = t.no_ntlm, "RDP: CredSSP");
+    let (mut seq, mut ts) = CredsspSequence::init(
+        connector.config.credentials.clone(),
+        connector.config.domain.as_deref(),
+        selected_protocol,
+        ironrdp_connector::ServerName::new(server),
+        key,
+        kerberos,
+    )
+    .map_err(login_err)?;
+    let mut buf = ironrdp_pdu::WriteBuf::new();
+    loop {
+        let state = {
+            let mut generator = seq.process_ts_request(ts);
+            let mut step = generator.start();
+            loop {
+                match step {
+                    GeneratorState::Suspended(req) => {
+                        // KDC nicht erreichbar: sspi entscheidet über den Rückfall auf NTLM.
+                        let reply = crate::kdc::send(&req).await.map_err(|e| SspiError::new(ErrorKind::NoAuthenticatingAuthority, e));
+                        step = generator.resume(reply);
+                    }
+                    GeneratorState::Completed(r) => break r,
+                }
+            }
+        }
+        .map_err(login_err)?;
+        let (ClientState::ReplyNeeded(req) | ClientState::FinalMessage(req)) = &state;
+        if t.no_ntlm && req.nego_tokens.as_deref().is_some_and(crate::kdc::carries_ntlm) {
+            return Err("Anmeldung: Kerberos war nicht möglich und NTLM ist für diese Verbindung nicht erlaubt. \
+                        Benutzer als benutzer@domain.tld eingeben und den Servernamen (nicht die IP) verwenden; \
+                        ist kein KDC per DNS erreichbar, unter «Erweitert» einen KDC oder KDC-Proxy eintragen."
+                .into());
+        }
+        buf.clear();
+        let written = seq.handle_process_result(state, &mut buf).map_err(login_err)?;
+        if let Some(n) = written.size() {
+            framed.write_all(&buf[..n]).await.map_err(|e| format!("CredSSP: {e}"))?;
+        }
+        let Some(hint) = seq.next_pdu_hint() else { break };
+        let pdu = framed.read_by_hint(hint).await.map_err(login_err)?;
+        match seq.decode_server_message(&pdu).map_err(login_err)? {
+            Some(next) if next.version < 5 => {
+                return Err(format!(
+                    "Anmeldung: Der Server spricht nur CredSSP {} (ungepatcht, CVE-2018-0886). Bitte den Server aktualisieren.",
+                    next.version
+                ));
+            }
+            Some(next) => ts = next,
+            None => break,
+        }
+    }
+    connector.mark_credssp_as_done();
+    Ok(())
+}
 
 /// Ein Verbindungsversuch bis zum Ende des Verbindungsaufbaus.
 async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(ConnectionOutcome, Framed), String> {
     let host = hop.host.clone().unwrap_or_else(|| t.host.clone());
     let redirected = hop.session_id != 0 || hop.routing_token.is_some();
     let user_log = if redirected { "***" } else { t.user.as_str() };
-    tracing::info!(%host, port = t.port, user = %user_log, redirected, "RDP: TCP");
-    let tcp = tokio::time::timeout(std::time::Duration::from_secs(15), TcpStream::connect((host.as_str(), t.port)))
-        .await
-        .map_err(|_| "TCP: Zeitüberschreitung beim Verbinden".to_string())?
-        .map_err(|e| format!("TCP: Verbindung fehlgeschlagen: {e}"))?;
-    let _ = tcp.set_nodelay(true);
-    let client_addr = tcp.local_addr().map_err(|e| e.to_string())?;
+    tracing::info!(%host, port = t.port, user = %user_log, redirected, "RDP: Verbindung");
+    // ring als Standard: mit aws-lc-rs (über sspi/ironrdp-mstsgu) im Baum wählt rustls sonst nicht selbst.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let (tcp, client_addr) = transport(t, &host).await?;
 
     let mut drdynvc = ironrdp_dvc::DrdynvcClient::new()
         .with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())))
@@ -469,12 +604,15 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
         return Ok((outcome, framed));
     }
     tracing::info!("RDP: Anmeldung (NLA/CredSSP) und Verbindungsaufbau");
+    if connector.should_perform_credssp() {
+        credssp(t, &host, &mut connector, &mut framed, key.clone()).await?;
+    }
     let outcome = ironrdp_tokio::connect_finalize(
         upgraded,
         connector,
         &mut framed,
-        &mut NoKdc,
-        ironrdp_connector::ServerName::new(t.host.clone()),
+        &mut crate::kdc::Kdc,
+        ironrdp_connector::ServerName::new(host.clone()),
         key,
         None,
     )
@@ -542,7 +680,7 @@ async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) 
 }
 
 /// X.224-Aushandlung mit PROTOCOL_RDSTLS und Routing-Token; der Server muss RDSTLS wählen.
-async fn rdstls_negotiate(framed: &mut TokioFramed<TcpStream>, hop: &Hop) -> Result<(), String> {
+async fn rdstls_negotiate(framed: &mut TokioFramed<Stream>, hop: &Hop) -> Result<(), String> {
     use ironrdp_pdu::nego::{ConnectionConfirm, ConnectionRequest, ConnectionRequestWithOpaqueRoutingToken, OpaqueRoutingToken, RequestFlags, SecurityProtocol};
     use ironrdp_pdu::x224::X224;
     let request = ConnectionRequest {
@@ -1047,6 +1185,9 @@ mod tests {
             clipboard: None,
             audio: false,
             share: None,
+            kdc: None,
+            no_ntlm: false,
+            gateway: None,
         };
         let mut hop = Hop::default();
         let pw: Vec<u8> = "einmal".encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
@@ -1099,7 +1240,7 @@ mod probe {
     #[ignore]
     async fn probe_rdstls_negotiation() {
         let Ok(addr) = std::env::var("SESAM_RDP_PROBE") else { return };
-        let tcp = TcpStream::connect(addr.as_str()).await.unwrap();
+        let tcp = Stream::Tcp(TcpStream::connect(addr.as_str()).await.unwrap());
         let mut framed = TokioFramed::new(tcp);
         let hop = Hop { routing_token: Some("Cookie: msts=sesam-probe".into()), ..Default::default() };
         println!("RDSTLS-Aushandlung: {:?}", rdstls_negotiate(&mut framed, &hop).await);
@@ -1123,6 +1264,9 @@ mod probe {
             clipboard: None,
             audio: false,
             share: None,
+            kdc: None,
+            no_ntlm: false,
+            gateway: None,
         };
         for round in 1..=2 {
             let seen: SeenCert = Default::default();

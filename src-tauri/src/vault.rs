@@ -13,6 +13,8 @@ pub enum Kind {
     VncPassword,
     /// Eigenes RDP-Passwort (falls anders als das Kontopasswort).
     RdpPassword,
+    /// Passwort für das RD-Gateway (falls eigener Gateway-Benutzer).
+    GatewayPassword,
     /// Privater SSH-Schlüssel im OpenSSH-Format, nur ed25519 (Windows erlaubt höchstens 2560 Byte pro Eintrag).
     SshKey,
 }
@@ -22,6 +24,7 @@ fn entry(id: &str, kind: Kind) -> Result<Entry, String> {
         Kind::Password => "password",
         Kind::VncPassword => "vnc-password",
         Kind::RdpPassword => "rdp-password",
+        Kind::GatewayPassword => "gateway-password",
         Kind::SshKey => "ssh-key",
     };
     Entry::new(SERVICE, &format!("{id}:{k}")).map_err(|e| format!("Tresor nicht verfügbar: {e}"))
