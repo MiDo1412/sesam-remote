@@ -1,0 +1,374 @@
+//! H.264 für EGFX (AVC420/AVC444) über den Decoder des Betriebssystems, ohne eigene Codec-Bibliothek
+//! (Lizenz- und Patentfragen in docs/architektur.md). Windows: Media Foundation (Microsoft H.264 Video Decoder MFT).
+//! macOS (VideoToolbox) fehlt noch; ohne Decoder kündigt EGFX kein AVC an und der Server nimmt andere Codecs.
+
+use ironrdp_egfx::decode::{DecodedFrame, DecoderError, DecoderResult, H264Decoder, Yuv420Frame};
+
+/// Decoder für die Graphics Pipeline, falls das System einen hat.
+pub fn decoder() -> Option<Box<dyn H264Decoder>> {
+    #[cfg(windows)]
+    return Some(Box::new(mf::MfDecoder::default()));
+    #[cfg(not(windows))]
+    None
+}
+
+/// Annex B (Startcodes) unverändert; AVC-Format (4-Byte-Längen, wie frühere IronRDP-Server) in Annex B umschreiben.
+pub fn to_annex_b(data: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    if data.starts_with(&[0, 0, 1]) || data.starts_with(&[0, 0, 0, 1]) {
+        return data.into();
+    }
+    let mut out = Vec::with_capacity(data.len() + 16);
+    let mut rest = data;
+    while rest.len() >= 4 {
+        let n = u32::from_be_bytes([rest[0], rest[1], rest[2], rest[3]]) as usize;
+        let Some(nal) = rest.get(4..4 + n) else { return data.into() };
+        out.extend_from_slice(&[0, 0, 0, 1]);
+        out.extend_from_slice(nal);
+        rest = &rest[4 + n..];
+    }
+    if rest.is_empty() && !out.is_empty() { out.into() } else { data.into() }
+}
+
+/// NV12 (Y-Ebene, dann U/V verschränkt; `rows` Zeilen bis zur UV-Ebene) in drei Ebenen für `Yuv420Frame`.
+pub fn nv12_to_yuv420(buf: &[u8], width: u16, height: u16, stride: usize, rows: usize) -> DecoderResult<Yuv420Frame> {
+    let (cw, ch) = (usize::from(width.div_ceil(2)), usize::from(height.div_ceil(2)));
+    let y_len = stride * usize::from(height);
+    let uv_start = stride * rows;
+    if stride < usize::from(width) || rows < usize::from(height) || buf.len() < uv_start + stride * ch {
+        return Err(DecoderError::msg("NV12-Puffer zu klein"));
+    }
+    let (mut u, mut v) = (Vec::with_capacity(cw * ch), Vec::with_capacity(cw * ch));
+    for row in buf[uv_start..].chunks(stride).take(ch) {
+        for p in row[..cw * 2].chunks_exact(2) {
+            u.push(p[0]);
+            v.push(p[1]);
+        }
+    }
+    Yuv420Frame::new(width, height, buf[..y_len].to_vec(), stride, u, v, cw)
+}
+
+#[cfg(windows)]
+mod mf {
+    use super::*;
+    use windows::Win32::Media::MediaFoundation::*;
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CLSCTX_INPROC_SERVER, CoCreateInstance, CoInitializeEx};
+
+    fn err(ctx: &str, e: windows::core::Error) -> DecoderError {
+        DecoderError::msg(format!("Media Foundation: {ctx}: {e}"))
+    }
+
+    /// COM (MTA) und Media Foundation einmal pro Thread; die Sitzung läuft auf wechselnden Tokio-Threads.
+    fn init_thread() {
+        thread_local!(static INIT: () = unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let _ = MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET);
+        });
+        INIT.with(|_| ());
+    }
+
+    #[derive(Default)]
+    pub struct MfDecoder {
+        mft: Option<IMFTransform>,
+        /// Bildgrösse und Zeilenlänge der Ausgabe (nach jedem Formatwechsel neu).
+        width: u32,
+        height: u32,
+        stride: u32,
+        time: i64,
+    }
+
+    // SAFETY: Der H.264-Decoder-MFT ist free-threaded ("Both"); er wird nur aus MTA-Threads und nie gleichzeitig benutzt.
+    unsafe impl Send for MfDecoder {}
+
+    impl MfDecoder {
+        fn start(&mut self) -> Result<(), windows::core::Error> {
+            init_thread();
+            unsafe {
+                let mft: IMFTransform = CoCreateInstance(&CLSID_MSH264DecoderMFT, None, CLSCTX_INPROC_SERVER)?;
+                // Ein Bild pro Eingabe, ohne Puffer für B-Frames: RDP schickt keine, AVC444 braucht jedes Bild sofort.
+                let attrs = mft.GetAttributes()?;
+                attrs.SetUINT32(&CODECAPI_AVLowLatencyMode, 1)?;
+                let input = MFCreateMediaType()?;
+                input.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
+                input.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264)?;
+                mft.SetInputType(0, &input, 0)?;
+                self.mft = Some(mft);
+                self.choose_output()?;
+                let mft = self.mft.as_ref().unwrap();
+                mft.ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)?;
+                mft.ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0)?;
+            }
+            Ok(())
+        }
+
+        /// NV12 als Ausgabe wählen und Grösse/Zeilenlänge übernehmen.
+        fn choose_output(&mut self) -> Result<(), windows::core::Error> {
+            let mft = self.mft.as_ref().unwrap();
+            unsafe {
+                for i in 0.. {
+                    let t = mft.GetOutputAvailableType(0, i)?;
+                    if t.GetGUID(&MF_MT_SUBTYPE)? == MFVideoFormat_NV12 {
+                        mft.SetOutputType(0, &t, 0)?;
+                        let size = t.GetUINT64(&MF_MT_FRAME_SIZE).unwrap_or(0);
+                        (self.width, self.height) = ((size >> 32) as u32, size as u32);
+                        // Negative Zeilenlänge (von unten nach oben) kommt bei NV12 nicht vor.
+                        self.stride = t.GetUINT32(&MF_MT_DEFAULT_STRIDE).unwrap_or(self.width).max(self.width);
+                        return Ok(());
+                    }
+                }
+            }
+            unreachable!()
+        }
+
+        fn feed(&mut self, data: &[u8]) -> Result<(), windows::core::Error> {
+            let mft = self.mft.as_ref().unwrap();
+            unsafe {
+                let buf = MFCreateMemoryBuffer(data.len() as u32)?;
+                let mut p = std::ptr::null_mut();
+                buf.Lock(&mut p, None, None)?;
+                std::ptr::copy_nonoverlapping(data.as_ptr(), p, data.len());
+                buf.Unlock()?;
+                buf.SetCurrentLength(data.len() as u32)?;
+                let sample = MFCreateSample()?;
+                sample.AddBuffer(&buf)?;
+                sample.SetSampleTime(self.time)?;
+                sample.SetSampleDuration(1)?;
+                self.time += 1;
+                mft.ProcessInput(0, &sample, 0)
+            }
+        }
+
+        /// Nächstes Bild als NV12-Bytes, `None` wenn der Decoder noch mehr Eingabe braucht.
+        fn output(&mut self) -> Result<Option<Vec<u8>>, windows::core::Error> {
+            loop {
+                let mft = self.mft.as_ref().unwrap();
+                unsafe {
+                    let info = mft.GetOutputStreamInfo(0)?;
+                    let provides = info.dwFlags & (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.0 as u32) != 0;
+                    let sample = if provides {
+                        None
+                    } else {
+                        let s = MFCreateSample()?;
+                        s.AddBuffer(&MFCreateMemoryBuffer(info.cbSize.max(self.stride * self.height * 3 / 2))?)?;
+                        Some(s)
+                    };
+                    let mut out = [MFT_OUTPUT_DATA_BUFFER { dwStreamID: 0, pSample: std::mem::ManuallyDrop::new(sample), dwStatus: 0, pEvents: Default::default() }];
+                    let mut status = 0;
+                    let r = mft.ProcessOutput(0, &mut out, &mut status);
+                    let sample = std::mem::ManuallyDrop::take(&mut out[0].pSample);
+                    drop(std::mem::ManuallyDrop::take(&mut out[0].pEvents));
+                    match r {
+                        Ok(()) => {
+                            let buf = sample.ok_or_else(|| windows::core::Error::from(windows::Win32::Foundation::E_UNEXPECTED))?.ConvertToContiguousBuffer()?;
+                            let (mut p, mut len) = (std::ptr::null_mut(), 0u32);
+                            buf.Lock(&mut p, None, Some(&mut len))?;
+                            let bytes = std::slice::from_raw_parts(p, len as usize).to_vec();
+                            buf.Unlock()?;
+                            return Ok(Some(bytes));
+                        }
+                        Err(e) if e.code() == MF_E_TRANSFORM_STREAM_CHANGE => self.choose_output()?,
+                        Err(e) if e.code() == MF_E_TRANSFORM_NEED_MORE_INPUT => return Ok(None),
+                        Err(e) => return Err(e),
+                    }
+                }
+            }
+        }
+    }
+
+    impl H264Decoder for MfDecoder {
+        fn decode(&mut self, data: &[u8]) -> DecoderResult<DecodedFrame> {
+            self.decode_yuv420(data).map(|f| f.to_rgba())
+        }
+
+        fn decode_yuv420(&mut self, data: &[u8]) -> DecoderResult<Yuv420Frame> {
+            init_thread();
+            if self.mft.is_none() {
+                self.start().map_err(|e| err("Start", e))?;
+            }
+            self.feed(&to_annex_b(data)).map_err(|e| err("Eingabe", e))?;
+            let nv12 = self.output().map_err(|e| err("Ausgabe", e))?.ok_or_else(|| DecoderError::msg("H.264: kein Bild"))?;
+            let (w, h) = (u16::try_from(self.width).unwrap_or(0), u16::try_from(self.height).unwrap_or(0));
+            // Zeilen bis zur UV-Ebene: aus der Puffergrösse (Höhe ggf. auf 16 aufgerundet).
+            let stride = self.stride as usize;
+            let rows = if stride == 0 { 0 } else { nv12.len() * 2 / 3 / stride };
+            nv12_to_yuv420(&nv12, w, h, stride, rows)
+        }
+
+        fn supports_yuv420(&self) -> bool {
+            true
+        }
+
+        fn wait_until_ready(&mut self) -> bool {
+            match self.start() {
+                Ok(()) => true,
+                Err(e) => {
+                    tracing::warn!(error = %e, "H.264: Media Foundation nicht verfügbar, EGFX ohne AVC");
+                    self.mft = None;
+                    false
+                }
+            }
+        }
+
+        fn reset(&mut self) {
+            if let Some(mft) = &self.mft {
+                let _ = unsafe { mft.ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0) };
+            }
+        }
+    }
+
+    impl Drop for MfDecoder {
+        fn drop(&mut self) {
+            init_thread();
+            self.mft = None;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn annex_b_passthrough_and_avc_conversion() {
+        let annex = [0, 0, 0, 1, 0x67, 1, 2];
+        assert_eq!(&*to_annex_b(&annex), &annex);
+        let avc = [0, 0, 0, 2, 0x67, 9, 0, 0, 0, 1, 0x68];
+        assert_eq!(&*to_annex_b(&avc), &[0, 0, 0, 1, 0x67, 9, 0, 0, 0, 1, 0x68]);
+        // Länge passt nicht: unverändert lassen, der Decoder meldet den Fehler.
+        assert_eq!(&*to_annex_b(&[0, 0, 0, 9, 1]), &[0, 0, 0, 9, 1]);
+    }
+
+    #[test]
+    fn nv12_split_with_padding() {
+        // 4x2 Bild, Zeilenlänge 6, Y-Ebene auf 4 Zeilen aufgefüllt.
+        let (w, h, stride, rows) = (4u16, 2u16, 6usize, 4usize);
+        let mut buf = vec![0u8; stride * rows + stride];
+        buf[..6].copy_from_slice(&[1, 2, 3, 4, 0, 0]);
+        buf[6..12].copy_from_slice(&[5, 6, 7, 8, 0, 0]);
+        buf[24..30].copy_from_slice(&[10, 20, 11, 21, 0, 0]);
+        let f = nv12_to_yuv420(&buf, w, h, stride, rows).unwrap();
+        let rgba = f.to_rgba();
+        assert_eq!(rgba.width(), 4);
+        assert!(nv12_to_yuv420(&buf[..20], w, h, stride, rows).is_err());
+    }
+
+    /// Kleinster gültiger H.264-Strom: SPS, PPS und ein IDR-Bild nur aus I_PCM-Makroblöcken (Rohwerte, verlustfrei).
+    #[cfg(windows)]
+    fn ipcm_stream(mbs_w: u32, mbs_h: u32, idr_id: u32, (y, u, v): (u8, u8, u8)) -> Vec<u8> {
+        #[derive(Default)]
+        struct Bits(Vec<u8>, u32);
+        impl Bits {
+            fn bit(&mut self, b: u32) {
+                if self.1 % 8 == 0 {
+                    self.0.push(0);
+                }
+                if b != 0 {
+                    *self.0.last_mut().unwrap() |= 0x80 >> (self.1 % 8);
+                }
+                self.1 += 1;
+            }
+            fn u(&mut self, n: u32, v: u32) {
+                (0..n).rev().for_each(|i| self.bit((v >> i) & 1));
+            }
+            fn ue(&mut self, v: u32) {
+                let x = v + 1;
+                let len = 32 - x.leading_zeros();
+                self.u(len - 1, 0);
+                self.u(len, x);
+            }
+            fn align_zero(&mut self) {
+                while self.1 % 8 != 0 {
+                    self.bit(0);
+                }
+            }
+            fn trailing(mut self) -> Vec<u8> {
+                self.bit(1);
+                self.align_zero();
+                self.0
+            }
+        }
+        fn nal(out: &mut Vec<u8>, header: u8, rbsp: Vec<u8>) {
+            out.extend_from_slice(&[0, 0, 0, 1, header]);
+            let mut zeros = 0;
+            for b in rbsp {
+                if zeros >= 2 && b <= 3 {
+                    out.push(3);
+                    zeros = 0;
+                }
+                zeros = if b == 0 { zeros + 1 } else { 0 };
+                out.push(b);
+            }
+        }
+        let mut out = Vec::new();
+        let mut sps = Bits::default();
+        sps.u(8, 66); // Baseline
+        sps.u(8, 0xC0); // constraint_set0/1
+        sps.u(8, 30);
+        sps.ue(0);
+        sps.ue(0); // log2_max_frame_num_minus4
+        sps.ue(2); // pic_order_cnt_type
+        sps.ue(1); // max_num_ref_frames
+        sps.bit(0);
+        sps.ue(mbs_w - 1);
+        sps.ue(mbs_h - 1);
+        sps.bit(1); // frame_mbs_only
+        sps.bit(1); // direct_8x8_inference
+        sps.bit(0); // cropping
+        sps.bit(0); // vui
+        nal(&mut out, 0x67, sps.trailing());
+        let mut pps = Bits::default();
+        pps.ue(0);
+        pps.ue(0);
+        pps.bit(0); // CAVLC
+        pps.bit(0);
+        pps.ue(0);
+        pps.ue(0);
+        pps.ue(0);
+        pps.bit(0);
+        pps.u(2, 0);
+        pps.ue(0); // pic_init_qp_minus26 (se 0 = ue 0)
+        pps.ue(0);
+        pps.ue(0);
+        pps.bit(1); // deblocking_filter_control_present
+        pps.bit(0);
+        pps.bit(0);
+        nal(&mut out, 0x68, pps.trailing());
+        let mut s = Bits::default();
+        s.ue(0); // first_mb_in_slice
+        s.ue(7); // I
+        s.ue(0); // pps
+        s.u(4, 0); // frame_num
+        s.ue(idr_id);
+        s.bit(0); // no_output_of_prior_pics
+        s.bit(0); // long_term_reference
+        s.ue(0); // slice_qp_delta
+        s.ue(1); // Deblocking aus
+        for _ in 0..mbs_w * mbs_h {
+            s.ue(25); // I_PCM
+            s.align_zero();
+            (0..256).for_each(|_| s.u(8, y.into()));
+            (0..64).for_each(|_| s.u(8, u.into()));
+            (0..64).for_each(|_| s.u(8, v.into()));
+        }
+        nal(&mut out, 0x65, s.trailing());
+        out
+    }
+
+    /// Echter Decoder des Systems: zwei Bilder hintereinander, je eines pro Aufruf, Werte exakt (I_PCM).
+    #[cfg(windows)]
+    #[test]
+    fn media_foundation_decodes_ipcm() {
+        let mut d = mf::MfDecoder::default();
+        if !d.wait_until_ready() {
+            eprintln!("Media Foundation ohne H.264 (z. B. Windows N): Test übersprungen");
+            return;
+        }
+        for (i, px) in [(100, 110, 120), (50, 60, 70)].into_iter().enumerate() {
+            let f = d.decode_yuv420(&ipcm_stream(4, 4, i as u32, px)).unwrap();
+            let rgba = f.to_rgba();
+            assert_eq!((rgba.width(), rgba.height()), (64, 64));
+            let reference = Yuv420Frame::new(1, 1, vec![px.0], 1, vec![px.1], vec![px.2], 1).unwrap().to_rgba();
+            assert_eq!(&rgba.data()[..4], reference.data(), "Bild {i}");
+            assert_eq!(&rgba.data()[rgba.data().len() - 4..], reference.data(), "Bild {i}");
+        }
+    }
+}

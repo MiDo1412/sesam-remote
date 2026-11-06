@@ -20,11 +20,20 @@ export interface Connection {
   os: "" | "ubuntu" | "linux" | "macos" | "windows" | "raspberry";
   customThumb: boolean;
   credentialId: string | null;
+  /** RDP nur mit Kerberos. */
+  rdpNoNtlm: boolean;
+  /** KDC oder KDC-Proxy-URL; leer = per DNS. */
+  rdpKdc: string;
+  /** RD-Gateway host[:port]; leer = direkt. */
+  rdpGateway: string;
+  /** Leer = gleiche Zugangsdaten wie die Verbindung. */
+  rdpGatewayUser: string;
   sharedFolder: string;
   fitToWindow: boolean;
   hasPassword: boolean;
   hasVncPassword: boolean;
   hasRdpPassword: boolean;
+  hasGatewayPassword: boolean;
   hasKey: boolean;
   lastUsed: string | null;
 }
@@ -70,7 +79,7 @@ export const desktopProtocol = (c: Connection): "vnc" | "rdp" | null =>
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
   /** Geheimnisse: undefined = unverändert, "" = löschen */
-  save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; sshKey?: string }) =>
+  save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; gatewayPassword?: string; sshKey?: string }) =>
     invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
   credsList: () => invoke<[Cred, number][]>("creds_list"),

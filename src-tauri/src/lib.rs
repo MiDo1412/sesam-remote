@@ -1,6 +1,8 @@
 mod clipshare;
 mod creds;
 mod diag;
+mod h264;
+mod kdc;
 mod library;
 mod rdp;
 mod rdp_redir;
@@ -37,6 +39,7 @@ fn library_save(
     password: Option<String>,
     vnc_password: Option<String>,
     rdp_password: Option<String>,
+    gateway_password: Option<String>,
     ssh_key: Option<String>,
 ) -> Result<Connection, String> {
     connection.validate()?;
@@ -49,11 +52,13 @@ fn library_save(
     connection.has_password = old.is_some_and(|c| c.has_password);
     connection.has_vnc_password = old.is_some_and(|c| c.has_vnc_password);
     connection.has_rdp_password = old.is_some_and(|c| c.has_rdp_password);
+    connection.has_gateway_password = old.is_some_and(|c| c.has_gateway_password);
     connection.has_key = old.is_some_and(|c| c.has_key);
     for (secret, kind, flag) in [
         (password, Kind::Password, &mut connection.has_password),
         (vnc_password, Kind::VncPassword, &mut connection.has_vnc_password),
         (rdp_password, Kind::RdpPassword, &mut connection.has_rdp_password),
+        (gateway_password, Kind::GatewayPassword, &mut connection.has_gateway_password),
         (ssh_key, Kind::SshKey, &mut connection.has_key),
     ] {
         match secret.as_deref() {
@@ -82,6 +87,7 @@ fn library_delete(path: State<LibraryPath>, id: String) -> Result<(), String> {
         vault::delete(&id, Kind::SshKey)?;
         vault::delete(&id, Kind::VncPassword)?;
         vault::delete(&id, Kind::RdpPassword)?;
+        vault::delete(&id, Kind::GatewayPassword)?;
         library::save(&path.0, &items)?;
     }
     Ok(())
@@ -773,6 +779,24 @@ async fn rdp_open(
     let c = find(&path, &id)?;
     let port = c.rdp_port.ok_or("Desktop über RDP ist für diese Verbindung ausgeschaltet")?;
     let password = vault::get(&c.id, Kind::RdpPassword)?.or(login_secret(&c, Kind::Password)?).unwrap_or_default();
+    let domain = (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string());
+    let gateway = match c.rdp_gateway.trim() {
+        "" => None,
+        gw if c.rdp_gateway_user.trim().is_empty() => Some(rdp::Gateway {
+            endpoint: gw.to_string(),
+            // «Gleiche wie Verbindung»: Domäne wie bei mstsc vor den Benutzer.
+            user: match &domain {
+                Some(d) if !c.user.contains(['@', '\\']) => format!("{d}\\{}", c.user),
+                _ => c.user.clone(),
+            },
+            password: password.clone(),
+        }),
+        gw => {
+            let pw = vault::get(&c.id, Kind::GatewayPassword)?.unwrap_or_default();
+            diag::add_secret(&pw);
+            Some(rdp::Gateway { endpoint: gw.to_string(), user: c.rdp_gateway_user.trim().to_string(), password: pw })
+        }
+    };
     let pins_path = path.0.with_file_name("known_certs.json");
     let mut pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
@@ -780,7 +804,7 @@ async fn rdp_open(
         host: c.address.clone(),
         port,
         user: c.user.clone(),
-        domain: (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string()),
+        domain,
         password,
         expected_cert: trust.clone().or_else(|| pins.get(&pin_key).cloned()),
         skip_cert_check: c.skip_cert_check,
@@ -789,6 +813,9 @@ async fn rdp_open(
         clipboard: None,
         audio: c.play_audio,
         share: (!c.shared_folder.trim().is_empty()).then(|| PathBuf::from(c.shared_folder.trim())),
+        kdc: kdc::kdc_url(&c.rdp_kdc)?,
+        no_ntlm: c.rdp_no_ntlm,
+        gateway,
     };
     let sid = new_sid(&c.id);
     let (tx, rx) = rdp::channel();

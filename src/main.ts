@@ -277,10 +277,15 @@ const blank = (): Connection => ({
   credentialId: null,
   sharedFolder: "",
   skipCertCheck: false,
+  rdpNoNtlm: false,
+  rdpKdc: "",
+  rdpGateway: "",
+  rdpGatewayUser: "",
   fitToWindow: true,
   hasPassword: false,
   hasVncPassword: false,
   hasRdpPassword: false,
+  hasGatewayPassword: false,
   hasKey: false,
   lastUsed: null,
 });
@@ -324,7 +329,14 @@ function edit(c: Connection | null, asNew = false) {
   pendingThumb = null;
   clearThumb = false;
   $("thumb-name").textContent = editing.customThumb ? "Eigenes Bild" : "Letzter Desktop";
-  ($("advanced") as HTMLDetailsElement).open = editing.skipCertCheck;
+  f.rdpNoNtlm.checked = editing.rdpNoNtlm;
+  f.rdpKdc.value = editing.rdpKdc;
+  f.rdpGateway.value = editing.rdpGateway;
+  f.rdpGatewayUser.value = editing.rdpGatewayUser;
+  f.gatewayPassword.value = "";
+  showPwHint("gw-pw", editing.hasGatewayPassword, "Nur mit eigenem Gateway-Benutzer.");
+  ($("advanced") as HTMLDetailsElement).open =
+    editing.skipCertCheck || editing.rdpNoNtlm || !!editing.rdpKdc || !!editing.rdpGateway;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -337,8 +349,8 @@ function edit(c: Connection | null, asNew = false) {
 /** Gespeicherte Passwörter, die beim Sichern entfernt werden (Feldname). */
 const clearing = new Set<string>();
 
-function showPwHint(prefix: "pw" | "vnc-pw" | "rdp-pw", stored: boolean, emptyText: string) {
-  const field = ({ pw: "password", "vnc-pw": "vncPassword", "rdp-pw": "rdpPassword" } as const)[prefix];
+function showPwHint(prefix: "pw" | "vnc-pw" | "rdp-pw" | "gw-pw", stored: boolean, emptyText: string) {
+  const field = ({ pw: "password", "vnc-pw": "vncPassword", "rdp-pw": "rdpPassword", "gw-pw": "gatewayPassword" } as const)[prefix];
   const hint = $(`${prefix}-hint`);
   const btn = $(`${prefix}-clear`);
   hint.textContent = stored ? "Verschlüsselt im Tresor gespeichert. Leer lassen, um es zu behalten." : emptyText;
@@ -412,6 +424,10 @@ form.onsubmit = async (ev) => {
     os: s("os") as Connection["os"],
     credentialId: s("credentialId") || null,
     customThumb: pendingThumb ? true : clearThumb ? false : editing.customThumb,
+    rdpNoNtlm: fd.get("rdpNoNtlm") !== null,
+    rdpKdc: s("rdpKdc"),
+    rdpGateway: s("rdpGateway"),
+    rdpGatewayUser: s("rdpGatewayUser"),
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],
@@ -422,7 +438,7 @@ form.onsubmit = async (ev) => {
   // Neuer Wert > «Entfernen» (leerer String löscht im Tresor) > unverändert.
   const secret = (k: string) => String(fd.get(k) ?? "") || (clearing.has(k) ? "" : undefined);
   try {
-    const saved = await api.save(c, { password: secret("password"), vncPassword: secret("vncPassword"), rdpPassword: secret("rdpPassword"), sshKey });
+    const saved = await api.save(c, { password: secret("password"), vncPassword: secret("vncPassword"), rdpPassword: secret("rdpPassword"), gatewayPassword: secret("gatewayPassword"), sshKey });
     if (pendingThumb) await invoke("thumb_import", { id: saved.id, file: pendingThumb }).catch((e) => console.warn(e));
     if (pendingThumb || clearThumb) forgetThumb(saved.id);
     selected = saved.id;

@@ -102,11 +102,12 @@ als «Remote Login» (Systemdienst, Anmeldebildschirm) und als Freigabe der lauf
 
 | Crate | Version | Wofür |
 |---|---|---|
-| `ironrdp-connector` | 0.12 | Verbindungsaufbau, NLA (CredSSP über `sspi`, NTLM), Server-Redirection |
+| `ironrdp-connector` | 0.12 | Verbindungsaufbau, NLA (CredSSP über `sspi`: Kerberos, NTLM), Server-Redirection |
 | `ironrdp-tokio` / `-async` | 0.12 | async Ablauf über tokio |
 | `ironrdp-tls` | 0.3 | TLS mit rustls + ring, Rückruf für eigene Zertifikatsprüfung (Pinning) |
 | `ironrdp-session` | 0.13 | aktive Sitzung, Bitmap/RemoteFX, setzt EGFX-Ausgabe ins Bild |
-| `ironrdp-egfx` | 0.5 | Graphics Pipeline: RemoteFX Progressive, ClearCodec, Planar (H.264 nur mit OpenH264) |
+| `ironrdp-egfx` | 0.5 | Graphics Pipeline: RemoteFX Progressive, ClearCodec, Planar, AVC420/AVC444 (Decoder des Systems) |
+| `ironrdp-mstsgu` | 0.1 | RD-Gateway (MS-TSGU über HTTPS/WebSocket) |
 | `ironrdp-displaycontrol` | 0.10 | Auflösung folgt dem Fenster |
 | `ironrdp-input` | 0.9 | Scancodes, Unicode-Tasten, Maus |
 
@@ -139,9 +140,116 @@ die Anzeige (`desktop.ts`) ist für beide Protokolle dieselbe.
   Monitore ein; die Anzeige skaliert die Gesamtfläche deckungsgleich. Bei gemischter Skalierung der
   Monitore kann das Bild leicht unscharf werden (ein Fenster, eine Pixeldichte).
 
-Noch offen: H.264 (OpenH264), Zwischenablage unter macOS, Drucker. Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
+Noch offen: H.264 unter macOS (VideoToolbox), Zwischenablage unter macOS, Drucker. Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
 braucht aber den Server aus dem IronRDP-Git-Repository (die veröffentlichte Version passt nicht zu den
 Client-Crates).
+
+## RDP: Anmeldung, Gateway, H.264 und Sicherheit
+
+Stand nach dem Ausbau «aktuelle Standards» (Microsoft kündigt NTLM ab).
+
+### Kerberos (NLA/CredSSP)
+
+- **Ablauf:** CredSSP läuft in `rdp::credssp` (eigene Schleife statt in `connect_finalize`, sonst wie
+  ironrdp-async). Mit Realm (Benutzer `benutzer@domain.tld` oder DNS-Domäne wie `contoso.local`), mit
+  eingetragenem KDC oder gesperrtem NTLM übergibt Sesam eine `KerberosConfig`: sspi spricht dann SPNEGO
+  (Negotiate) mit **Kerberos zuerst**. Ohne Realm (lokale Konten, GNOME, xrdp, NetBIOS-Domäne `CONTOSO`)
+  bleibt es bei NTLM wie bisher, ohne KDC-Suche.
+- **KDC finden:** macht sspi selbst: Umgebungsvariable `SSPI_KDC_URL`, Registry
+  (`…\Lsa\Kerberos\Domains`), dann DNS-SRV `_kerberos._tcp.<realm>` über den Resolver des Betriebssystems
+  (Windows `DnsQuery_W`, macOS dnssd). Darum braucht Sesam **keinen eigenen Resolver** (hickory o. ä.).
+  Unter Linux fände sspi den KDC nur über krb5.conf oder sein Feature `dns_resolver`.
+- **Transport** (`kdc.rs`): TCP (Längenpräfix), UDP und KDC-Proxy nach MS-KKDCP über HTTP(S). Die
+  KDC-PROXY-MESSAGE (ASN.1) baut und entpackt sspi; Sesam schickt sie per `POST` mit
+  `Content-Type: application/kerberos` (eigenes kleines HTTP/1.1, TLS über `ironrdp-tls` gegen die
+  Stammzertifikate des Systems, ohne Pinning). Antworten höchstens 1 MiB, Zeitlimit 10 s.
+- **Rückfall auf NTLM:** Ist der KDC nicht erreichbar oder kennt er Konto bzw. Server nicht, meldet Sesam
+  sspi `NoAuthenticatingAuthority`, und sspi fällt auf NTLM zurück. Wählt der Server selbst NTLM, ebenso.
+- **«NTLM nicht erlauben»** (Erweitert): sspi kennt zwar eine Paketliste (`!ntlm`), ironrdp-connector 0.12
+  reicht sie aber nicht durch. Sesam prüft darum jedes ausgehende SPNEGO-Token auf die NTLM-Signatur
+  `NTLMSSP\0` und bricht **vor dem Senden** ab. Eine NTLM-Antwort verlässt den Rechner so nie.
+- **Eingaben pro Verbindung:** «Kerberos-KDC» leer = automatisch, sonst `host[:port]`, `tcp://`, `udp://`
+  oder `https://gateway/KdcProxy`. Als Adresse muss der Servername stehen, der im SPN steht
+  (`TERMSRV/<host>`); mit einer IP-Adresse klappt Kerberos nicht (dann NTLM oder Fehler).
+- **Ungetestet** gegen einen echten AD-KDC und einen KDC-Proxy. Getestet: Eingabeformen, HTTP-Rahmen
+  (Content-Length, chunked, Fehlerstatus), TCP-Rundlauf, NTLM-Erkennung, Entscheid Kerberos ja/nein.
+
+**Mit aktuellem Windows-Konto anmelden (SSO):** mit sspi nicht machbar. sspi ist eine reine
+Rust-Implementierung und braucht Benutzer und Passwort; an das TGT bzw. die Anmeldedaten der laufenden
+Windows-Sitzung (LSA) kommt sie nicht heran. Möglich wäre es nur unter Windows mit der nativen SSPI
+(`AcquireCredentialsHandleW`/`InitializeSecurityContextW`, Paket «Negotiate» mit Standard-Anmeldedaten)
+anstelle von `CredSspClient`, also ein zweiter CredSSP-Pfad über das `windows`-Crate. Für die Weitergabe der
+Anmeldedaten an den Server muss zudem die Richtlinie «Delegierung von Standardanmeldeinformationen
+zulassen» mit `TERMSRV/*` gesetzt sein. Aufwand mittel, nur Windows, darum zurückgestellt.
+
+### RD-Gateway (MS-TSGU)
+
+`ironrdp-mstsgu` 0.1 (crates.io) passt zu den übrigen Versionen (ironrdp-tls 0.3, sspi 0.23) und ist
+eingebaut: Feld «RD-Gateway» (`host[:port]`, Standard 443) unter Erweitert. «Gateway-Benutzer» leer =
+gleiche Zugangsdaten wie die Verbindung (mit Domäne als `DOMÄNE\benutzer`), sonst eigener Benutzer mit
+eigenem Gateway-Passwort im Tresor. Das Crate spricht HTTPS/WebSocket und fällt auf den alten
+HTTP-Transport zurück; Anmeldung am Gateway über HTTP Negotiate (Kerberos, dann NTLM) oder Basic.
+Das Gateway-Zertifikat prüft es strikt gegen die Stammzertifikate des Systems (wie mstsc, ohne
+Pinning-Dialog); das Zertifikat des RDP-Servers dahinter wie gewohnt mit Pinning. Umleitungen während des
+Aufbaus laufen wieder durch dasselbe Gateway.
+
+Kosten: `ironrdp-mstsgu` zieht über `sspi/network_client` reqwest 0.12, hyper und **aws-lc-rs** mit
+(baut hier ohne CMake/NASM). Weil damit zwei rustls-Provider im Baum sind, installiert `rdp.rs` ring als
+Standard-Provider, bevor TLS beginnt. Nicht umgesetzt: RPC-over-HTTP (`RpchStream`), UDP-Seitenkanal,
+Smartcard am Gateway, Anzeige der Consent-Meldung (wird automatisch akzeptiert), Gateway-Richtlinien
+(Umleitungsverbote). **Ungetestet** gegen ein echtes Gateway.
+
+### H.264 (AVC420/AVC444)
+
+`GraphicsPipelineClient::new` erhält einen `H264Decoder` (`h264.rs`). Unter Windows ist das der
+**Microsoft H.264 Video Decoder MFT** (Media Foundation über das `windows`-Crate 0.62, das ohnehin im Baum
+ist): Eingabe Annex B (das AVC-Längenformat wird umgeschrieben), Ausgabe NV12, Low-Latency-Modus, damit
+jedes Eingabebild sofort ein Ausgabebild liefert (AVC444 paart zwei aufeinanderfolgende Bilder). Sesam
+gibt die YUV-Ebenen zurück (`decode_yuv420`); die Farbumrechnung nach MS-RDPEGFX und die
+AVC444-Kombination macht ironrdp-egfx. Ohne Decoder (Windows N ohne Media Feature Pack) meldet
+`wait_until_ready` false, und der Server bekommt kein AVC angeboten. Dekodiert wird in Software auf dem
+Sitzungs-Thread (ohne D3D11-Manager); für 4K mit hoher Bildrate wäre DXVA der nächste Schritt.
+Getestet mit einem im Test erzeugten H.264-Strom aus I_PCM-Makroblöcken (zwei IDR-Bilder, Werte exakt);
+gegen einen echten Server ungetestet. macOS: VideoToolbox (`VTDecompressionSession`) nach demselben
+Muster, noch offen.
+
+**Lizenz und Patente (GPL-3.0-or-later):**
+
+- Media Foundation und VideoToolbox gehören zum Betriebssystem. Die GPL erlaubt das Linken gegen
+  Systembibliotheken (GPLv3 §1, «System Libraries»); die H.264-Patentlizenz hat Microsoft bzw. Apple mit
+  dem System abgegolten. Sesam liefert keinen Codec mit. Das ist der bevorzugte Weg.
+- **OpenH264** (Cisco) steht unter BSD-2-Clause und ist damit GPL-kompatibel. Die Patentlizenz (Via LA,
+  früher MPEG LA) deckt Cisco aber **nur für die von Cisco gebauten und verteilten Binärdateien**, die
+  zur Laufzeit von Cisco heruntergeladen werden (`ironrdp-egfx`, Feature `openh264-libloading`). Die
+  Cisco-DLL darf nicht im Installer stecken, und Ciscos Hinweistext muss angezeigt werden. Selbst aus dem
+  Quelltext gebaut und mitgeliefert (`openh264-bundled`) wäre der Code GPL-kompatibel, aber ohne
+  Patentlizenz. Für Sesam darum höchstens als Rückfall auf Systemen ohne Decoder, nicht als Standard.
+- FFmpeg (LGPL/GPL) wäre lizenzrechtlich möglich, bringt aber C-Bibliotheken in den Bau und dieselbe
+  Patentfrage wie OpenH264.
+
+### Sicherheit: was IronRDP und sspi können und was nicht
+
+- **TLS:** rustls mit ring, TLS 1.2 und **TLS 1.3** (rustls-Standard), kein TLS 1.0/1.1, keine alten
+  Chiffren, keine Sitzungswiederaufnahme. Hinweis: `ironrdp-tls` setzt `KeyLogFile`; ist die
+  Umgebungsvariable `SSLKEYLOGFILE` gesetzt, landen die Sitzungsschlüssel in dieser Datei (wie bei
+  Browsern, nur relevant, wenn jemand die Variable setzt).
+- **Serverauthentisierung:** Zertifikatskette und Name gegen die Stammzertifikate des Systems; schlägt das
+  fehl, entscheidet das Pinning (SHA256, beim ersten Mal bestätigt). Zusätzlich bindet CredSSP den
+  öffentlichen Schlüssel des TLS-Zertifikats (pubKeyAuth), sodass ein Mann in der Mitte mit eigenem
+  Zertifikat die NLA-Anmeldung nicht weiterreichen kann. Mit Kerberos authentisiert sich auch der Server
+  gegenüber dem Client (gegenseitig über `TERMSRV/<host>`); bei NTLM nicht.
+- **CredSSP-Version / CVE-2018-0886:** sspi spricht TSRequest Version 6 mit Client-Nonce und
+  Hash-Bindung (ab v5). sspi selbst würde ungepatchte Server (v2 bis v4) noch bedienen; **Sesam lehnt
+  Server unter Version 5 ab** (entspricht «Encryption Oracle Remediation: Mitigated» bei mstsc).
+- **Restricted Admin:** nicht umgesetzt. sspi kennt `CredSspMode::CredentialLess`, aber
+  `CredsspSequence::init` in ironrdp-connector 0.12 setzt fest `WithCredentials`, und der Connector setzt
+  das X.224-Flag `RESTRICTED_ADMIN_MODE_REQUIRED` nicht. Machbar mit einem eigenen `CredSspClient` statt
+  `CredsspSequence` und eigener X.224-Anfrage (wie bei RDSTLS); sinnvoll nur mit Kerberos und wenn der
+  Server Restricted Admin erlaubt.
+- **Remote Credential Guard:** mit sspi nicht machbar. Er braucht `TSRemoteGuardCreds` mit Anmeldedaten,
+  die das lokale LSA (Kerberos-Paket von Windows) ausstellt; das geht nur über die native Windows-SSPI.
+- **NTLM:** nur noch Rückfall und pro Verbindung abschaltbar (siehe oben). Passwörter bleiben aus dem Log
+  (`diag::add_secret`), auch das Gateway-Passwort.
 
 ## Plattformen
 

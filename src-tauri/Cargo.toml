@@ -51,6 +51,9 @@ ironrdp-egfx = "0.5"
 ironrdp-input = "0.9"
 ironrdp-graphics = "0.11"
 ironrdp-cliprdr = "0.9"
+# RD-Gateway (MS-TSGU über HTTPS/WebSocket); zieht über sspi aws-lc-rs mit, darum Provider ring fest installieren
+ironrdp-mstsgu = { version = "0.1", features = ["rustls"] }
+url = "2"
 # Ton (nur PCM: ohne Opus/AAC keine C-Bibliotheken im Build)
 ironrdp-rdpsnd = "0.11"
 ironrdp-rdpsnd-native = { version = "0.8", default-features = false }
@@ -73,6 +76,8 @@ chrono = "0.4"
 # Windows-Zwischenablage für RDP (Text, Bilder, Dateien)
 [target.'cfg(windows)'.dependencies]
 ironrdp-cliprdr-native = "0.9"
+# H.264 (EGFX AVC) über Media Foundation; dieselbe Version wie bei cpal/ironrdp im Baum
+windows = { version = "0.62", features = ["Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_Foundation"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
