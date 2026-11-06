@@ -392,3 +392,7 @@ fieldset.svc legend { float: none; padding: 0; }
 .thumb.has-image .thumb-os { display: none; }
 .thumb-os { display: inline-flex; }
 .pick-name { flex: 1; min-width: 0; align-self: center; font-weight: 400; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Ziehen und Ablegen ---------- */
+.nav-item.drop { background: color-mix(in srgb, var(--accent) 18%, transparent); outline: 2px solid var(--accent); outline-offset: -2px; }
+.desktop.drop { outline: 3px dashed var(--chrome-accent); outline-offset: -6px; }

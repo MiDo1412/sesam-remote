@@ -55,16 +55,17 @@ async function reload() {
 
 function render() {
   const groups = [...new Set(items.map((c) => c.group).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de-CH"));
-  const navItem = (label: string, count: number, on: boolean, click: () => void) => {
+  const navItem = (label: string, count: number, on: boolean, click: () => void, group?: string) => {
     const a = el("button", { type: "button", class: "nav-item", "aria-current": on ? "page" : "false" }, el("span", {}, label), el("span", { class: "count" }, String(count)));
     a.onclick = click;
+    if (group !== undefined) a.dataset.group = group;
     return a;
   };
   $("nav").replaceChildren(
-    navItem("Alle", items.length, filter.kind === "all", () => ((filter = { kind: "all" }), render())),
+    navItem("Alle", items.length, filter.kind === "all", () => ((filter = { kind: "all" }), render()), ""),
     ...(groups.length ? [el("div", { class: "nav-header" }, "Gruppen")] : []),
     ...groups.map((g) =>
-      navItem(g, items.filter((c) => c.group === g).length, filter.kind === "group" && filter.name === g, () => ((filter = { kind: "group", name: g }), render())),
+      navItem(g, items.filter((c) => c.group === g).length, filter.kind === "group" && filter.name === g, () => ((filter = { kind: "group", name: g }), render()), g),
     ),
   );
   $("groups").replaceChildren(...groups.map((g) => el("option", { value: g })));
@@ -88,6 +89,7 @@ function render() {
         el("div", { class: "card-sub" }, c.address),
       );
       card.onclick = () => ((selected = c.id), render());
+      card.onpointerdown = (e) => dragCard(e, card, c);
       card.ondblclick = () => open(c, c.defaultView);
       card.oncontextmenu = (e) => (e.preventDefault(), cardMenu(card, c));
       return card;
@@ -132,6 +134,49 @@ function renderDetails() {
     btn("Bearbeiten …", "plain", () => edit(c)),
     ...(c.sshPort ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
   );
+}
+
+/** Verbindung auf eine Gruppe (Seitenleiste) ziehen = Gruppe wechseln. «Alle» = ohne Gruppe.
+ *  Eigene Zeiger-Logik, weil Tauri HTML-Drag&Drop für Systemdateien abfängt. */
+function dragCard(e: PointerEvent, card: HTMLElement, c: Connection) {
+  if (e.button !== 0) return;
+  const [sx, sy] = [e.clientX, e.clientY];
+  let ghost: HTMLElement | null = null;
+  let target: HTMLElement | null = null;
+  const move = (m: PointerEvent) => {
+    if (!ghost && Math.hypot(m.clientX - sx, m.clientY - sy) < 6) return;
+    if (!ghost) {
+      card.setPointerCapture(m.pointerId);
+      ghost = el("div", { class: "drag-ghost" }, c.name);
+      document.body.append(ghost);
+    }
+    ghost.style.transform = `translate(${m.clientX + 12}px, ${m.clientY + 8}px)`;
+    const hit = document.elementFromPoint(m.clientX, m.clientY)?.closest<HTMLElement>(".nav-item[data-group]") ?? null;
+    if (hit !== target) {
+      target?.classList.remove("drop");
+      target = hit;
+      target?.classList.add("drop");
+    }
+  };
+  const up = async () => {
+    card.removeEventListener("pointermove", move);
+    card.removeEventListener("pointerup", up);
+    if (!ghost) return;
+    ghost.remove();
+    target?.classList.remove("drop");
+    // Nach dem Ziehen keinen Klick auslösen
+    card.addEventListener("click", (ev) => ev.stopImmediatePropagation(), { capture: true, once: true });
+    const group = target?.dataset.group;
+    if (group === undefined || group === c.group) return;
+    try {
+      await api.save({ ...c, group }, {});
+      reload();
+    } catch (err) {
+      tell("Nicht verschoben", String(err));
+    }
+  };
+  card.addEventListener("pointermove", move);
+  card.addEventListener("pointerup", up);
 }
 
 /** Kontextmenü einer Verbindung in der Bibliothek. */

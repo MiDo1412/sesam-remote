@@ -292,6 +292,38 @@ fn create_shortcut(app: AppHandle, path: State<LibraryPath>, id: String, view: S
     Ok(file.display().to_string())
 }
 
+/// Dateien aufs Desktop-Fenster gezogen: per SFTP nach ~/Sesam-Ablage (wenn SSH an ist),
+/// sonst in den per RDP freigegebenen Ordner kopieren. Gibt eine Meldung für die Statuszeile zurück.
+#[tauri::command]
+async fn drop_files(path: State<'_, LibraryPath>, id: String, files: Vec<String>) -> Result<String, String> {
+    let c = find(&path, &id)?;
+    let files: Vec<PathBuf> = files.into_iter().map(PathBuf::from).collect();
+    if c.ssh_port.is_some() {
+        let share = ClipShare::new(c.clone(), std::env::temp_dir());
+        let done = share.upload_files(&files).await?;
+        return Ok(format!("{} Element(e) nach ~/Sesam-Ablage hochgeladen.", done.len()));
+    }
+    let dir = c.shared_folder.trim();
+    if c.rdp_port.is_some() && !dir.is_empty() {
+        let dir = PathBuf::from(dir);
+        for f in &files {
+            let name = f.file_name().ok_or("Ungültige Datei")?;
+            let mut target = dir.join(name);
+            let mut n = 2;
+            while target.exists() {
+                target = dir.join(format!("{} ({n})", name.to_string_lossy()));
+                n += 1;
+            }
+            if f.is_dir() {
+                return Err("Ordner lassen sich nur mit SSH übertragen.".into());
+            }
+            std::fs::copy(f, &target).map_err(|e| format!("{}: {e}", f.display()))?;
+        }
+        return Ok(format!("{} Datei(en) in den freigegebenen Ordner kopiert (auf dem Server als Laufwerk sichtbar).", files.len()));
+    }
+    Err("Für Dateien SSH einschalten oder unter RDP einen Ordner freigeben.".into())
+}
+
 /// Gemerkte TLS-Zertifikate (RDP/VNC) für die Einstellungen.
 #[tauri::command]
 fn certs_list(path: State<LibraryPath>) -> Vec<(String, String)> {
@@ -801,6 +833,7 @@ pub fn run() {
             certs_list,
             quick_register,
             create_shortcut,
+            drop_files,
             thumb_save,
             thumb_get,
             thumb_import,

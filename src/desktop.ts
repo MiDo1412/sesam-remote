@@ -8,6 +8,7 @@ import { ICON } from "./icons";
 import { enhanceSelect } from "./menu";
 import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { saveDesktopThumb } from "./thumbs";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
 
 type Mode = "fit" | "scale" | "native";
@@ -353,7 +354,22 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   window.addEventListener("focus", syncClipboard);
   canvas.addEventListener("focus", syncClipboard);
 
+  // Dateien aus Explorer/Finder auf den Desktop ziehen = hochladen.
+  const unlistenDrop = getCurrentWebview().onDragDropEvent((ev) => {
+    if (!ctx.isActive() || !sid) return;
+    wrap.classList.toggle("drop", ev.payload.type === "over");
+    if (ev.payload.type === "drop") {
+      wrap.classList.remove("drop");
+      status.textContent = "Übertrage …";
+      invoke<string>("drop_files", { id: c.id, files: ev.payload.paths })
+        .then((m) => (status.textContent = m))
+        .catch((e) => (status.textContent = String(e)));
+    }
+    if (ev.payload.type === "leave") wrap.classList.remove("drop");
+  });
+
   const close = () => {
+    unlistenDrop.then((u) => u());
     if (sid) void saveDesktopThumb(c, canvas);
     ro.disconnect();
     touch.dispose();
