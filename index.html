@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="de-CH">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sesam Remote</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <div id="library" class="app">
+      <header class="toolbar">
+        <label class="search">
+          <span class="sr-only">Verbindungen suchen</span>
+          <input id="search" type="search" placeholder="Verbindungen suchen" />
+        </label>
+      </header>
+      <div class="body">
+        <nav id="nav" aria-label="Bibliothek"></nav>
+        <main>
+          <section aria-labelledby="title" class="list">
+            <div class="list-head">
+              <h1 id="title">Alle Verbindungen</h1>
+              <button id="new" type="button" class="primary">＋ Neue Verbindung</button>
+            </div>
+            <div id="grid" class="grid"></div>
+            <p id="empty" class="empty" hidden>Noch keine Verbindungen. Lege mit «Neue Verbindung» die erste an.</p>
+          </section>
+          <aside id="details" aria-label="Details" hidden></aside>
+        </main>
+      </div>
+    </div>
+
+    <div id="session" class="session" hidden>
+      <header class="session-bar">
+        <button id="session-back" type="button" class="plain">‹ Bibliothek</button>
+        <div>
+          <h1 id="session-title"></h1>
+          <div id="session-sub" class="sub"></div>
+        </div>
+      </header>
+      <div id="terminal" class="terminal"></div>
+      <div id="session-status" role="status" class="status"></div>
+    </div>
+
+    <dialog id="editor" aria-labelledby="editor-title">
+      <form id="editor-form" method="dialog" class="sheet">
+        <h2 id="editor-title">Verbindung bearbeiten</h2>
+        <label>Name<input name="name" required /></label>
+        <label>Gruppe<input name="group" list="groups" /></label>
+        <datalist id="groups"></datalist>
+        <label class="span">Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
+        <hr />
+        <fieldset>
+          <legend>Desktop <small>VNC</small></legend>
+          <label class="switch"><input type="checkbox" name="vncOn" /> Aktiv</label>
+          <label>Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
+        </fieldset>
+        <fieldset>
+          <legend>Shell und Dateien <small>SSH mit SFTP</small></legend>
+          <label class="switch"><input type="checkbox" name="sshOn" /> Aktiv</label>
+          <label>Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
+        </fieldset>
+        <hr />
+        <label>Benutzer<input name="user" autocomplete="off" /></label>
+        <label>SSH-Schlüssel
+          <select name="keyMode">
+            <option value="keep">Unverändert</option>
+            <option value="none">Keiner, nur Passwort</option>
+            <option value="import">Schlüssel importieren …</option>
+          </select>
+        </label>
+        <label class="span" id="key-row" hidden>Privater Schlüssel (OpenSSH-Format)
+          <textarea name="key" rows="4" class="mono" spellcheck="false"></textarea>
+        </label>
+        <label class="span">Passwort
+          <input name="password" type="password" autocomplete="new-password" />
+          <small id="pw-hint"></small>
+        </label>
+        <hr />
+        <label class="option"><span><b>Gemeinsame Zwischenablage</b><small>Text, Bilder und Dateien hier kopieren, dort einfügen</small></span><input type="checkbox" name="sharedClipboard" /></label>
+        <label class="option"><span><b>An Fenster anpassen</b><small>Entfernte Auflösung folgt der Fenstergrösse</small></span><input type="checkbox" name="fitToWindow" /></label>
+        <div class="row"><span>Ausrichtung des Monitors</span>
+          <div class="segmented" role="radiogroup" aria-label="Ausrichtung des Monitors">
+            <label><input type="radio" name="orientation" value="landscape" />Querformat</label>
+            <label><input type="radio" name="orientation" value="portrait" />Hochformat</label>
+          </div>
+        </div>
+        <div class="row"><span>Bei Doppelklick öffnen</span>
+          <div class="segmented" role="radiogroup" aria-label="Standardansicht">
+            <label><input type="radio" name="defaultView" value="desktop" />Desktop</label>
+            <label><input type="radio" name="defaultView" value="shell" />Shell</label>
+            <label><input type="radio" name="defaultView" value="files" />Dateien</label>
+          </div>
+        </div>
+        <p id="editor-error" class="error span" role="alert"></p>
+        <div class="row actions">
+          <button type="button" id="editor-delete" class="danger">Löschen</button>
+          <button type="button" id="editor-cancel">Abbrechen</button>
+          <button type="submit" class="primary">Sichern</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
