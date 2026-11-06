@@ -373,7 +373,7 @@ impl Session {
         }
     }
 
-    pub fn close(self) {
+    pub fn close(&self) {
         self.reader.abort();
     }
 }

@@ -1,3 +1,4 @@
+mod clipshare;
 mod library;
 mod sftp;
 mod ssh;
@@ -10,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Manager, State};
-use tauri_plugin_clipboard_manager::ClipboardExt;
+use clipshare::{ClipShare, Last, Local};
 use vault::Kind;
 
 struct LibraryPath(PathBuf);
@@ -222,10 +223,9 @@ fn transfer_cancel(transfers: State<Transfers>, tid: String) {
 // ---------- VNC ----------
 
 struct Desktop {
-    session: vnc::Session,
-    shared_clipboard: bool,
-    /// Zuletzt abgeglichener Text, damit nichts im Kreis läuft.
-    last_clip: Arc<Mutex<String>>,
+    session: Arc<vnc::Session>,
+    share: Arc<ClipShare>,
+    events: Channel<InvokeResponseBody>,
 }
 
 #[derive(Default)]
@@ -278,8 +278,9 @@ async fn vnc_open(
         let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
     }
 
-    let last_clip = Arc::new(Mutex::new(String::new()));
-    let (clip, share) = (last_clip.clone(), c.shared_clipboard);
+    let downloads = app.path().download_dir().unwrap_or_else(|_| std::env::temp_dir());
+    let share = Arc::new(ClipShare::new(c.clone(), downloads));
+    let (sh, events) = (share.clone(), on_event.clone());
     let session = vnc::Session::start(stream, init, move |e| {
         let f = match e {
             vnc::Event::Rect { rect: r, rgba } => frame(0, &[r.x, r.y, r.w, r.h], &rgba),
@@ -289,16 +290,29 @@ async fn vnc_open(
             vnc::Event::Info(t) => frame(5, &[], t.as_bytes()),
             vnc::Event::Cursor { hot_x, hot_y, w, h, rgba } => frame(6, &[hot_x, hot_y, w, h], &rgba),
             vnc::Event::Clipboard(t) => {
-                if share && app.clipboard().write_text(t.clone()).is_ok() {
-                    *clip.lock().unwrap() = t;
+                if !sh.enabled {
+                    return true;
                 }
+                if let Some(paths) = clipshare::file_uris(&t).filter(|_| sh.has_ssh()) {
+                    let (sh, ev) = (sh.clone(), on_event.clone());
+                    tauri::async_runtime::spawn(async move {
+                        let msg = match sh.download_to_clipboard(&paths).await {
+                            Ok(n) => format!("{n} Datei(en) vom Server liegen in der Zwischenablage ({})", sh.download_dir().join("Sesam-Ablage").display()),
+                            Err(e) => e,
+                        };
+                        let _ = ev.send(frame(5, &[], msg.as_bytes()));
+                    });
+                    return true;
+                }
+                clipshare::write_local_text(&t);
+                *sh.last.lock().unwrap() = Last::Text(t);
                 return true;
             }
         };
         on_event.send(f).is_ok()
     });
     let sid = new_sid(&c.id);
-    desktops.0.lock().unwrap().insert(sid.clone(), Desktop { session, shared_clipboard: c.shared_clipboard, last_clip });
+    desktops.0.lock().unwrap().insert(sid.clone(), Desktop { session: Arc::new(session), share, events });
     Ok(sid)
 }
 
@@ -323,16 +337,67 @@ fn vnc_set_size(desktops: State<Desktops>, sid: String, width: u16, height: u16)
 }
 
 /// Lokale Zwischenablage an den Server geben, falls sie sich geändert hat (beim Fokussieren aufgerufen).
+/// Text direkt über VNC; Dateien und Bilder per SFTP nach `~/Sesam-Ablage`, dazu deren Pfade als Text.
 #[tauri::command]
-fn vnc_clipboard_sync(app: AppHandle, desktops: State<Desktops>, sid: String) -> Result<(), String> {
-    let Ok(text) = app.clipboard().read_text() else { return Ok(()) };
-    with_desktop(&desktops, &sid, |d| {
-        let mut last = d.last_clip.lock().unwrap();
-        if d.shared_clipboard && *last != text {
-            d.session.clipboard(&text);
-            *last = text;
+async fn vnc_clipboard_sync(desktops: State<'_, Desktops>, sid: String) -> Result<(), String> {
+    let (session, share, events) = with_desktop(&desktops, &sid, |d| (d.session.clone(), d.share.clone(), d.events.clone()))?;
+    if !share.enabled {
+        return Ok(());
+    }
+    let info = |m: &str| {
+        let _ = events.send(frame(5, &[], m.as_bytes()));
+    };
+    // `true`, wenn neu (und merkt es sich).
+    let fresh = |next: Last| {
+        let mut last = share.last.lock().unwrap();
+        let new = *last != next;
+        *last = next;
+        new
+    };
+    let needs_ssh = "Dateien und Bilder über die Zwischenablage brauchen SSH (in der Verbindung einschalten).";
+    match clipshare::read_local() {
+        Local::Nothing => {}
+        Local::Text(t) => {
+            if fresh(Last::Text(t.clone())) {
+                session.clipboard(&t);
+            }
         }
-    })
+        Local::Files(files) => {
+            if !fresh(Last::Files(files.clone())) {
+                return Ok(());
+            }
+            if !share.has_ssh() {
+                info(needs_ssh);
+                return Ok(());
+            }
+            info(&format!("Kopiere {} Element(e) nach ~/Sesam-Ablage …", files.len()));
+            match share.upload_files(&files).await {
+                Ok(paths) => {
+                    session.clipboard(&paths.join("\n"));
+                    info(&format!("{} Element(e) in ~/Sesam-Ablage; der Pfad liegt in der Zwischenablage des Servers.", paths.len()));
+                }
+                Err(e) => info(&e),
+            }
+        }
+        Local::Image { width, height, rgba } => {
+            if !fresh(Last::Image(clipshare::hash(&rgba))) {
+                return Ok(());
+            }
+            if !share.has_ssh() {
+                info(needs_ssh);
+                return Ok(());
+            }
+            let png = clipshare::encode_png(width, height, &rgba)?;
+            match share.upload_png(&png).await {
+                Ok(path) => {
+                    session.clipboard(&path);
+                    info(&format!("Bild als {path} abgelegt; der Pfad liegt in der Zwischenablage des Servers."));
+                }
+                Err(e) => info(&e),
+            }
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -346,7 +411,6 @@ fn vnc_close(desktops: State<Desktops>, sid: String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             app.manage(LibraryPath(dir.join("library.json")));
