@@ -25,9 +25,9 @@ SFTP-Dateitransfer in einer Bibliothek. Lizenz: GPL-3.0-or-later (siehe `LICENSE
 | Bibliothek + Tresor | läuft, mit Tests |
 | Verbindung anlegen/bearbeiten (Sheet) | läuft |
 | SSH-Shell | läuft (Passwort oder ed25519-Schlüssel aus dem Tresor, Fingerabdruck bestätigen) |
-| VNC | Protokoll mit Tests fertig, Anzeige im Fenster; gegen echte Hosts noch ungetestet |
-| Zwischenablage (Text über VNC) | eingebaut, ungetestet |
-| SFTP, Dateien über die Zwischenablage | offen |
+| VNC | Anzeige im Fenster, VNC-/Apple-Anmeldung, VeNCrypt (TLS) mit Zertifikat-Pinning, lokaler Mauszeiger; gegen echte Hosts noch ungetestet |
+| Dateien (SFTP) | zweispaltig, Ziehen und Ablegen, Übertragungsliste, Umbenennen/Löschen; gegen einen Test-Server geprüft |
+| Gemeinsame Zwischenablage | Text über VNC; Dateien und Bilder über SFTP nach `~/Sesam-Ablage`, `file://`-Listen vom Server als lokale Dateien |
 
 ## Entwickeln
 
