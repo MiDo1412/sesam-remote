@@ -93,6 +93,44 @@ Ursprünglicher Spike-Plan:
 4. Bildübertragung ans Frontend: Rechtecke als Binärdaten über `ipc::Channel`
    (`Response` mit `Vec<u8>`), Zeichnen mit `putImageData`.
 
+## RDP: Crate-Entscheid (Meilenstein 4)
+
+Anlass: Ubuntu 26.04 / GNOME 50 ist reines Wayland; GNOME Remote Desktop bietet nur noch RDP,
+als «Remote Login» (Systemdienst, Anmeldebildschirm) und als Freigabe der laufenden Sitzung.
+
+**Entscheid: IronRDP** (Devolutions, Rust, MIT/Apache-2.0), aufgeteilt in einzelne Crates:
+
+| Crate | Version | Wofür |
+|---|---|---|
+| `ironrdp-connector` | 0.12 | Verbindungsaufbau, NLA (CredSSP über `sspi`, NTLM), Server-Redirection |
+| `ironrdp-tokio` / `-async` | 0.12 | async Ablauf über tokio |
+| `ironrdp-tls` | 0.3 | TLS mit rustls + ring, Rückruf für eigene Zertifikatsprüfung (Pinning) |
+| `ironrdp-session` | 0.13 | aktive Sitzung, Bitmap/RemoteFX, setzt EGFX-Ausgabe ins Bild |
+| `ironrdp-egfx` | 0.5 | Graphics Pipeline: RemoteFX Progressive, ClearCodec, Planar (H.264 nur mit OpenH264) |
+| `ironrdp-displaycontrol` | 0.10 | Auflösung folgt dem Fenster |
+| `ironrdp-input` | 0.9 | Scancodes, Unicode-Tasten, Maus |
+
+Gründe: reines Rust (baut unter Windows ohne C-Bibliotheken, später iOS), aktiv gepflegt,
+EGFX mit RemoteFX Progressive (GNOME verlangt die Graphics Pipeline), Server-Redirection im Connector.
+Alternative FreeRDP: in C, über FFI und mit grossem Bau-Aufwand auf allen Zielen.
+
+Umsetzung in `src-tauri/src/rdp.rs`; Bild und Ereignisse laufen über dieselben Binärrahmen wie VNC,
+die Anzeige (`desktop.ts`) ist für beide Protokolle dieselbe.
+
+- **Zertifikat:** Gültige Kette akzeptiert rustls; sonst entscheidet der gepinnte SHA256 (`known_certs.json`),
+  beim ersten Mal nach Bestätigung im UI.
+- **Server-Redirection (GNOME-Übergabe):** Nach dem Login am Anmeldebildschirm schickt GNOME eine
+  Redirection-PDU. Sesam verbindet neu mit Routing-Token, Session-ID und Passwort-Cookie. Wie FreeRDP
+  nimmt Sesam das Passwort aus der Umleitung auch für NLA. Höchstens 8 Umleitungen.
+- **Tastatur:** physische Tasten als Scancodes (das Layout wählt der Server); mit AltGr erzeugte Zeichen
+  und Tasten ohne Scancode als Unicode-Ereignisse.
+- **Passwort:** eigenes RDP-Passwort im Tresor, sonst das Passwort des Benutzers; Domäne optional.
+
+Noch offen: Zwischenablage (`ironrdp-cliprdr`), Audio (`ironrdp-rdpsnd`), Laufwerke (`ironrdp-rdpdr`),
+mehrere Monitore, H.264 (OpenH264). Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
+braucht aber den Server aus dem IronRDP-Git-Repository (die veröffentlichte Version passt nicht zu den
+Client-Crates).
+
 ## Plattformen
 
 Zuerst Windows. macOS ist ohne Code-Änderung zu erwarten. iPad (`tauri ios init`) braucht
