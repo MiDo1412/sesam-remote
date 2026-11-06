@@ -164,6 +164,16 @@ async fn sftp_mkdir(files: State<'_, Files>, sid: String, dir: String, name: Str
 }
 
 #[tauri::command]
+async fn sftp_rename(files: State<'_, Files>, sid: String, path: String, name: String) -> Result<String, String> {
+    files_get(&files, &sid)?.rename(&path, &name).await
+}
+
+#[tauri::command]
+async fn sftp_remove(files: State<'_, Files>, sid: String, path: String) -> Result<(), String> {
+    files_get(&files, &sid)?.remove(&path).await
+}
+
+#[tauri::command]
 fn sftp_close(files: State<Files>, sid: String) {
     files.0.lock().unwrap().remove(&sid);
 }
@@ -436,6 +446,8 @@ pub fn run() {
             sftp_open,
             sftp_list,
             sftp_mkdir,
+            sftp_rename,
+            sftp_remove,
             sftp_close,
             local_list,
             local_home,

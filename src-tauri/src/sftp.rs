@@ -73,6 +73,13 @@ fn numbered(name: &str, n: u32, dir: bool) -> String {
     }
 }
 
+fn valid_name(name: &str) -> Result<(), String> {
+    if name.is_empty() || name.contains('/') || name == "." || name == ".." {
+        return Err("Ungültiger Name".into());
+    }
+    Ok(())
+}
+
 // ---------- Auflisten ----------
 
 impl Sftp {
@@ -99,12 +106,54 @@ impl Sftp {
     }
 
     pub async fn mkdir(&self, dir: &str, name: &str) -> Result<String, String> {
-        if name.is_empty() || name.contains('/') || name == "." || name == ".." {
-            return Err("Ungültiger Ordnername".into());
-        }
+        valid_name(name)?;
         let p = rjoin(dir, name);
         self.s.create_dir(&p).await.map_err(err)?;
         Ok(p)
+    }
+
+    /// Im selben Ordner umbenennen; ein belegter Name wird nicht überschrieben.
+    pub async fn rename(&self, path: &str, name: &str) -> Result<String, String> {
+        valid_name(name)?;
+        let dir = rparent(path).ok_or("Das Wurzelverzeichnis lässt sich nicht umbenennen")?;
+        let to = rjoin(&dir, name);
+        if self.s.try_exists(&to).await.map_err(err)? {
+            return Err(format!("«{name}» gibt es dort schon"));
+        }
+        self.s.rename(path, &to).await.map_err(|e| format!("{path}: {e}"))?;
+        Ok(to)
+    }
+
+    /// Datei oder Ordner samt Inhalt löschen. Verknüpfungen werden gelöscht, nicht verfolgt.
+    pub async fn remove(&self, path: &str) -> Result<(), String> {
+        if rparent(path).is_none() {
+            return Err("Das Wurzelverzeichnis lässt sich nicht löschen".into());
+        }
+        let m = self.s.symlink_metadata(path).await.map_err(|e| format!("{path}: {e}"))?;
+        if !m.file_type().is_dir() {
+            return self.s.remove_file(path).await.map_err(|e| format!("{path}: {e}"));
+        }
+        // Erst alle Dateien, dann die Ordner von innen nach aussen.
+        let (mut dirs, mut stack) = (Vec::new(), vec![path.to_string()]);
+        while let Some(d) = stack.pop() {
+            for e in self.s.read_dir(&d).await.map_err(|e| format!("{d}: {e}"))? {
+                let n = e.file_name();
+                if n == "." || n == ".." {
+                    continue;
+                }
+                let p = rjoin(&d, &n);
+                if e.file_type().is_dir() {
+                    stack.push(p);
+                } else {
+                    self.s.remove_file(&p).await.map_err(|e| format!("{p}: {e}"))?;
+                }
+            }
+            dirs.push(d);
+        }
+        for d in dirs.iter().rev() {
+            self.s.remove_dir(d).await.map_err(|e| format!("{d}: {e}"))?;
+        }
+        Ok(())
     }
 
     async fn unique(&self, dir: &str, name: &str, is_dir: bool) -> Result<String, String> {
@@ -515,6 +564,14 @@ mod tests {
         assert_eq!(std::fs::read_to_string(base.join("projekt (2)").join("a.txt")).unwrap(), "Grüezi");
 
         assert!(download(&sftp, "/home/fehlt", &base, |_| {}).await.is_err());
+
+        // Umbenennen und rekursiv löschen.
+        assert_eq!(sftp.rename("/home/projekt (2)", "kopie").await.unwrap(), "/home/kopie");
+        assert!(sftp.rename("/home/kopie", "projekt").await.unwrap_err().contains("gibt es dort schon"));
+        assert!(sftp.rename("/home/kopie", "a/b").await.is_err());
+        sftp.remove("/home/kopie").await.unwrap();
+        assert!(!fs.lock().unwrap().nodes.keys().any(|k| k.starts_with("/home/kopie")));
+        assert!(sftp.remove("/").await.is_err());
 
         // Keine Teildateien übrig, weder hier noch dort.
         assert!(!fs.lock().unwrap().nodes.keys().any(|k| k.ends_with(PARTIAL)));

@@ -1,6 +1,6 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, HOSTKEY_UNKNOWN, type Connection, type Entry, type Listing, type Progress } from "./api";
-import { askHostKey, askText, showView, tell } from "./ui";
+import { ask, askHostKey, askText, showView, tell } from "./ui";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
@@ -135,6 +135,8 @@ export async function openFiles(c: Connection, onBack: () => void) {
         tr.ondblclick = () => activate(p, e);
         tr.onkeydown = (ev) => {
           if (ev.key === "Enter") activate(p, e);
+          if (p.side === "remote" && ev.key === "F2") renameRemote();
+          if (p.side === "remote" && ev.key === "Delete") deleteRemote();
           if (ev.key === "Backspace" && l.parent != null) load(p, l.parent);
         };
         tr.onpointerdown = (ev) => startDrag(p, e.name, ev);
@@ -228,6 +230,46 @@ export async function openFiles(c: Connection, onBack: () => void) {
       tell("Ordner nicht angelegt", String(e));
     }
   };
+
+  async function renameRemote() {
+    const p = panes.remote;
+    const [name] = p.selected;
+    if (!sid || !p.listing || p.selected.size !== 1) return void (status.textContent = "Bitte rechts genau ein Element wählen.");
+    const next = await askText("Umbenennen", `Neuer Name für «${name}»`, "Umbenennen", name);
+    if (!next || next === name) return;
+    try {
+      await api.sftpRename(sid, join(p, name), next);
+      await load(p, p.listing.path);
+    } catch (e) {
+      tell("Nicht umbenannt", String(e));
+    }
+  }
+
+  async function deleteRemote() {
+    const p = panes.remote;
+    const names = [...p.selected];
+    if (!sid || !p.listing || !names.length) return void (status.textContent = "Bitte rechts auswählen, was gelöscht werden soll.");
+    const dirs = names.filter((n) => p.listing!.entries.find((e) => e.name === n)?.dir).length;
+    const what = names.length === 1 ? `«${names[0]}»` : `${names.length} Elemente`;
+    const ok = await ask(
+      `${what} löschen?`,
+      `Wird auf ${c.name} endgültig gelöscht, ohne Papierkorb.${dirs ? " Ordner werden samt Inhalt gelöscht." : ""}`,
+      "Löschen",
+    );
+    if (!ok) return;
+    for (const n of names) {
+      try {
+        await api.sftpRemove(sid, join(p, n));
+      } catch (e) {
+        tell("Nicht gelöscht", String(e));
+        break;
+      }
+    }
+    await load(p, p.listing.path);
+  }
+
+  $("files-rename").onclick = renameRemote;
+  $("files-delete").onclick = deleteRemote;
 
   // ---------- Ziehen zwischen den Seiten ----------
   // Eigene Zeiger-Logik: Tauri fängt HTML-Drag&Drop für Dateien aus dem System ab.
