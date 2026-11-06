@@ -9,11 +9,19 @@ import { applyAppearance, openSettings } from "./settings";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
 import { initFieldHelp } from "./fieldhelp";
+import { forgetThumb, renderThumb } from "./thumbs";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { enhanceSelect } from "./menu";
 
 // Native Auswahllisten durch eigene Menüs ersetzen (einmal beim Start).
+function thumbEl(c: Connection, kind: string) {
+  const t = el("div", { class: "thumb" }, el("span", { class: "badge" }, kind));
+  renderThumb(t, c);
+  return t;
+}
+const osMenu = enhanceSelect((document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("os") as HTMLSelectElement);
 const keyModeMenu = enhanceSelect((document.getElementById("editor-form") as HTMLFormElement).elements.namedItem("keyMode") as HTMLSelectElement);
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -68,7 +76,7 @@ function render() {
       const card = el(
         "button",
         { type: "button", class: "card", "aria-pressed": String(c.id === selected) },
-        el("div", { class: "thumb" }, el("span", { class: "badge" }, kind)),
+        thumbEl(c, kind),
         el("div", { class: "card-name" }, c.name),
         el("div", { class: "card-sub" }, c.address),
       );
@@ -145,6 +153,8 @@ const blank = (): Connection => ({
   orientation: "landscape",
   sharedClipboard: true,
   playAudio: true,
+  os: "",
+  customThumb: false,
   sharedFolder: "",
   skipCertCheck: false,
   fitToWindow: true,
@@ -188,6 +198,11 @@ function edit(c: Connection | null, asNew = false) {
   f.playAudio.checked = editing.playAudio;
   f.sharedFolder.value = editing.sharedFolder;
   f.skipCertCheck.checked = editing.skipCertCheck;
+  (form.elements.namedItem("os") as HTMLSelectElement).value = editing.os ?? "";
+  osMenu.sync();
+  pendingThumb = null;
+  clearThumb = false;
+  $("thumb-name").textContent = editing.customThumb ? "Eigenes Bild" : "Letzter Desktop";
   ($("advanced") as HTMLDetailsElement).open = editing.skipCertCheck;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
@@ -220,6 +235,14 @@ function syncDesktopRow() {
   $("desktop-protocol-row").hidden = !(on("vncOn") && on("rdpOn"));
 }
 for (const n of ["vncOn", "rdpOn"]) (form.elements.namedItem(n) as HTMLInputElement).addEventListener("change", syncDesktopRow);
+
+let pendingThumb: string | null = null;
+let clearThumb = false;
+$("thumb-pick").onclick = async () => {
+  const f = await pickFolder({ title: "Bild für die Verbindung", filters: [{ name: "Bilder", extensions: ["png", "jpg", "jpeg", "webp"] }] });
+  if (typeof f === "string") ((pendingThumb = f), ($("thumb-name").textContent = f.split(/[\\/]/).pop() ?? f));
+};
+$("thumb-clear").onclick = () => ((pendingThumb = null), (clearThumb = true), ($("thumb-name").textContent = "Letzter Desktop"));
 
 const sharedFolder = form.elements.namedItem("sharedFolder") as HTMLInputElement;
 $("share-pick").onclick = async () => {
@@ -265,6 +288,8 @@ form.onsubmit = async (ev) => {
     playAudio: fd.get("playAudio") !== null,
     sharedFolder: s("sharedFolder"),
     skipCertCheck: fd.get("skipCertCheck") !== null,
+    os: s("os") as Connection["os"],
+    customThumb: pendingThumb ? true : clearThumb ? false : editing.customThumb,
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
     defaultView: s("defaultView") as Connection["defaultView"],
@@ -276,6 +301,8 @@ form.onsubmit = async (ev) => {
   const secret = (k: string) => String(fd.get(k) ?? "") || (clearing.has(k) ? "" : undefined);
   try {
     const saved = await api.save(c, { password: secret("password"), vncPassword: secret("vncPassword"), rdpPassword: secret("rdpPassword"), sshKey });
+    if (pendingThumb) await invoke("thumb_import", { id: saved.id, file: pendingThumb }).catch((e) => console.warn(e));
+    if (pendingThumb || clearThumb) forgetThumb(saved.id);
     selected = saved.id;
     dlg.close();
     reload();

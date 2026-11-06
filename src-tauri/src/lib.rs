@@ -231,6 +231,41 @@ async fn setup_upload(path: State<'_, LibraryPath>, id: String, trust: Option<St
     Ok(target)
 }
 
+fn thumb_path(path: &LibraryPath, id: &str) -> Result<PathBuf, String> {
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || id.is_empty() {
+        return Err("Ungültige ID".into());
+    }
+    Ok(path.0.with_file_name("thumbs").join(format!("{id}.jpg")))
+}
+
+/// Vorschaubild speichern (JPEG vom Frontend: letzter Desktop beim Trennen).
+#[tauri::command]
+fn thumb_save(path: State<LibraryPath>, id: String, data: Vec<u8>) -> Result<(), String> {
+    if id.starts_with("quick-") {
+        return Ok(()); // schnelle Verbindungen hinterlassen nichts
+    }
+    let p = thumb_path(&path, &id)?;
+    std::fs::create_dir_all(p.parent().unwrap()).map_err(|e| e.to_string())?;
+    std::fs::write(&p, data).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn thumb_get(path: State<LibraryPath>, id: String) -> Option<Vec<u8>> {
+    std::fs::read(thumb_path(&path, &id).ok()?).ok()
+}
+
+/// Eigenes Bild übernehmen (vom Benutzer im Dialog gewählt).
+#[tauri::command]
+fn thumb_import(path: State<LibraryPath>, id: String, file: String) -> Result<(), String> {
+    let data = std::fs::read(&file).map_err(|e| format!("{file}: {e}"))?;
+    if data.len() > 8 << 20 {
+        return Err("Bild zu gross (höchstens 8 MB)".into());
+    }
+    let p = thumb_path(&path, &id)?;
+    std::fs::create_dir_all(p.parent().unwrap()).map_err(|e| e.to_string())?;
+    std::fs::write(&p, data).map_err(|e| e.to_string())
+}
+
 /// Gemerkte TLS-Zertifikate (RDP/VNC) für die Einstellungen.
 #[tauri::command]
 fn certs_list(path: State<LibraryPath>) -> Vec<(String, String)> {
@@ -726,6 +761,9 @@ pub fn run() {
             save_bytes,
             certs_list,
             quick_register,
+            thumb_save,
+            thumb_get,
+            thumb_import,
             setup_script,
             setup_upload,
             cert_remove,

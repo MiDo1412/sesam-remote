@@ -32,6 +32,10 @@ pub struct Connection {
     pub shared_folder: String,
     /// TLS-Zertifikat nicht prüfen (RDP/VNC). Unsicher, nur bewusst einschalten.
     pub skip_cert_check: bool,
+    /// Betriebssystem für das Symbol: "ubuntu" | "linux" | "macos" | "windows" | "raspberry" | "".
+    pub os: String,
+    /// Eigenes Bild statt des letzten Desktop-Bildes.
+    pub custom_thumb: bool,
     pub fit_to_window: bool,
     /// Nur Merker für die Anzeige; das Geheimnis selbst liegt im Tresor.
     pub has_password: bool,
@@ -60,6 +64,8 @@ impl Default for Connection {
             play_audio: true,
             shared_folder: String::new(),
             skip_cert_check: false,
+            os: String::new(),
+            custom_thumb: false,
             fit_to_window: true,
             has_password: false,
             has_vnc_password: false,

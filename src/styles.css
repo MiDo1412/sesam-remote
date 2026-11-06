@@ -386,3 +386,9 @@ fieldset.svc:has(> label.switch input:not(:checked)) { padding-bottom: 14px; opa
 .popover { position: fixed; z-index: 120; max-width: 300px; padding: 10px 12px; border-radius: 10px; font-size: 12px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--card) 90%, transparent); backdrop-filter: blur(20px); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); animation: menu-in 120ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .popover { animation: none; } }
 fieldset.svc legend { float: none; padding: 0; }
+
+/* ---------- Vorschaubilder ---------- */
+.thumb { display: grid; place-items: center; background-size: cover; background-position: center; color: rgba(255, 255, 255, 0.85); }
+.thumb.has-image .thumb-os { display: none; }
+.thumb-os { display: inline-flex; }
+.pick-name { flex: 1; min-width: 0; align-self: center; font-weight: 400; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -7,6 +7,7 @@ import { keysym } from "./keysym";
 import { ICON } from "./icons";
 import { enhanceSelect } from "./menu";
 import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
+import { saveDesktopThumb } from "./thumbs";
 
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
@@ -350,6 +351,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   canvas.addEventListener("focus", syncClipboard);
 
   const close = () => {
+    if (sid) void saveDesktopThumb(c, canvas);
     ro.disconnect();
     releaseAll();
     window.removeEventListener("keydown", onF11);

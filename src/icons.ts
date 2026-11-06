@@ -10,6 +10,11 @@ import folder from "@phosphor-icons/core/assets/regular/folder.svg?raw";
 import folderPlus from "@phosphor-icons/core/assets/regular/folder-plus.svg?raw";
 import frameCorners from "@phosphor-icons/core/assets/regular/frame-corners.svg?raw";
 import keyboard from "@phosphor-icons/core/assets/regular/keyboard.svg?raw";
+import linuxLogo from "@phosphor-icons/core/assets/regular/linux-logo.svg?raw";
+import appleLogo from "@phosphor-icons/core/assets/regular/apple-logo.svg?raw";
+import windowsLogo from "@phosphor-icons/core/assets/regular/windows-logo.svg?raw";
+import cpu from "@phosphor-icons/core/assets/regular/cpu.svg?raw";
+import desktopTower from "@phosphor-icons/core/assets/regular/desktop-tower.svg?raw";
 import lightning from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import floppy from "@phosphor-icons/core/assets/regular/floppy-disk.svg?raw";
 import magnifyingGlass from "@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw";
@@ -37,6 +42,11 @@ export const ICON = {
   newFolder: sized(folderPlus),
   fullscreen: sized(frameCorners),
   keyboard: sized(keyboard),
+  osLinux: sized(linuxLogo, 40),
+  osMac: sized(appleLogo, 40),
+  osWindows: sized(windowsLogo, 40),
+  osPi: sized(cpu, 40),
+  osGeneric: sized(desktopTower, 40),
   quick: sized(lightning),
   save: sized(floppy),
   search: sized(magnifyingGlass),

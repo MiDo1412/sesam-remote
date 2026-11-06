@@ -122,7 +122,7 @@ export function initQuick(onSaveAsConnection: (c: Connection) => void) {
       vncPort: k === "vnc" ? port : null, sshPort: k === "shell" || k === "files" ? port : null, rdpPort: k === "rdp" ? port : null,
       rdpDomain: "", desktopProtocol: k === "vnc" ? "vnc" : "rdp", user,
       defaultView: k === "shell" ? "shell" : k === "files" ? "files" : "desktop", orientation: "landscape",
-      sharedClipboard: true, fitToWindow: true, playAudio: true, sharedFolder: "", skipCertCheck: false,
+      sharedClipboard: true, fitToWindow: true, playAudio: true, sharedFolder: "", skipCertCheck: false, os: "", customThumb: false,
       hasPassword: false, hasVncPassword: false, hasRdpPassword: false, hasKey: false, lastUsed: null,
     };
     try {

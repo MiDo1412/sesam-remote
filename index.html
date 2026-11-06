@@ -66,6 +66,19 @@
         <label data-tip="Optional. Verbindungen mit gleicher Gruppe stehen in der Seitenleiste zusammen. Beispiel: «Homelab».">Gruppe<input name="group" list="groups" /></label>
         <datalist id="groups"></datalist>
         <label class="span" data-tip="Name oder IP-Adresse des Zielrechners, ohne Port. Beispiele: 192.168.1.4, doerig-02.local. Pflichtfeld.">Hostname oder IP-Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
+        <label data-tip="Bestimmt das Symbol in der Bibliothek, solange es noch kein Bild vom Desktop gibt.">Betriebssystem
+          <select name="os">
+            <option value="">Unbekannt</option>
+            <option value="ubuntu">Ubuntu</option>
+            <option value="linux">Linux</option>
+            <option value="macos">macOS</option>
+            <option value="windows">Windows</option>
+            <option value="raspberry">Raspberry Pi</option>
+          </select>
+        </label>
+        <label data-tip="Standard: das letzte Bild des Desktops, gespeichert beim Trennen. Optional ein eigenes Bild.">Bild
+          <span class="pick"><span id="thumb-name" class="pick-name"></span><button type="button" id="thumb-pick">Wählen …</button><button type="button" id="thumb-clear" class="plain">Standard</button></span>
+        </label>
 
         <h3 class="sec span">Anmeldung</h3>
         <label data-tip="Benutzername auf dem Zielrechner. Bei RDP mit GNOME: der Benutzername aus «grdctl … set-credentials», nicht dein Ubuntu-Konto. Bei macOS: der Kurzname des Kontos.">Benutzername<input name="user" autocomplete="off" /></label>
