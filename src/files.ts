@@ -1,6 +1,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
 import { ask, askHostKey, askText, tell } from "./ui";
+import { openMenu } from "./menu";
 import { ICON } from "./icons";
 import { toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 
@@ -34,6 +35,19 @@ function formatDate(secs: number | null) {
 
 type Side = "local" | "remote";
 
+type SortKey = "name" | "size" | "date";
+
+/** Dateityp grob nach Endung, für das Symbol in der Liste. */
+function fileKind(name: string, dir: boolean) {
+  if (dir) return "dir";
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "bmp"].includes(ext)) return "img";
+  if (["zip", "gz", "tgz", "xz", "bz2", "7z", "rar", "zst", "tar"].includes(ext)) return "zip";
+  if (["pdf"].includes(ext)) return "pdf";
+  if (["sh", "py", "js", "ts", "rs", "go", "c", "h", "json", "yml", "yaml", "toml", "conf", "ini", "md", "txt", "log", "html", "css"].includes(ext)) return "txt";
+  return "file";
+}
+
 interface Pane {
   side: Side;
   root: HTMLElement;
@@ -43,6 +57,10 @@ interface Pane {
   selected: Set<string>;
   /** Pfad-Trenner der Seite. */
   sep: string;
+  sort: SortKey;
+  desc: boolean;
+  hidden: boolean;
+  filter: string;
 }
 
 /** Dateien (SFTP) als Tab. */
@@ -82,27 +100,58 @@ export function filesTab(ctx: TabCtx): TabHandle {
     const head = el("div", "pane-head");
     const up = el("button", "plain", "‹");
     up.type = "button";
-    up.title = "Übergeordneter Ordner";
+    up.title = "Übergeordneter Ordner (Rücktaste)";
     up.setAttribute("aria-label", "Übergeordneter Ordner");
     const refresh = el("button", "plain", "↻");
     refresh.type = "button";
     refresh.title = "Neu laden";
     refresh.setAttribute("aria-label", "Neu laden");
-    const pathEl = el("span", "path mono");
-    head.append(up, el("h2", "", title), pathEl, el("span", "grow"), refresh);
+    // Pfad: Brotkrumen, Klick darauf macht ein Eingabefeld daraus.
+    const pathEl = el("span", "path crumbs");
+    const marks = el("button", "plain", "★");
+    marks.type = "button";
+    marks.title = "Lesezeichen";
+    marks.setAttribute("aria-label", "Lesezeichen");
+    head.append(up, el("h2", "", title), pathEl, el("span", "grow"), marks, refresh);
+    const tools = el("div", "pane-tools");
+    const filter = el("input", "pane-filter") as HTMLInputElement;
+    filter.type = "search";
+    filter.placeholder = "Filtern";
+    filter.setAttribute("aria-label", `${title} filtern`);
+    const hidden = el("label", "pane-hidden");
+    const hiddenBox = Object.assign(document.createElement("input"), { type: "checkbox" });
+    hidden.append(hiddenBox, document.createTextNode(" Versteckte Dateien"));
+    tools.append(filter, hidden);
     const table = el("table");
     const thead = el("thead");
     const tr = el("tr");
-    tr.append(el("th", "", "Name"), el("th", "size", "Grösse"), el("th", "date", "Geändert"));
+    const th = (key: SortKey, label: string, cls: string) => {
+      const h = el("th", cls);
+      const b = el("button", "sort", label) as HTMLButtonElement;
+      b.type = "button";
+      b.onclick = () => {
+        pane.desc = pane.sort === key ? !pane.desc : false;
+        pane.sort = key;
+        render(pane);
+      };
+      h.dataset.key = key;
+      h.append(b);
+      return h;
+    };
+    tr.append(th("name", "Name", ""), th("size", "Grösse", "size"), th("date", "Geändert", "date"));
     thead.append(tr);
     const body = el("tbody");
     table.append(thead, body);
     const scroller = el("div", "pane-list");
     scroller.append(table);
-    root.append(head, scroller);
-    const pane: Pane = { side, root, body, pathEl, listing: null, selected: new Set(), sep };
+    root.append(head, tools, scroller);
+    const pane: Pane = { side, root, body, pathEl, listing: null, selected: new Set(), sep, sort: "name", desc: false, hidden: false, filter: "" };
     up.onclick = () => pane.listing?.parent != null && load(pane, pane.listing.parent);
     refresh.onclick = () => pane.listing && load(pane, pane.listing.path);
+    filter.oninput = () => ((pane.filter = filter.value.toLowerCase()), render(pane));
+    hiddenBox.onchange = () => ((pane.hidden = hiddenBox.checked), render(pane));
+    marks.onclick = () => bookmarkMenu(pane, marks);
+    pathEl.ondblclick = () => editPath(pane);
     return pane;
   }
 
@@ -116,18 +165,76 @@ export function filesTab(ctx: TabCtx): TabHandle {
     }
   }
 
+  /** Pfad als Brotkrumen; Doppelklick = eintippen. */
+  function renderCrumbs(p: Pane) {
+    const path = p.listing!.path;
+    p.pathEl.title = `${path}\nDoppelklick: Pfad eingeben`;
+    if (!path) return void (p.pathEl.textContent = "Laufwerke");
+    const parts = path.split(/[\\/]/).filter(Boolean);
+    const lead = p.sep === "/" ? "/" : "";
+    p.pathEl.replaceChildren();
+    let acc = lead;
+    if (lead) p.pathEl.append(crumb(p, "/", "/"));
+    parts.forEach((part, i) => {
+      acc = i === 0 && !lead ? `${part}${p.sep}` : `${acc}${acc.endsWith(p.sep) ? "" : p.sep}${part}`;
+      if (i > 0 || lead) p.pathEl.append(el("span", "crumb-sep", "›"));
+      p.pathEl.append(crumb(p, part, acc));
+    });
+  }
+  function crumb(p: Pane, label: string, target: string) {
+    const b = el("button", "crumb", label) as HTMLButtonElement;
+    b.type = "button";
+    b.onclick = () => load(p, target);
+    return b;
+  }
+  async function editPath(p: Pane) {
+    const v = await askText("Gehe zu", p.side === "local" ? "Ordner auf diesem Computer" : `Ordner auf ${c.name}`, "Öffnen", p.listing?.path ?? "");
+    if (v) load(p, v);
+  }
+
+  // Lesezeichen pro Seite und Verbindung (nur Pfade, lokal gespeichert).
+  const markKey = (p: Pane) => `sesam.marks.${p.side === "local" ? "local" : c.id}`;
+  const marksOf = (p: Pane): string[] => JSON.parse(localStorage.getItem(markKey(p)) ?? "[]");
+  async function bookmarkMenu(p: Pane, anchor: HTMLElement) {
+    const list = marksOf(p);
+    const here = p.listing?.path ?? "";
+    const v = await openMenu(anchor, [
+      ...list.map((m) => ({ value: `go:${m}`, label: m })),
+      { value: "add", label: "Diesen Ordner merken", separator: list.length > 0, disabled: !here || list.includes(here) },
+      { value: "del", label: "Diesen Ordner vergessen", disabled: !list.includes(here) },
+    ]);
+    if (!v) return;
+    if (v.startsWith("go:")) load(p, v.slice(3));
+    if (v === "add") localStorage.setItem(markKey(p), JSON.stringify([...list, here]));
+    if (v === "del") localStorage.setItem(markKey(p), JSON.stringify(list.filter((m) => m !== here)));
+  }
+
+  function visible(p: Pane) {
+    const l = p.listing!;
+    const dir = p.desc ? -1 : 1;
+    return l.entries
+      .filter((e) => (p.hidden || !e.name.startsWith(".")) && (!p.filter || e.name.toLowerCase().includes(p.filter)))
+      .sort((a, b) => {
+        if (a.dir !== b.dir) return a.dir ? -1 : 1;
+        const d = p.sort === "size" ? a.size - b.size : p.sort === "date" ? (a.modified ?? 0) - (b.modified ?? 0) : a.name.localeCompare(b.name, "de-CH", { numeric: true });
+        return d * dir;
+      });
+  }
+
   function render(p: Pane) {
     const l = p.listing!;
-    p.pathEl.textContent = l.path || "Laufwerke";
-    p.pathEl.title = l.path;
+    renderCrumbs(p);
+    for (const h of p.root.querySelectorAll<HTMLElement>("th[data-key]")) {
+      h.setAttribute("aria-sort", h.dataset.key === p.sort ? (p.desc ? "descending" : "ascending") : "none");
+    }
     p.body.replaceChildren(
-      ...l.entries.map((e) => {
+      ...visible(p).map((e) => {
         const tr = el("tr");
         tr.tabIndex = -1;
         tr.dataset.name = e.name;
         tr.setAttribute("aria-selected", String(p.selected.has(e.name)));
         const name = el("td", "name");
-        name.append(el("span", e.dir ? "icon dir" : "icon file"), document.createTextNode(e.name));
+        name.append(el("span", `icon ${fileKind(e.name, e.dir)}`), document.createTextNode(e.name));
         tr.append(name, el("td", "size", e.dir ? "—" : formatSize(e.size)), el("td", "date", formatDate(e.modified)));
         tr.onclick = (ev) => select(p, e.name, ev.ctrlKey || ev.metaKey);
         tr.ondblclick = () => activate(p, e);
@@ -141,9 +248,9 @@ export function filesTab(ctx: TabCtx): TabHandle {
         return tr;
       }),
     );
-    if (!l.entries.length) {
+    if (!p.body.children.length) {
       const tr = el("tr");
-      const td = el("td", "empty", "Leerer Ordner");
+      const td = el("td", "empty", l.entries.length ? "Keine Treffer" : "Leerer Ordner");
       td.colSpan = 3;
       tr.append(td);
       p.body.append(tr);
@@ -186,6 +293,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
     row.append(label, bar, state, cancel);
     transferList.prepend(row);
     let tid: string | null = null;
+    let [lastAt, lastDone, speed] = [0, 0, 0];
     const finish = (text: string) => {
       state.textContent = text;
       cancel.hidden = true;
@@ -199,7 +307,12 @@ export function filesTab(ctx: TabCtx): TabHandle {
       .transferStart(sid!, upload, src, destDir, (p: Progress) => {
         if (p.state === "running") {
           bar.value = p.total ? p.done / p.total : 0;
-          state.textContent = `${formatSize(p.done)} von ${formatSize(p.total)}`;
+          // Geschwindigkeit gleitend, Restzeit daraus
+          const now = performance.now();
+          if (lastAt) speed = speed * 0.7 + (((p.done - lastDone) / Math.max(1, now - lastAt)) * 1000) * 0.3;
+          [lastAt, lastDone] = [now, p.done];
+          const rest = speed > 0 ? Math.round((p.total - p.done) / speed) : 0;
+          state.textContent = `${formatSize(p.done)} von ${formatSize(p.total)} · ${formatSize(speed)}/s${rest ? ` · noch ${rest < 60 ? `${rest} s` : `${Math.round(rest / 60)} min`}` : ""}`;
         } else if (p.state === "done") {
           bar.value = 1;
           finish("Fertig");

@@ -396,3 +396,19 @@ fieldset.svc legend { float: none; padding: 0; }
 /* ---------- Ziehen und Ablegen ---------- */
 .nav-item.drop { background: color-mix(in srgb, var(--accent) 18%, transparent); outline: 2px solid var(--accent); outline-offset: -2px; }
 .desktop.drop { outline: 3px dashed var(--chrome-accent); outline-offset: -6px; }
+
+/* ---------- Dateien: Brotkrumen, Filter, Sortierung, Typen ---------- */
+.crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; direction: ltr; }
+.crumb { height: 22px; padding: 0 4px; border: 0; background: transparent; border-radius: 4px; font: 12px "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; color: var(--muted); white-space: nowrap; }
+.crumb:hover { background: var(--hover); color: var(--text); }
+.crumb:last-child { color: var(--text); font-weight: 600; }
+.crumb-sep { color: var(--muted); font-size: 11px; }
+.pane-tools { display: flex; align-items: center; gap: 12px; padding: 0 12px 6px; font-size: 12px; color: var(--muted); }
+.pane-filter { height: 26px !important; flex: 1; max-width: 220px; font-size: 12px; }
+.pane th button.sort { height: auto; padding: 0; border: 0; background: none; font: inherit; color: inherit; }
+.pane th[aria-sort=ascending] button.sort::after { content: " ▲"; font-size: 9px; }
+.pane th[aria-sort=descending] button.sort::after { content: " ▼"; font-size: 9px; }
+.icon.img { background: #c58a2e; }
+.icon.zip { background: #8e6c3f; }
+.icon.pdf { background: #c5574a; }
+.icon.txt { background: #6b8e7d; }
