@@ -4,12 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sesam Remote</title>
+    <link rel="icon" type="image/svg+xml" href="/sesam-icon.svg" />
     <link rel="stylesheet" href="/src/styles.css" />
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
     <div id="library" class="app">
       <header class="toolbar">
+        <div class="brand" aria-hidden="true"><img src="/sesam-icon.svg" alt="" width="22" height="22" /><span>Sesam</span></div>
         <label class="search">
           <span class="sr-only">Verbindungen suchen</span>
           <input id="search" type="search" placeholder="Verbindungen suchen" />
