@@ -2,6 +2,7 @@
 import arrowClockwise from "@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw";
 import arrowSquareOut from "@phosphor-icons/core/assets/regular/arrow-square-out.svg?raw";
 import question from "@phosphor-icons/core/assets/regular/question.svg?raw";
+import screencast from "@phosphor-icons/core/assets/regular/screencast.svg?raw";
 import minus from "@phosphor-icons/core/assets/regular/minus.svg?raw";
 import arrowsOut from "@phosphor-icons/core/assets/regular/arrows-out.svg?raw";
 import camera from "@phosphor-icons/core/assets/regular/camera.svg?raw";
@@ -66,5 +67,6 @@ export const ICON = {
   upload: sized(uploadSimple),
   close: sized(x, 12),
   minimize: sized(minus, 12),
+  screencast: sized(screencast),
   question: sized(question, 14),
 };

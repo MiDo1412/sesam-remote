@@ -2,6 +2,8 @@
 import { api, type Connection } from "./api";
 import { ICON } from "./icons";
 import { openTab, type Kind } from "./tabs";
+import { enhanceSelect } from "./menu";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
 
 type QuickKind = "rdp" | "vnc" | "shell" | "files";
 interface Recent { kind: QuickKind; address: string; port: number; user: string }
@@ -52,14 +54,47 @@ const saveRecents = (r: Recent[]) => localStorage.setItem(KEY, JSON.stringify(r.
 
 export function initQuick(onSaveAsConnection: (c: Connection) => void) {
   $("quick").querySelector(".quick-icon")!.innerHTML = ICON.quick;
+  for (const s of document.querySelectorAll<HTMLElement>("#quick-form .seg-icon")) s.innerHTML = ICON[s.dataset.icon as keyof typeof ICON];
   const dlg = $<HTMLDialogElement>("quick-dlg");
   const form = $<HTMLFormElement>("quick-form");
   const f = form.elements as unknown as Record<string, HTMLInputElement>;
   const kind = () => (form.querySelector<HTMLInputElement>("[name=kind]:checked")?.value ?? "rdp") as QuickKind;
   let portTouched = false;
+  // SSH-Schlüssel: keiner, gespeicherte Zugangsdaten mit Schlüssel, Agent oder eine Datei (nur im Arbeitsspeicher).
+  const keySel = form.elements.namedItem("keySource") as HTMLSelectElement;
+  const keyMenu = enhanceSelect(keySel);
+  let keyFile = "";
+  const fillKeys = async () => {
+    const creds = await api.credsList().catch(() => []);
+    keySel.replaceChildren(
+      new Option("Keiner, nur Passwort", ""),
+      ...creds.filter(([c]) => c.hasKey).map(([c]) => new Option(`Gespeichert: ${c.name}${c.user ? ` (${c.user})` : ""}`, `cred:${c.id}`)),
+      new Option("SSH-Agent (Pageant oder OpenSSH)", "agent"),
+      new Option(keyFile ? `Datei: ${keyFile.split(/[\\/]/).pop()}` : "Schlüsseldatei wählen …", "file"),
+    );
+    keySel.value = keyFile ? "file" : "";
+    keyMenu.sync();
+    syncKey();
+  };
+  const syncKey = () => {
+    const ssh = kind() === "shell" || kind() === "files";
+    form.classList.toggle("no-ssh", !ssh);
+    const withKey = ssh && keySel.value !== "";
+    $("quick-pw-note").textContent = withKey ? "optional (Passphrase des Schlüssels) · wird nicht gespeichert" : "wird nicht gespeichert";
+  };
+  keySel.addEventListener("change", async () => {
+    if (keySel.value === "file") {
+      const p = await pickFile({ title: "Privater SSH-Schlüssel", filters: [{ name: "SSH-Schlüssel", extensions: ["ppk", "pem", "key", "*"] }] });
+      keyFile = typeof p === "string" ? p : keyFile;
+      return fillKeys();
+    }
+    keyFile = "";
+    syncKey();
+  });
   const setKind = (k: QuickKind) => {
     form.querySelector<HTMLInputElement>(`[name=kind][value=${k}]`)!.checked = true;
     if (!portTouched) f.port.value = String(PORT[k]);
+    syncKey();
   };
   for (const r of form.querySelectorAll<HTMLInputElement>("[name=kind]")) r.onchange = () => setKind(kind());
   f.port.oninput = () => (portTouched = true);
@@ -101,7 +136,9 @@ export function initQuick(onSaveAsConnection: (c: Connection) => void) {
   const open = () => {
     form.reset();
     portTouched = false;
+    keyFile = "";
     setKind("rdp");
+    void fillKeys();
     renderRecent();
     dlg.showModal();
     f.address.focus();
@@ -126,7 +163,10 @@ export function initQuick(onSaveAsConnection: (c: Connection) => void) {
       hasPassword: false, hasVncPassword: false, hasRdpPassword: false, hasKey: false, lastUsed: null,
     };
     try {
-      c.id = await api.quickRegister(c, f.password.value || undefined);
+      const ks = k === "shell" || k === "files" ? keySel.value : "";
+      if (ks.startsWith("cred:")) c.credentialId = ks.slice(5);
+      if (ks === "agent") c.sshAgent = true;
+      c.id = await api.quickRegister(c, f.password.value || undefined, ks === "file" ? keyFile : undefined);
       saveRecents([{ kind: k, address, port, user }, ...recents().filter((r) => !(r.kind === k && r.address === address && r.port === port))]);
       dlg.close();
       openTab(c, c.defaultView as Kind);

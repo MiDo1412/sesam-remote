@@ -105,7 +105,7 @@ export const api = {
   credSave: (cred: Cred, password?: string, sshKey?: string) => invoke<Cred>("cred_save", { cred, password, sshKey }),
   credDelete: (id: string) => invoke<void>("cred_delete", { id }),
   credFromConnection: (id: string, credId: string, name: string) => invoke<Cred>("cred_from_connection", { id, credId, name }),
-  quickRegister: (connection: Connection, password?: string) => invoke<string>("quick_register", { connection, password }),
+  quickRegister: (connection: Connection, password?: string, keyFile?: string) => invoke<string>("quick_register", { connection, password, keyFile }),
   shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void) => {
     const ch = new Channel<ShellEvent>();
     ch.onmessage = onEvent;

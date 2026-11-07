@@ -5,7 +5,7 @@ use keyring::{Entry, Error};
 
 const SERVICE: &str = "ch.sesam.remote";
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Kind {
     /// Login-Passwort (SSH/VNC) bzw. Passphrase des Schlüssels.
     Password,
@@ -35,18 +35,16 @@ pub fn set(id: &str, kind: Kind, secret: &str) -> Result<(), String> {
 }
 
 /// Passwörter schneller Verbindungen: nur im Arbeitsspeicher, nie im Schlüsselbund.
-static EPHEMERAL: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+/// Auch der Schlüssel einer gewählten Schlüsseldatei (nur Passwort und SSH-Schlüssel).
+static EPHEMERAL: std::sync::Mutex<Vec<(String, u8, String)>> = std::sync::Mutex::new(Vec::new());
 
-pub fn set_ephemeral(id: &str, secret: &str) {
-    EPHEMERAL.lock().unwrap().push((id.to_string(), secret.to_string()));
+pub fn set_ephemeral(id: &str, kind: Kind, secret: &str) {
+    EPHEMERAL.lock().unwrap().push((id.to_string(), kind as u8, secret.to_string()));
 }
 
 pub fn get(id: &str, kind: Kind) -> Result<Option<String>, String> {
     if id.starts_with("quick-") {
-        return Ok(match kind {
-            Kind::Password => EPHEMERAL.lock().unwrap().iter().find(|(i, _)| i == id).map(|(_, s)| s.clone()),
-            _ => None,
-        });
+        return Ok(EPHEMERAL.lock().unwrap().iter().find(|(i, k, _)| i == id && *k == kind as u8).map(|(_, _, s)| s.clone()));
     }
     match entry(id, kind)?.get_password() {
         Ok(s) => Ok(Some(s)),

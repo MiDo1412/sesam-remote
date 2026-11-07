@@ -235,12 +235,12 @@
     <dialog id="quick-dlg" aria-labelledby="quick-title">
       <form id="quick-form" class="sheet quick" method="dialog">
         <h2 id="quick-title">Schnelle Verbindung</h2>
-        <div class="row span"><span>Art</span>
-          <div class="segmented" role="radiogroup" aria-label="Art">
-            <label><input type="radio" name="kind" value="rdp" checked />Desktop RDP</label>
-            <label><input type="radio" name="kind" value="vnc" />Desktop VNC</label>
-            <label><input type="radio" name="kind" value="shell" />Shell</label>
-            <label><input type="radio" name="kind" value="files" />Dateien</label>
+        <div class="span quick-kind">
+          <div class="segmented" role="radiogroup" aria-label="Art der Verbindung">
+            <label title="Remotedesktop (RDP): Windows, GNOME (Ubuntu)"><input type="radio" name="kind" value="rdp" checked /><span class="seg-icon" data-icon="desktop"></span>RDP</label>
+            <label title="Bildschirmfreigabe (VNC): macOS, wayvnc, Raspberry Pi"><input type="radio" name="kind" value="vnc" /><span class="seg-icon" data-icon="screencast"></span>VNC</label>
+            <label title="Befehlszeile über SSH"><input type="radio" name="kind" value="shell" /><span class="seg-icon" data-icon="shell"></span>Shell</label>
+            <label title="Dateien übertragen über SFTP (oder SCP)"><input type="radio" name="kind" value="files" /><span class="seg-icon" data-icon="folder"></span>Dateien</label>
           </div>
         </div>
         <label class="span">Hostname oder IP-Adresse
@@ -248,7 +248,10 @@
         </label>
         <label>Port<input name="port" type="number" min="1" max="65535" class="mono" /></label>
         <label>Benutzername<input name="user" autocomplete="off" /></label>
-        <label class="span">Passwort <small>wird nicht gespeichert</small><input name="password" type="password" autocomplete="off" /></label>
+        <label class="span ssh-only">SSH-Schlüssel
+          <select name="keySource"><option value="">Keiner, nur Passwort</option></select>
+        </label>
+        <label class="span">Passwort <small id="quick-pw-note">wird nicht gespeichert</small><input name="password" type="password" autocomplete="off" /></label>
         <div id="quick-recent" class="recent span"></div>
         <div class="row actions">
           <span></span>

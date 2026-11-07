@@ -105,13 +105,27 @@ static QUICK: Mutex<Vec<Connection>> = Mutex::new(Vec::new());
 
 /// Schnelle Verbindung anlegen (nichts wird gespeichert). Gibt die ID zurück.
 #[tauri::command]
-fn quick_register(mut connection: Connection, password: Option<String>) -> Result<String, String> {
+/// `key_file`: Pfad einer privaten Schlüsseldatei (OpenSSH oder PuTTY .ppk), nur im Arbeitsspeicher gehalten.
+/// Gespeicherte Zugangsdaten (`credential_id`) liefern Schlüssel/Passwort aus dem Tresor; ohne Benutzer auch diesen.
+fn quick_register(path: State<LibraryPath>, mut connection: Connection, password: Option<String>, key_file: Option<String>) -> Result<String, String> {
     connection.id = format!("quick-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
     connection.validate()?;
+    if let Some(cid) = &connection.credential_id {
+        let cred = creds::load(&creds_path(&path))?.into_iter().find(|x| &x.id == cid).ok_or("Diese Zugangsdaten gibt es nicht mehr")?;
+        if connection.user.trim().is_empty() {
+            connection.user = cred.user;
+        }
+    }
     if let Some(pw) = password.filter(|p| !p.is_empty()) {
         diag::add_secret(&pw);
-        vault::set_ephemeral(&connection.id, &pw);
+        vault::set_ephemeral(&connection.id, Kind::Password, &pw);
         connection.has_password = true;
+    }
+    if let Some(f) = key_file.filter(|f| !f.is_empty()) {
+        let key = std::fs::read_to_string(&f).map_err(|e| format!("Schlüsseldatei nicht lesbar: {e}"))?;
+        ssh::check_private_key(&key)?;
+        vault::set_ephemeral(&connection.id, Kind::SshKey, &key);
+        connection.has_key = true;
     }
     let id = connection.id.clone();
     QUICK.lock().unwrap().push(connection);
@@ -232,6 +246,12 @@ fn find_raw(path: &LibraryPath, id: &str) -> Result<Connection, String> {
 
 /// Passwort/SSH-Schlüssel: aus den gespeicherten Zugangsdaten, wenn zugewiesen, sonst aus der Verbindung.
 fn login_secret(c: &Connection, kind: Kind) -> Result<Option<String>, String> {
+    // Schnelle Verbindung: hier eingetippt/gewählt geht vor gespeicherten Zugangsdaten.
+    if c.id.starts_with("quick-") {
+        if let Some(s) = vault::get(&c.id, kind)? {
+            return Ok(Some(s));
+        }
+    }
     match (&c.credential_id, kind) {
         (Some(cid), Kind::Password | Kind::SshKey) => vault::get(&creds::vault_id(cid), kind),
         _ => vault::get(&c.id, kind),
