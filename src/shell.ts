@@ -9,13 +9,16 @@ import { openMenu } from "./menu";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { createKeyboard, isTouch, termSequence } from "./osk";
 import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings, themeFont } from "./termthemes";
+import { localProfile } from "./terminal";
 
 const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
 
 /** SSH-Shell als Tab. */
 export function shellTab(ctx: TabCtx): TabHandle {
   const c = ctx.conn;
-  ctx.setSub(`SSH · ${c.user}@${c.address}:${c.sshPort}`);
+  // Lokales Terminal (Pseudo-Verbindung «local:…») oder SSH.
+  const local = localProfile(c.id);
+  ctx.setSub(local ? `Dieser Computer · ${local.command}` : `SSH · ${c.user}@${c.address}:${c.sshPort}`);
   const status = ctx.status;
   status.textContent = "Verbinde …";
 
@@ -50,9 +53,10 @@ export function shellTab(ctx: TabCtx): TabHandle {
   // Einstellungen wirken sofort auf offene Shells.
   const applySettings = () => {
     const t = termSettings();
-    term.options.theme = resolveTheme(t.theme);
+    const theme = local?.theme || t.theme; // Profil darf ein eigenes Farbschema haben
+    term.options.theme = resolveTheme(theme);
     term.options.fontSize = t.fontSize;
-    term.options.fontFamily = t.fontFamily || (themeFont(t.theme) ? `${themeFont(t.theme)}, ${FONT}` : FONT);
+    term.options.fontFamily = local?.font || t.fontFamily || (themeFont(theme) ? `${themeFont(theme)}, ${FONT}` : FONT);
     // Ganze Fläche (Rand, Statuszeile, Bildlaufleiste) in der Farbe des Schemas, kein Schwarz.
     const bg = term.options.theme?.background ?? "";
     host.style.background = ctx.pane.style.background = bg;
@@ -149,7 +153,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
           sid = at.sid;
           handoffDone(at.token);
           api.shellResize(sid, term.cols, term.rows).catch(() => {});
-        } else sid = await api.shellOpen(c.id, term.cols || 80, term.rows || 24, trust, onEvent);
+        } else if (local) sid = await api.termOpen(local, term.cols || 80, term.rows || 24, onEvent);
+        else sid = await api.shellOpen(c.id, term.cols || 80, term.rows || 24, trust, onEvent);
         status.textContent = "";
         // Vorgegebener Befehl (z. B. Setup-Script): getippt, der Benutzer sieht und bestätigt alles im Terminal.
         if (ctx.extra?.command && !at) setTimeout(() => send(ctx.extra!.command!), 400);

@@ -29,6 +29,7 @@
                 <label title="Liste"><input type="radio" name="libView" value="list" aria-label="Liste" /><span class="seg-icon" data-icon="viewList"></span></label>
               </div>
               <button id="open-settings" type="button" class="plain" title="Einstellungen (Strg+,)">Einstellungen</button>
+              <span class="split-btn lib-term"><button id="lib-term-new" type="button" title="Neues Terminal (Strg+T)">Terminal</button><button id="lib-term-pick" type="button" title="Terminal-Profil wählen" aria-label="Terminal-Profil wählen">▾</button></span>
               <button id="quick" type="button" class="quick-btn" title="Schnelle Verbindung (Strg+K)"><span class="quick-icon"></span><span class="quick-text">Schnelle Verbindung</span></button>
               <button id="new" type="button" class="primary">＋ Neue Verbindung</button>
             </div>
@@ -65,6 +66,7 @@
       <header class="session-bar">
         <button id="session-back" type="button" class="plain" title="Zurück zur Bibliothek; Sitzungen laufen weiter">‹ Bibliothek</button>
         <div id="tabs" role="tablist" aria-label="Sitzungen"></div>
+        <span class="split-btn term-btns"><button type="button" id="term-new" class="tool" title="Neues Terminal (Strg+T)" aria-label="Neues Terminal">+</button><button type="button" id="term-pick" class="tool" title="Terminal-Profil wählen" aria-label="Terminal-Profil wählen">▾</button></span>
       </header>
       <div class="session-head">
         <div class="session-id">
@@ -347,6 +349,7 @@
           <button type="button" role="tab" data-pane="shell">Shell</button>
           <button type="button" role="tab" data-pane="security">Sicherheit</button>
           <button type="button" role="tab" data-pane="creds">Zugangsdaten</button>
+          <button type="button" role="tab" data-pane="terminal">Terminal</button>
           <button type="button" role="tab" data-pane="groups">Gruppen</button>
           <button type="button" role="tab" data-pane="about">Über Sesam</button>
         </nav>
@@ -377,6 +380,12 @@
           <div id="settings-certs" class="certs"></div>
           <h3>SSH-Server</h3>
           <p class="note">Bestätigte SSH-Server stehen in <code>~/.ssh/known_hosts</code>, wie bei OpenSSH.</p>
+        </section>
+        <section class="settings-pane" id="settings-terminal" hidden>
+          <h2>Terminal</h2>
+          <p class="note">Lokale Shells und Sprachen wie im Windows Terminal. Sesam erkennt installierte Shells selbst; eigene Profile kannst du ergänzen. Strg+T öffnet das Standardprofil.</p>
+          <div id="settings-profiles" class="certs" role="radiogroup" aria-label="Standardprofil"></div>
+          <div><button type="button" id="profile-new">Eigenes Profil …</button></div>
         </section>
         <section class="settings-pane" id="settings-creds" hidden>
           <h2>Zugangsdaten</h2>

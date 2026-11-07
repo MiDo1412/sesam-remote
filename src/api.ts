@@ -157,6 +157,12 @@ export const api = {
     ch.onmessage = onFrame;
     return invoke<void>("desktop_attach", { sid, onEvent: ch });
   },
+  /** Lokales Terminal (PTY) mit einem Profil starten; Schreiben/Grösse/Schliessen wie bei der SSH-Shell. */
+  termOpen: (profile: { command: string; args: string[]; cwd?: string; env?: Record<string, string> }, cols: number, rows: number, onEvent: (e: ShellEvent) => void) => {
+    const ch = new Channel<ShellEvent>();
+    ch.onmessage = onEvent;
+    return invoke<string>("term_open", { profile: { command: profile.command, args: profile.args, cwd: profile.cwd ?? null, env: profile.env ?? {} }, cols, rows, onEvent: ch });
+  },
   shellWrite: (sid: string, data: Uint8Array) => invoke<void>("shell_write", { sid, data: Array.from(data) }),
   shellResize: (sid: string, cols: number, rows: number) => invoke<void>("shell_resize", { sid, cols, rows }),
   shellClose: (sid: string) => invoke<void>("shell_close", { sid }),

@@ -1313,6 +1313,7 @@ pub fn run() {
                 let file = SubmenuBuilder::new(app, "Ablage")
                     .item(&MenuItemBuilder::with_id("cmd:new", "Neue Verbindung …").accelerator("CmdOrCtrl+N").build(app)?)
                     .item(&MenuItemBuilder::with_id("cmd:quick", "Schnelle Verbindung …").accelerator("CmdOrCtrl+K").build(app)?)
+                    .item(&MenuItemBuilder::with_id("cmd:terminal", "Neues Terminal").accelerator("CmdOrCtrl+T").build(app)?)
                     .text("cmd:addubuntu", "Ubuntu-PC hinzufügen …")
                     .separator()
                     .item(&P::close_window(app, Some("Fenster schliessen"))?)

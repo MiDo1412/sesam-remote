@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings } from "./termthemes";
 import { ask } from "./ui";
 import { renderCredList } from "./creds";
+import { renderProfiles } from "./termprofiles";
 import { renderGroupSettings } from "./groups";
 
 export type Appearance = "auto" | "light" | "dark";
@@ -41,6 +42,7 @@ export async function openSettings(tab = "general") {
     for (const p of dlg.querySelectorAll<HTMLElement>(".settings-pane")) p.hidden = p.id !== `settings-${t}`;
     if (t === "security") renderCerts();
     if (t === "creds") renderCredList();
+    if (t === "terminal") void renderProfiles();
     if (t === "groups") renderGroupSettings();
   };
   for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.onclick = () => show(b.dataset.pane!);
