@@ -616,8 +616,16 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
         return Ok((outcome, framed));
     }
     tracing::info!("RDP: Anmeldung (NLA/CredSSP) und Verbindungsaufbau");
+    let check = CHECK_ONLY.try_with(|v| *v).unwrap_or(false);
     if connector.should_perform_credssp() {
         credssp(t, &host, &mut connector, &mut framed, key.clone()).await?;
+    } else if check {
+        return Err("Dieser Server prüft die Zugangsdaten erst am Bildschirm, nicht vorab.".into());
+    }
+    if check {
+        // Nur prüfen: nach der Anmeldung sauber trennen, kein Desktop, kein Anmeldebildschirm.
+        let _ = framed.write_all(&disconnect_frame()).await;
+        return Err(CHECK_PASSED.into());
     }
     let outcome = ironrdp_tokio::connect_finalize(
         upgraded,
@@ -745,6 +753,21 @@ async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) 
     }
 }
 
+tokio::task_local! {
+    static CHECK_ONLY: bool;
+}
+const CHECK_PASSED: &str = "__sesam_check_passed__";
+
+/// «Zugangsdaten prüfen»: verbinden bis die Anmeldung (NLA/CredSSP) durch ist, dann sauber trennen.
+pub async fn check_login(t: Target, seen: SeenCert) -> Result<(), String> {
+    diag::add_secret(&t.password);
+    match CHECK_ONLY.scope(true, connect_once(&t, &Hop::default(), &seen)).await {
+        Err(e) if e == CHECK_PASSED => Ok(()),
+        Err(e) => Err(e),
+        Ok(_) => Ok(()),
+    }
+}
+
 /// MCS Disconnect Provider Ultimatum mit Grund «vom Benutzer gewünscht» ([MS-RDPBCGR] 1.3.1.4.1).
 fn disconnect_frame() -> Vec<u8> {
     use ironrdp_pdu::mcs::{DisconnectProviderUltimatum, DisconnectReason};
@@ -829,7 +852,7 @@ fn login_err<E: std::error::Error + 'static>(e: E) -> String {
     let s = err(e);
     let lower = s.to_lowercase();
     if ["logon_failure", "logonfailure", "logon failure", "sec_e_logon_denied", "access_denied", "access denied", "wrong password"].iter().any(|k| lower.contains(k)) {
-        "Anmeldung abgelehnt: Benutzer oder Passwort stimmen nicht (bei GNOME: die Zugangsdaten aus grdctl).".into()
+        "Anmeldung abgelehnt: Benutzer oder Passwort stimmen nicht.".into()
     } else if ["read frame", "eof", "connection reset", "10054", "broken pipe"].iter().any(|k| lower.contains(k)) {
         format!(
             "Anmeldung: Der Server hat die Verbindung beendet. Meist sind die RDP-Zugangsdaten falsch oder auf dem Server nicht gesetzt (grdctl … set-credentials). Details: {s}"

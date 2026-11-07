@@ -11,6 +11,7 @@ import { saveDesktopThumb } from "./thumbs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
 import { remoteSize } from "./desksize";
+import { explainRdpError } from "./ubuntu";
 
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
@@ -478,7 +479,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
           continue;
         }
         status.textContent = "Verbindung abgebrochen: Zertifikat nicht bestätigt.";
-      } else status.textContent = `Keine Verbindung: ${msg}`;
+      } else status.textContent = `Keine Verbindung: ${explainRdpError(msg, c)}`;
       ctx.setState("closed");
     }
     break;

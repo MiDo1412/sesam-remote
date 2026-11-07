@@ -11,6 +11,9 @@ export interface Connection {
   rdpDomain: string;
   /** Eigener RDP-Benutzer; leer = Benutzer der Verbindung */
   rdpUser: string;
+  /** "" Windows/anderer Server, "login" GNOME-Anmeldebildschirm, "session" laufende Sitzung übernehmen */
+  rdpTarget: "" | "login" | "session";
+  rdpSessionUser: string;
   desktopProtocol: "vnc" | "rdp";
   user: string;
   defaultView: "desktop" | "shell" | "files";
@@ -105,6 +108,9 @@ export const api = {
   save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; gatewayPassword?: string; sshKey?: string }) =>
     invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
+  rdpCheck: (id: string) => invoke<void>("rdp_check", { id }),
+  rdpPorts: (host: string, port: number, user: string, password: string | undefined, id: string | undefined, trust: string | null) =>
+    invoke<[string, number][]>("rdp_ports", { host, port, user, password, id, trust }),
   credsList: () => invoke<[Cred, number][]>("creds_list"),
   credSave: (cred: Cred, password?: string, sshKey?: string) => invoke<Cred>("cred_save", { cred, password, sshKey }),
   credDelete: (id: string) => invoke<void>("cred_delete", { id }),

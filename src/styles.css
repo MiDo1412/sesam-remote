@@ -487,3 +487,10 @@ body.mac { --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro"
 .own-svc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .own-svc > .own-fields, .adv-fields > .own-fields { grid-column: span 2; }
 .own-fields[hidden] { display: none !important; }
+
+/* ---------- RDP zu Ubuntu ---------- */
+.fetch { display: flex; align-items: center; gap: 8px; align-self: end; min-height: 32px; }
+.fetch small, .check-row small { color: var(--muted); font-weight: 400; }
+.check-row { display: flex; align-items: center; gap: 12px; }
+#rdp-cred-note { margin: 0; }
+#editor-delete[hidden] { display: inline-flex !important; visibility: hidden; }

@@ -18,6 +18,7 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
   const items: MenuItem[] = [
     { value: "cmd:new", label: "Neue Verbindung …", shortcut: "Strg+N", section: "Datei" },
     { value: "cmd:quick", label: "Schnelle Verbindung …", shortcut: "Strg+K" },
+    { value: "cmd:addubuntu", label: "Ubuntu-PC hinzufügen …" },
     { value: "cmd:settings", label: "Einstellungen", shortcut: "Strg+,", separator: true },
     { value: "app:quit", label: "Beenden", shortcut: "Alt+F4", separator: true },
     { value: "edit:cut", label: "Ausschneiden", shortcut: "Strg+X", section: "Bearbeiten", separator: true },

@@ -6,6 +6,7 @@ import { detachedWindow, detachToken, initTabs, openTab, runTool, takeOver } fro
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
 import { initTitlebar, isMac } from "./titlebar";
+import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
 import { applyAppearance, openSettings } from "./settings";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
@@ -88,6 +89,59 @@ const fileTransferMenu = enhanceSelect(formEls.namedItem("fileTransfer") as HTML
 const jumpHost = formEls.namedItem("jumpHost") as HTMLSelectElement;
 const jumpHostMenu = enhanceSelect(jumpHost);
 const osMenu = enhanceSelect(formEls.namedItem("os") as HTMLSelectElement);
+
+// ---------- RDP zu Ubuntu: «Was möchtest du öffnen?» mit genau einem Zugangsdaten-Block ----------
+const rdpTargetSel = formEls.namedItem("rdpTarget") as HTMLSelectElement;
+const rdpTargetMenu = enhanceSelect(rdpTargetSel);
+let rdpPorts: [string, number][] = [];
+const fld = (n: string) => formEls.namedItem(n) as HTMLInputElement;
+function syncRdpTarget() {
+  const v = rdpTargetSel.value;
+  const who = fld("rdpSessionUser").value.trim() || "diesem Benutzer";
+  document.getElementById("rdp-session-row")!.hidden = v !== "session";
+  document.getElementById("rdp-own-opt")!.hidden = v !== "";
+  if (v) fld("rdpOwn").checked = true; // bei Ubuntu immer genau dieser eine Block
+  const note = document.getElementById("rdp-cred-note")!;
+  note.hidden = !v;
+  note.textContent =
+    v === "login"
+      ? "Zugang zum Anmeldebildschirm (vom Einrichtungs-Script gesetzt). Danach meldest du dich wie gewohnt mit deinem Ubuntu-Konto an. Leer lassen, wenn es dieselben Angaben wie unter «Anmeldung» sind (empfohlen)."
+      : `Freigabe-Zugangsdaten von ${who} (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe). Leer lassen, wenn es dieselben Angaben wie unter «Anmeldung» sind (empfohlen).`;
+  if (v === "login" && !fld("rdpPort").value) fld("rdpPort").value = "3389";
+}
+rdpTargetSel.addEventListener("change", () => {
+  if (rdpTargetSel.value === "login") fld("rdpPort").value = "3389";
+  syncRdpTarget();
+});
+fld("rdpSessionUser").addEventListener("input", () => {
+  const hit = rdpPorts.find(([u]) => u === fld("rdpSessionUser").value.trim());
+  if (hit) fld("rdpPort").value = String(hit[1]);
+  syncRdpTarget();
+});
+document.getElementById("rdp-ports-fetch")!.onclick = async () => {
+  const note = document.getElementById("rdp-ports-note")!;
+  const host = fld("address").value.trim();
+  if (!host) return void (note.textContent = "Zuerst Hostname oder IP-Adresse eintragen.");
+  note.textContent = "Lese …";
+  try {
+    rdpPorts = await fetchPorts(host, Number(fld("sshPort").value) || 22, fld("user").value.trim(), fld("password").value || undefined, editing && items.some((x) => x.id === editing!.id) ? editing.id : undefined);
+    document.getElementById("rdp-users")!.replaceChildren(...rdpPorts.map(([u, p]) => new Option(`Port ${p}`, u)));
+    note.textContent = rdpPorts.length ? `Gefunden: ${rdpPorts.map(([u, p]) => `${u} (${p})`).join(", ")}` : "Keine festen Ports eingerichtet.";
+  } catch (e) {
+    note.textContent = String(e);
+  }
+};
+document.getElementById("rdp-check")!.onclick = async () => {
+  const out = document.getElementById("rdp-check-result")!;
+  if (!editing || !items.some((x) => x.id === editing!.id)) return void (out.textContent = "Bitte zuerst sichern, dann prüfen.");
+  out.textContent = "Prüfe (gespeicherter Stand) …";
+  try {
+    await api.rdpCheck(editing.id);
+    out.textContent = "Stimmt: die Zugangsdaten wurden angenommen.";
+  } catch (e) {
+    out.textContent = explainRdpError(String(e), editing);
+  }
+};
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -330,6 +384,8 @@ const blank = (): Connection => ({
   rdpPort: 3389,
   rdpDomain: "",
   rdpUser: "",
+  rdpTarget: "",
+  rdpSessionUser: "",
   desktopProtocol: "rdp",
   sshPort: 22,
   user: "",
@@ -380,8 +436,13 @@ function edit(c: Connection | null, asNew = false) {
   f.rdpPort.value = String(editing.rdpPort ?? 3389);
   f.rdpDomain.value = editing.rdpDomain;
   f.rdpUser.value = editing.rdpUser ?? "";
+  (formEls.namedItem("rdpTarget") as HTMLSelectElement).value = editing.rdpTarget ?? "";
+  rdpTargetMenu.sync();
+  f.rdpSessionUser.value = editing.rdpSessionUser ?? "";
+  $("rdp-check-result").textContent = "";
   f.rdpOwn.checked = editing.hasRdpPassword || !!editing.rdpUser || !!editing.rdpCredentialId;
   f.vncOwn.checked = editing.hasVncPassword || !!editing.vncCredentialId;
+  syncRdpTarget();
   f.rdpPassword.value = "";
   form.querySelector<HTMLInputElement>(`[name=desktopProtocol][value=${editing.desktopProtocol}]`)!.checked = true;
   f.sshOn.checked = editing.sshPort !== null;
@@ -519,6 +580,8 @@ form.onsubmit = async (ev) => {
     rdpPort: port("rdpOn", "rdpPort"),
     rdpDomain: s("rdpDomain"),
     rdpUser: fd.get("rdpOwn") ? s("rdpUser") : "",
+    rdpTarget: s("rdpTarget") as Connection["rdpTarget"],
+    rdpSessionUser: s("rdpTarget") === "session" ? s("rdpSessionUser") : "",
     // Gespeicherte Zugangsdaten pro Dienst (nur wenn der Schalter des Dienstes ein ist).
     rdpCredentialId: fd.get("rdpOwn") ? svcPickers[0].value() : null,
     vncCredentialId: fd.get("vncOwn") ? svcPickers[1].value() : null,
@@ -581,11 +644,14 @@ $("open-settings").onclick = () => openSettings();
 // Befehle aus dem App-Menü und Tastenkürzel
 const quick = initQuick((c) => edit({ ...c, id: crypto.randomUUID(), name: c.address }, true));
 $("empty-new").onclick = () => edit(null);
+const ubuntu = initUbuntu(blank, () => reload());
+$("empty-ubuntu").onclick = () => ubuntu.open();
 initFieldHelp(document.getElementById("editor-form")!);
 initFieldHelp(document.getElementById("quick-form")!);
 const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
   else if (cmd === "about") openSettings("about");
+  else if (cmd === "addubuntu") ubuntu.open();
   else if (cmd === "new") edit(null);
   else if (cmd === "quick") quick.open();
 };

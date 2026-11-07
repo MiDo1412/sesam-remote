@@ -338,6 +338,39 @@ pub async fn connect(t: &Target) -> Result<Handle<Client>, String> {
     Ok(handle)
 }
 
+/// Einen Befehl ausführen und die Ausgabe zurückgeben (nur für einfache, lesende Abfragen).
+pub async fn exec(t: &Target, cmd: &str) -> Result<String, String> {
+    let h = connect(t).await?;
+    let mut ch = h.channel_open_session().await.map_err(|e| e.to_string())?;
+    ch.exec(true, cmd.as_bytes()).await.map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    let mut status = 0;
+    while let Some(m) = ch.wait().await {
+        match m {
+            ChannelMsg::Data { data } => out.extend_from_slice(&data),
+            ChannelMsg::ExitStatus { exit_status } => status = exit_status,
+            ChannelMsg::Close => break,
+            _ => {}
+        }
+    }
+    let _ = h.disconnect(russh::Disconnect::ByApplication, "", "de").await;
+    if status != 0 {
+        return Err(format!("Befehl fehlgeschlagen (Code {status})"));
+    }
+    Ok(String::from_utf8_lossy(&out).into_owned())
+}
+
+/// Zeilen «benutzer port» aus /etc/sesam-rdp/ports (Setup-Script); Unbrauchbares wird übersprungen.
+pub fn parse_ports(text: &str) -> Vec<(String, u16)> {
+    text.lines()
+        .filter_map(|l| {
+            let mut it = l.split_whitespace();
+            let (u, p) = (it.next()?, it.next()?.parse().ok()?);
+            (it.next().is_none() && u.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))).then(|| (u.to_string(), p))
+        })
+        .collect()
+}
+
 pub async fn open(t: Target, cols: u32, rows: u32, on_event: crate::relay::Relay<ShellEvent>) -> Result<Shell, String> {
     let handle = Arc::new(connect(&t).await?);
     let note = on_event.clone();
@@ -507,6 +540,15 @@ Private-MAC: 4df1d2227cb63bbbaf0821816cb82afffc2c97163d22afb114f68621a55b07c7
 /// Server-Journal lesen für die RDP-Fehlersuche: als Benutzer aus «Sesam Test» (Tresor) einen Befehl ausführen.
 /// `SESAM_SSH_JOURNAL=192.168.1.4 cargo test --lib probe_journal -- --ignored --nocapture`
 /// Befehl über `SESAM_SSH_CMD` (Standard: GNOME-Remote-Desktop-Meldungen der letzten 10 Minuten).
+#[cfg(test)]
+mod ports_tests {
+    #[test]
+    fn parse_setup_ports() {
+        let p = super::parse_ports("darts 3390\nmike 3391\n\n# kommentar\nsesamtest 3392\nkaputt\nx y\n");
+        assert_eq!(p, vec![("darts".into(), 3390), ("mike".into(), 3391), ("sesamtest".into(), 3392)]);
+    }
+}
+
 #[cfg(test)]
 mod probe {
     #[tokio::test(flavor = "multi_thread")]

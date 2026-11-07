@@ -20,6 +20,10 @@ pub struct Connection {
     pub rdp_domain: String,
     /// Eigener RDP-Benutzer (leer = Benutzer der Verbindung), z. B. GNOME-Freigabe.
     pub rdp_user: String,
+    /// Was RDP öffnet: "" = Windows/anderer Server, "login" = GNOME-Anmeldebildschirm, "session" = laufende Sitzung übernehmen.
+    pub rdp_target: String,
+    /// Bei "session": wessen Sitzung (nur für Anzeige und Meldungen).
+    pub rdp_session_user: String,
     /// Bei VNC *und* RDP: womit «Desktop» verbindet ("vnc" | "rdp").
     pub desktop_protocol: String,
     pub user: String,
@@ -89,6 +93,8 @@ impl Default for Connection {
             rdp_port: None,
             rdp_domain: String::new(),
             rdp_user: String::new(),
+            rdp_target: String::new(),
+            rdp_session_user: String::new(),
             desktop_protocol: "vnc".into(),
             user: String::new(),
             default_view: "desktop".into(),
@@ -133,6 +139,9 @@ impl Connection {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        if !["", "login", "session"].contains(&self.rdp_target.as_str()) {
+            return Err("Ungültige Auswahl für RDP".into());
+        }
         if self.id.trim().is_empty() || self.id.len() > 64 || !self.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Err("Ungültige ID".into());
         }

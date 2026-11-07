@@ -145,6 +145,86 @@ fn find(path: &LibraryPath, id: &str) -> Result<Connection, String> {
     Ok(c)
 }
 
+/// RDP-Benutzer und -Passwort: gespeicherte Zugangsdaten für RDP, eigene für RDP, sonst die der Verbindung.
+fn rdp_login(path: &LibraryPath, c: &Connection) -> Result<(String, String), String> {
+    Ok(match &c.rdp_credential_id {
+        Some(cid) => {
+            let (u, p) = cred_login(path, cid)?;
+            (u, p.unwrap_or_default())
+        }
+        None => (
+            match c.rdp_user.trim() {
+                "" => c.user.clone(),
+                u => u.to_string(),
+            },
+            vault::get(&c.id, Kind::RdpPassword)?.or(login_secret(c, Kind::Password)?).unwrap_or_default(),
+        ),
+    })
+}
+
+/// «Zugangsdaten prüfen»: nur bis zur Anmeldung (NLA), dann sauber trennen. Zertifikat muss schon bestätigt sein.
+#[tauri::command]
+async fn rdp_check(path: State<'_, LibraryPath>, id: String) -> Result<(), String> {
+    let c = find(&path, &id)?;
+    let port = c.rdp_port.ok_or("RDP ist für diese Verbindung ausgeschaltet")?;
+    let (user, password) = rdp_login(&path, &c)?;
+    let pins = load_pins(&path.0.with_file_name("known_certs.json"));
+    let t = rdp::Target {
+        host: c.address.clone(),
+        port,
+        user,
+        domain: (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string()),
+        password,
+        expected_cert: pins.get(&format!("{}:{port}", c.address)).cloned(),
+        skip_cert_check: c.skip_cert_check,
+        width: 1024,
+        height: 768,
+        clipboard: None,
+        audio: false,
+        share: None,
+        kdc: kdc::kdc_url(&c.rdp_kdc)?,
+        no_ntlm: c.rdp_no_ntlm,
+        gateway: None,
+    };
+    rdp::check_login(t, Default::default()).await
+}
+
+/// Ports aus /etc/sesam-rdp/ports per SSH lesen (nur `cat`, kein sudo). Passwort aus dem Formular
+/// oder aus dem Tresor der Verbindung `id`.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn rdp_ports(
+    path: State<'_, LibraryPath>,
+    host: String,
+    port: u16,
+    user: String,
+    password: Option<String>,
+    id: Option<String>,
+    trust: Option<String>,
+) -> Result<Vec<(String, u16)>, String> {
+    let conn = id.as_deref().and_then(|i| find(&path, i).ok());
+    let password = match password.filter(|p| !p.is_empty()) {
+        Some(p) => Some(p),
+        None => match &conn {
+            Some(c) => login_secret(c, Kind::Password)?,
+            None => None,
+        },
+    };
+    if let Some(p) = &password {
+        diag::add_secret(p);
+    }
+    let key = match &conn {
+        Some(c) => login_secret(c, Kind::SshKey)?,
+        None => None,
+    };
+    let opts = ssh::Options { agent: conn.as_ref().is_some_and(|c| c.ssh_agent), ..Default::default() };
+    let t = ssh::Target { host, port, user, password, key, trusted: trust, opts, forwards: Vec::new(), jump: None };
+    let text = ssh::exec(&t, "cat /etc/sesam-rdp/ports").await.map_err(|e| {
+        if e.starts_with(ssh::HOSTKEY_UNKNOWN) { e } else { format!("Ports nicht lesbar: {e}") }
+    })?;
+    Ok(ssh::parse_ports(&text))
+}
+
 /// Benutzer und Passwort gespeicherter Zugangsdaten (für RDP, VNC, Gateway).
 fn cred_login(path: &LibraryPath, cid: &str) -> Result<(String, Option<String>), String> {
     let cred = creds::load(&creds_path(path))?.into_iter().find(|x| x.id == cid).ok_or("Zugewiesene Zugangsdaten gibt es nicht mehr")?;
@@ -957,20 +1037,7 @@ async fn rdp_open(
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
     let port = c.rdp_port.ok_or("Desktop über RDP ist für diese Verbindung ausgeschaltet")?;
-    // «Eigene Zugangsdaten für RDP»: gespeicherte, eigener Benutzer/Passwort, sonst die der Verbindung.
-    let (user, password) = match &c.rdp_credential_id {
-        Some(cid) => {
-            let (u, p) = cred_login(&path, cid)?;
-            (u, p.unwrap_or_default())
-        }
-        None => (
-            match c.rdp_user.trim() {
-                "" => c.user.clone(),
-                u => u.to_string(),
-            },
-            vault::get(&c.id, Kind::RdpPassword)?.or(login_secret(&c, Kind::Password)?).unwrap_or_default(),
-        ),
-    };
+    let (user, password) = rdp_login(&path, &c)?;
     let domain = (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string());
     let gateway = match c.rdp_gateway.trim() {
         "" => None,
@@ -1122,6 +1189,7 @@ pub fn run() {
                 let file = SubmenuBuilder::new(app, "Ablage")
                     .item(&MenuItemBuilder::with_id("cmd:new", "Neue Verbindung …").accelerator("CmdOrCtrl+N").build(app)?)
                     .item(&MenuItemBuilder::with_id("cmd:quick", "Schnelle Verbindung …").accelerator("CmdOrCtrl+K").build(app)?)
+                    .text("cmd:addubuntu", "Ubuntu-PC hinzufügen …")
                     .separator()
                     .item(&P::close_window(app, Some("Fenster schliessen"))?)
                     .build()?;
@@ -1220,6 +1288,8 @@ pub fn run() {
             sftp_remove,
             sftp_close,
             app_exit,
+            rdp_check,
+            rdp_ports,
             desktop_attach,
             shell_attach,
             open_detached,
