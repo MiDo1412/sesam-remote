@@ -51,6 +51,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   const canvas = document.createElement("canvas");
   canvas.tabIndex = 0;
   canvas.setAttribute("aria-label", "Entfernter Bildschirm");
+  canvas.style.visibility = "hidden"; // bis zur ersten Bildgrösse, sonst eine leere schwarze Fläche
   wrap.replaceChildren(canvas);
   const g = canvas.getContext("2d", { alpha: false })!;
   let mode: Mode = c.fitToWindow ? "fit" : "scale";
@@ -398,6 +399,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
       case 1:
         canvas.width = v.getUint16(1);
         canvas.height = v.getUint16(3);
+        canvas.style.visibility = "";
         layout();
         break;
       case 3:
@@ -432,6 +434,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
       const s = at.state as { w: number; h: number; img: string } | undefined;
       if (s) {
         [canvas.width, canvas.height] = [s.w, s.h];
+        canvas.style.visibility = "";
         layout();
         const im = new Image();
         im.onload = () => g.drawImage(im, 0, 0);
