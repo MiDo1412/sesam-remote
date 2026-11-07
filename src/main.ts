@@ -5,7 +5,7 @@ import { filesTab } from "./files";
 import { detachedWindow, detachToken, initTabs, openTab, runTool, takeOver } from "./tabs";
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
-import { initTitlebar } from "./titlebar";
+import { initTitlebar, isMac } from "./titlebar";
 import { applyAppearance, openSettings } from "./settings";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
@@ -249,7 +249,7 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
     { value: "open:shell", label: "Shell öffnen", disabled: !c.sshPort },
     { value: "open:files", label: "Dateien öffnen", disabled: !c.sshPort },
     { value: "edit", label: "Bearbeiten …", separator: true },
-    { value: "lnk:desktop", label: "Desktop", section: "Verknüpfung auf Schreibtisch", disabled: !desktopProtocol(c) },
+    { value: "lnk:desktop", label: "Desktop", section: isMac ? "Verknüpfung auf dem Schreibtisch" : "Verknüpfung auf dem Desktop", disabled: !desktopProtocol(c) },
     { value: "lnk:shell", label: "Shell", disabled: !c.sshPort },
     { value: "lnk:files", label: "Dateien", disabled: !c.sshPort },
   ]);
@@ -585,6 +585,7 @@ initFieldHelp(document.getElementById("editor-form")!);
 initFieldHelp(document.getElementById("quick-form")!);
 const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
+  else if (cmd === "about") openSettings("about");
   else if (cmd === "new") edit(null);
   else if (cmd === "quick") quick.open();
 };

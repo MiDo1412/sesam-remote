@@ -6,6 +6,7 @@ import { ask, choose, tell } from "./ui";
 import { emit, emitTo, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { keyLabel } from "./titlebar";
 
 /** Dieses Fenster zeigt abgekoppelte Sitzungen (ohne Bibliothek). */
 export const detachToken: string = (window as unknown as { __SESAM_DETACH__?: string }).__SESAM_DETACH__ ?? new URLSearchParams(location.search).get("detach") ?? "";
@@ -369,7 +370,7 @@ export function toolButton(icon: string, label: string, onClick: () => void, opt
   b.className = `tool${opts.text ? " with-text" : ""}${opts.danger ? " danger" : ""}`;
   b.innerHTML = icon;
   if (opts.text) b.append(Object.assign(document.createElement("span"), { textContent: label }));
-  b.title = opts.shortcut ? `${label} (${opts.shortcut})` : label;
+  b.title = opts.shortcut ? `${label} (${keyLabel(opts.shortcut)})` : label;
   b.setAttribute("aria-label", label);
   b.onclick = onClick;
   return b;

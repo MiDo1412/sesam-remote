@@ -3,6 +3,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openMenu, type MenuItem } from "./menu";
 import { topics } from "./help";
+import { invoke } from "@tauri-apps/api/core";
 
 export const isMac = navigator.userAgent.includes("Mac");
 
@@ -13,23 +14,36 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
   document.body.classList.add("custom-titlebar");
   const win = getCurrentWindow();
 
+  // Windows-Begriffe: Datei / Bearbeiten / Ansicht / Sitzung / Hilfe (docs/beschriftungen.md).
   const items: MenuItem[] = [
-    { value: "cmd:new", label: "Neue Verbindung …", shortcut: "Strg+N", section: "Ablage" },
+    { value: "cmd:new", label: "Neue Verbindung …", shortcut: "Strg+N", section: "Datei" },
     { value: "cmd:quick", label: "Schnelle Verbindung …", shortcut: "Strg+K" },
-    { value: "cmd:settings", label: "Einstellungen …", shortcut: "Strg+," },
-    { value: "tool:Bibliothek", label: "Bibliothek anzeigen", section: "Sitzung", separator: true },
-    { value: "tool:Abkoppeln", label: "In eigenem Fenster öffnen" },
+    { value: "cmd:settings", label: "Einstellungen", shortcut: "Strg+,", separator: true },
+    { value: "app:quit", label: "Beenden", shortcut: "Alt+F4", separator: true },
+    { value: "edit:cut", label: "Ausschneiden", shortcut: "Strg+X", section: "Bearbeiten", separator: true },
+    { value: "edit:copy", label: "Kopieren", shortcut: "Strg+C" },
+    { value: "edit:paste", label: "Einfügen", shortcut: "Strg+V" },
+    { value: "edit:selectAll", label: "Alles auswählen", shortcut: "Strg+A" },
+    { value: "tool:Bibliothek", label: "Bibliothek anzeigen", section: "Ansicht", separator: true },
+    { value: "tool:Vorheriger Tab", label: "Vorheriger Tab" },
+    { value: "tool:Nächster Tab", label: "Nächster Tab" },
+    { value: "tool:Vollbild", label: "Vollbild", shortcut: "F11" },
+    { value: "tool:Abkoppeln", label: "In eigenem Fenster öffnen", section: "Sitzung", separator: true },
     { value: "tool:Andocken", label: "Ins Hauptfenster zurück" },
     { value: "tool:Minimieren", label: "Minimieren" },
     { value: "tool:Trennen", label: "Trennen" },
     ...topics.map((t, i) => ({ value: `help:${t.id}`, label: t.title, ...(i === 0 ? { section: "Hilfe", separator: true } : {}) })),
+    { value: "cmd:about", label: "Über Sesam Remote", separator: true },
   ];
   const menu = async (anchor: HTMLElement) => {
+    const focused = document.activeElement as HTMLElement | null; // Bearbeiten wirkt auf das Feld davor
     const v = await openMenu(anchor, items);
     if (!v) return;
     const [kind, arg] = [v.slice(0, v.indexOf(":")), v.slice(v.indexOf(":") + 1)];
     if (kind === "cmd") actions.command(arg);
     else if (kind === "tool") actions.tool(arg);
+    else if (kind === "app") void invoke("app_exit");
+    else if (kind === "edit") void editCommand(arg, focused);
     else actions.help(arg);
   };
 
@@ -71,4 +85,20 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
     void sync();
     void win.onResized(sync);
   }
+}
+
+/** Bearbeiten-Befehle für das zuletzt fokussierte Eingabefeld (Einfügen über die Zwischenablage-API). */
+async function editCommand(cmd: string, el: HTMLElement | null) {
+  el?.focus();
+  if (cmd !== "paste") return void document.execCommand(cmd === "selectAll" ? "selectAll" : cmd);
+  const text = await navigator.clipboard.readText().catch(() => "");
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    el.setRangeText(text, el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, "end");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}
+
+/** Kürzel so anzeigen, wie das System sie schreibt: macOS ⌘ ⇧ ⌥, sonst Strg/Umschalt/Alt. */
+export function keyLabel(s: string) {
+  return isMac ? s.replace(/Strg\+/g, "⌘").replace(/Umschalt\+/g, "⇧").replace(/Alt\+/g, "⌥").replace(/Entf/g, "⌫") : s;
 }

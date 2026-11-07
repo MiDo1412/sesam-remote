@@ -450,6 +450,12 @@ fn local_rename(path: String, name: String) -> Result<String, String> {
     sftp::local_rename(&path, &name)
 }
 
+/// «Beenden» aus dem eigenen Menü (Windows/Linux).
+#[tauri::command]
+fn app_exit(app: AppHandle) {
+    app.exit(0);
+}
+
 /// Laufende Desktop-Sitzung (VNC/RDP) an das Fenster dieses Kanals hängen.
 #[tauri::command]
 fn desktop_attach(sid: String, on_event: Channel<InvokeResponseBody>) -> Result<(), String> {
@@ -1094,57 +1100,79 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            use tauri::menu::{MenuBuilder, SubmenuBuilder};
-            // IDs wie in src/help.ts.
-            use tauri::menu::MenuItemBuilder;
-            let file = SubmenuBuilder::new(app, "Ablage")
-                .item(&MenuItemBuilder::with_id("cmd:new", "Neue Verbindung …").accelerator("CmdOrCtrl+N").build(app)?)
-                .item(&MenuItemBuilder::with_id("cmd:quick", "Schnelle Verbindung …").accelerator("CmdOrCtrl+K").build(app)?)
-                .separator()
-                .item(&MenuItemBuilder::with_id("cmd:settings", "Einstellungen …").accelerator("CmdOrCtrl+,").build(app)?)
-                .build()?;
-            // Gleiche Beschriftungen wie die Werkzeugknöpfe (src/tabs.ts runTool); Kürzel bleiben bei der Sitzung.
-            let session = SubmenuBuilder::new(app, "Sitzung")
-                .text("tool:Bibliothek", "Bibliothek anzeigen")
-                .text("tool:Vorheriger Tab", "Vorheriger Tab")
-                .text("tool:Nächster Tab", "Nächster Tab")
-                .separator()
-                .text("tool:Neue Shell", "Neue Shell")
-                .text("tool:Suchen", "Suchen …")
-                .text("tool:Zwischenablage abtippen", "Zwischenablage abtippen")
-                .text("tool:Bildschirmfoto", "Bildschirmfoto")
-                .text("tool:Alle Monitore", "Alle Monitore")
-                .text("tool:Vollbild", "Vollbild")
-                .separator()
-                .text("tool:Abkoppeln", "In eigenem Fenster öffnen")
-                .text("tool:Andocken", "Ins Hauptfenster zurück")
-                .text("tool:Minimieren", "Minimieren")
-                .text("tool:Trennen", "Trennen")
-                .build()?;
-            let help = SubmenuBuilder::new(app, "Hilfe")
-                .text("help:zugangsdaten", "Welche Zugangsdaten?")
-                .separator()
-                .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")
-                .text("help:rdp-windows", "RDP mit Windows")
-                .text("help:vnc", "VNC allgemein")
-                .text("help:wayvnc", "wayvnc (wlroots)")
-                .text("help:macos", "macOS-Bildschirmfreigabe")
-                .text("help:ssh", "SSH und SFTP")
-                .build()?;
-            // macOS braucht das Standardmenü (Bearbeiten: Kopieren/Einfügen); Windows nur «Hilfe».
-            // macOS: native Menüleiste oben am Bildschirm. Windows/Linux: eigene Titelleiste mit Menüknopf (src/titlebar.ts).
+            use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+            // Menüs nach Systemstandard (docs/beschriftungen.md). macOS: native Menüleiste oben am Bildschirm.
+            // Windows/Linux: eigene Titelleiste mit Menüknopf (src/titlebar.ts), kein natives Menü.
             if cfg!(target_os = "macos") {
-                let m = tauri::menu::Menu::default(app.handle())?;
-                m.insert(&file, 1)?;
-                m.append(&session)?;
-                m.append(&help)?;
-                app.set_menu(m)?;
-            } else {
-                let _ = MenuBuilder::new(app).item(&file).item(&session).item(&help).build()?;
-                if let Some(w) = app.get_webview_window("main") {
-                    w.set_decorations(false)?;
-                    let _ = w.set_shadow(true);
-                }
+                use tauri::menu::{AboutMetadata, PredefinedMenuItem as P};
+                let about = AboutMetadata { name: Some("Sesam Remote".into()), version: Some(app.package_info().version.to_string()), ..Default::default() };
+                let app_menu = SubmenuBuilder::new(app, "Sesam Remote")
+                    .item(&P::about(app, Some("Über Sesam Remote"), Some(about))?)
+                    .separator()
+                    .item(&MenuItemBuilder::with_id("cmd:settings", "Einstellungen …").accelerator("CmdOrCtrl+,").build(app)?)
+                    .separator()
+                    .item(&P::services(app, Some("Dienste"))?)
+                    .separator()
+                    .item(&P::hide(app, Some("Sesam Remote ausblenden"))?)
+                    .item(&P::hide_others(app, Some("Andere ausblenden"))?)
+                    .item(&P::show_all(app, Some("Alle einblenden"))?)
+                    .separator()
+                    .item(&P::quit(app, Some("Sesam Remote beenden"))?)
+                    .build()?;
+                let file = SubmenuBuilder::new(app, "Ablage")
+                    .item(&MenuItemBuilder::with_id("cmd:new", "Neue Verbindung …").accelerator("CmdOrCtrl+N").build(app)?)
+                    .item(&MenuItemBuilder::with_id("cmd:quick", "Schnelle Verbindung …").accelerator("CmdOrCtrl+K").build(app)?)
+                    .separator()
+                    .item(&P::close_window(app, Some("Fenster schliessen"))?)
+                    .build()?;
+                let edit = SubmenuBuilder::new(app, "Bearbeiten")
+                    .item(&P::undo(app, Some("Widerrufen"))?)
+                    .item(&P::redo(app, Some("Wiederholen"))?)
+                    .separator()
+                    .item(&P::cut(app, Some("Ausschneiden"))?)
+                    .item(&P::copy(app, Some("Kopieren"))?)
+                    .item(&P::paste(app, Some("Einsetzen"))?)
+                    .item(&P::select_all(app, Some("Alles auswählen"))?)
+                    .build()?;
+                let view = SubmenuBuilder::new(app, "Darstellung")
+                    .text("tool:Bibliothek", "Bibliothek anzeigen")
+                    .text("tool:Vorheriger Tab", "Vorheriger Tab")
+                    .text("tool:Nächster Tab", "Nächster Tab")
+                    .separator()
+                    .item(&P::fullscreen(app, Some("Vollbild"))?)
+                    .build()?;
+                // Gleiche Beschriftungen wie die Werkzeugknöpfe (src/tabs.ts runTool); Kürzel bleiben bei der Sitzung.
+                let session = SubmenuBuilder::new(app, "Sitzung")
+                    .text("tool:Neue Shell", "Neue Shell")
+                    .text("tool:Suchen", "Suchen …")
+                    .text("tool:Zwischenablage abtippen", "Zwischenablage abtippen")
+                    .text("tool:Bildschirmfoto", "Bildschirmfoto")
+                    .text("tool:Alle Monitore", "Alle Monitore")
+                    .separator()
+                    .text("tool:Abkoppeln", "In eigenem Fenster öffnen")
+                    .text("tool:Andocken", "Ins Hauptfenster zurück")
+                    .text("tool:Minimieren", "Minimieren")
+                    .text("tool:Trennen", "Trennen")
+                    .build()?;
+                let window = SubmenuBuilder::new(app, "Fenster")
+                    .item(&P::minimize(app, Some("Im Dock ablegen"))?)
+                    .item(&P::maximize(app, Some("Zoomen"))?)
+                    .build()?;
+                // IDs wie in src/help.ts.
+                let help = SubmenuBuilder::new(app, "Hilfe")
+                    .text("help:zugangsdaten", "Welche Zugangsdaten?")
+                    .separator()
+                    .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")
+                    .text("help:rdp-windows", "RDP mit Windows")
+                    .text("help:vnc", "VNC allgemein")
+                    .text("help:wayvnc", "wayvnc (wlroots)")
+                    .text("help:macos", "macOS-Bildschirmfreigabe")
+                    .text("help:ssh", "SSH und SFTP")
+                    .build()?;
+                app.set_menu(MenuBuilder::new(app).items(&[&app_menu, &file, &edit, &view, &session, &window, &help]).build()?)?;
+            } else if let Some(w) = app.get_webview_window("main") {
+                w.set_decorations(false)?;
+                let _ = w.set_shadow(true);
             }
             app.on_menu_event(|app, e| {
                 if let Some(topic) = e.id().as_ref().strip_prefix("help:") {
@@ -1191,6 +1219,7 @@ pub fn run() {
             sftp_rename,
             sftp_remove,
             sftp_close,
+            app_exit,
             desktop_attach,
             shell_attach,
             open_detached,
