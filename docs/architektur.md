@@ -303,3 +303,15 @@ Sprungservers muss schon bekannt sein (einmal direkt verbinden), die Rückfrage 
 `authenticate_gssapi_with_mic`; SSPI-Anbindung wäre eigener Code), Server-Zertifikate (`*-cert-v01`,
 werden abgelehnt), SSH-1, X11-Weiterleitung, Weiterleitung über Unix-Sockets, keyboard-interactive/2FA
 (russh kann es, hier noch ohne Dialog), serielle Verbindungen, Telnet/rlogin.
+
+## Titelleiste unter Windows: Andocklayouts (Snap Layouts)
+
+Sesam zeichnet unter Windows eine eigene Titelleiste (ohne Fensterrahmen, `decorations: false`), damit
+Tabs und Menü in der Leiste stehen. Windows 11 zeigt die Andocklayouts beim Darüberfahren über den
+Maximieren-Knopf nur, wenn das Fenster bei `WM_NCHITTEST` für diesen Bereich `HTMAXBUTTON` meldet.
+WebView2 liegt als eigenes Kindfenster über der ganzen Fläche und bekommt die Mausereignisse, das
+Hauptfenster sieht den Treffertest dort nicht. Eine saubere Lösung braucht ein kleines natives
+Kindfenster genau über dem Knopf, das `HTMAXBUTTON` meldet und Klicks/Hover an die Webansicht
+weiterreicht (Ansatz von tauri-plugin-decorum). Das ist noch nicht umgesetzt, weil es nur am laufenden
+Fenster prüfbar ist. Bis dahin: Andocklayouts mit **Win+Z** (steht im Tooltip des Knopfs), Ziehen an
+den Bildschirmrand und Doppelklick auf die Leiste zum Maximieren funktionieren.

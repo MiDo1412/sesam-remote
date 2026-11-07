@@ -79,7 +79,7 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
     const sync = async () => {
       const on = await win.isMaximized();
       max.textContent = on ? "" : "";
-      max.title = on ? "Wiederherstellen" : "Maximieren";
+      max.title = on ? "Wiederherstellen" : "Maximieren (Andocklayouts: Win+Z)";
       max.setAttribute("aria-label", max.title);
     };
     void sync();
