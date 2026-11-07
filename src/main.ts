@@ -288,7 +288,7 @@ function renderTable(visible: Connection[]) {
     th.setAttribute("aria-sort", th.dataset.key === prefs.sort ? (prefs.desc ? "descending" : "ascending") : "none");
   const tabId = visible.some((c) => c.id === selected) ? selected : visible[0]?.id;
   const svcIcon: Record<string, string> = { RDP: ICON.desktop, VNC: ICON.screencast, SSH: ICON.shell, FTP: ICON.globe };
-  const port: Record<string, (c: Connection) => number | null> = { RDP: (c) => c.rdpPort, VNC: (c) => c.vncPort, SSH: (c) => c.sshPort };
+  const port: Record<string, (c: Connection) => number | null> = { RDP: (c) => c.rdpPort, VNC: (c) => c.vncPort, SSH: (c) => c.sshPort, FTP: (c) => c.ftpPort };
   $("conn-rows").replaceChildren(
     ...visible.map((c) => {
       const svc = el("td", { class: "svc-col" });
