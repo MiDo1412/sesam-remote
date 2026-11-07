@@ -556,10 +556,13 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     tracing::info!(rdstls = hop.rdstls.is_some(), "RDP: Aushandlung (X.224)");
     let should_upgrade = if hop.rdstls.is_some() {
         // IronRDP fordert RDSTLS nicht an: Aushandlung selbst, Connector dann direkt beim TLS-Upgrade weiter.
-        rdstls_negotiate(&mut framed, hop).await?;
-        connector.state = ironrdp_connector::ClientConnectorState::EnhancedSecurityUpgrade {
-            selected_protocol: ironrdp_pdu::nego::SecurityProtocol::RDSTLS,
+        let confirm = rdstls_negotiate(&mut framed, hop).await?;
+        // Die Antwort durch den Connector schicken: er übernimmt so die Antwort-Flags (EXTENDED_CLIENT_DATA_SUPPORTED)
+        // und fordert den MCS-Nachrichtenkanal an. Ohne ihn verwirft GNOME die Auto-Detect-Antworten («message channel id == 0»).
+        connector.state = ironrdp_connector::ClientConnectorState::ConnectionInitiationWaitConfirm {
+            requested_protocol: ironrdp_pdu::nego::SecurityProtocol::RDSTLS | ironrdp_pdu::nego::SecurityProtocol::SSL,
         };
+        connector.step(&confirm, None, &mut ironrdp_pdu::WriteBuf::new()).map_err(|e| phase("Aushandlung", e))?;
         ironrdp_tokio::skip_connect_begin(&mut connector)
     } else {
         ironrdp_tokio::connect_begin(&mut framed, &mut connector).await.map_err(|e| phase("Aushandlung", e))?
@@ -734,7 +737,7 @@ async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) 
 }
 
 /// X.224-Aushandlung mit PROTOCOL_RDSTLS und Routing-Token; der Server muss RDSTLS wählen.
-async fn rdstls_negotiate(framed: &mut TokioFramed<Stream>, hop: &Hop) -> Result<(), String> {
+async fn rdstls_negotiate(framed: &mut TokioFramed<Stream>, hop: &Hop) -> Result<Vec<u8>, String> {
     use ironrdp_pdu::nego::{ConnectionConfirm, ConnectionRequest, ConnectionRequestWithOpaqueRoutingToken, OpaqueRoutingToken, RequestFlags, SecurityProtocol};
     use ironrdp_pdu::x224::X224;
     let request = ConnectionRequest {
@@ -751,9 +754,9 @@ async fn rdstls_negotiate(framed: &mut TokioFramed<Stream>, hop: &Hop) -> Result
     framed.write_all(&bytes).await.map_err(|e| format!("Aushandlung: {e}"))?;
     let (_, frame) = framed.read_pdu().await.map_err(|e| format!("Aushandlung: {e}"))?;
     match ironrdp_pdu::decode::<X224<ConnectionConfirm>>(&frame).map_err(|e| format!("Aushandlung: {e}"))?.0 {
-        ConnectionConfirm::Response { protocol, .. } if protocol.contains(SecurityProtocol::RDSTLS) => {
-            tracing::info!(?protocol, "RDSTLS gewählt");
-            Ok(())
+        ConnectionConfirm::Response { protocol, flags } if protocol.contains(SecurityProtocol::RDSTLS) => {
+            tracing::info!(?protocol, ?flags, "RDSTLS gewählt");
+            Ok(frame.to_vec())
         }
         ConnectionConfirm::Response { protocol, .. } => Err(format!("Aushandlung: Server wählt {protocol:?} statt RDSTLS für die Übergabe")),
         ConnectionConfirm::Failure { code } => Err(format!("Aushandlung: Server lehnt ab ({code:?})")),
@@ -1323,6 +1326,136 @@ mod probe {
         let mut framed = TokioFramed::new(tcp);
         let hop = Hop { routing_token: Some("Cookie: msts=sesam-probe".into()), ..Default::default() };
         println!("RDSTLS-Aushandlung: {:?}", rdstls_negotiate(&mut framed, &hop).await);
+    }
+
+    /// Anmeldung wie ein Mensch: am GNOME-Anmeldebildschirm Benutzer und Passwort tippen, Umleitung abwarten,
+    /// Bildschirmfotos nach test-build/diag/. Zugangsdaten nur aus dem Tresor (Einstellungen › Zugangsdaten):
+    /// «Sesam Test RDP» (RDP-Anmeldung) und, falls `SESAM_RDP_DESKTOP` nicht gesetzt, «Sesam Test» (Ubuntu-Konto).
+    /// `SESAM_RDP_LOGIN=192.168.1.4:3389 cargo test --lib probe_login -- --ignored --nocapture`
+    /// Mit `SESAM_RDP_DESKTOP=1` nur verbinden und Bilder speichern (direkte Freigabe, z. B. Port 3392, mit «Sesam Test»).
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn probe_login() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let Ok(addr) = std::env::var("SESAM_RDP_LOGIN") else { return };
+        let desktop_only = std::env::var("SESAM_RDP_DESKTOP").is_ok();
+        crate::diag::init(&std::env::temp_dir().join("sesam-probe"));
+        let appdata = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("ch.sesam.remote");
+        let creds = crate::creds::load(&appdata.join("credentials.json")).expect("Zugangsdaten-Liste");
+        let get = |name: &str| {
+            let c = creds.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("Zugangsdaten «{name}» fehlen"));
+            let pw = crate::vault::get(&crate::creds::vault_id(&c.id), crate::vault::Kind::Password).unwrap().expect("Passwort im Tresor");
+            crate::diag::add_secret(&pw);
+            (c.user.clone(), pw)
+        };
+        let (user, password) = get(if desktop_only { "Sesam Test" } else { "Sesam Test RDP" });
+        let (host, port) = addr.rsplit_once(':').unwrap();
+        let pins: std::collections::HashMap<String, String> =
+            std::fs::read_to_string(appdata.join("known_certs.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let t = Target {
+            host: host.into(),
+            port: port.parse().unwrap(),
+            user,
+            domain: None,
+            password,
+            expected_cert: pins.get(&addr).cloned(),
+            skip_cert_check: false,
+            width: 1280,
+            height: 800,
+            clipboard: None,
+            audio: false,
+            share: None,
+            kdc: None,
+            no_ntlm: false,
+            gateway: None,
+        };
+        println!("Zertifikat gepinnt: {}", t.expected_cert.is_some());
+        // Bild mitschreiben wie die Anzeige.
+        let fb = std::sync::Arc::new(std::sync::Mutex::new((0u16, 0u16, Vec::<u8>::new())));
+        let rects = std::sync::Arc::new(AtomicUsize::new(0));
+        let (fb2, rects2) = (fb.clone(), rects.clone());
+        let emit = move |e: Event| {
+            match e {
+                Event::Resize { width, height } => *fb2.lock().unwrap() = (width, height, vec![0; width as usize * height as usize * 4]),
+                Event::Rect { rect, rgba } => {
+                    let mut g = fb2.lock().unwrap();
+                    let w = g.0 as usize;
+                    for row in 0..rect.h as usize {
+                        let dst = ((rect.y as usize + row) * w + rect.x as usize) * 4;
+                        let src = row * rect.w as usize * 4;
+                        if dst + rect.w as usize * 4 <= g.2.len() {
+                            g.2[dst..dst + rect.w as usize * 4].copy_from_slice(&rgba[src..src + rect.w as usize * 4]);
+                        }
+                    }
+                    rects2.fetch_add(1, Ordering::Relaxed);
+                }
+                Event::Info(i) if !i.is_empty() => println!("Hinweis: {i}"),
+                Event::Closed(why) => println!("Beendet: {why}"),
+                _ => {}
+            }
+            true
+        };
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../test-build/diag");
+        std::fs::create_dir_all(&dir).unwrap();
+        let snap = |name: &str| {
+            let g = fb.lock().unwrap();
+            if g.0 == 0 {
+                return println!("{name}: noch kein Bild");
+            }
+            let f = std::fs::File::create(dir.join(format!("{name}.png"))).unwrap();
+            let mut enc = png::Encoder::new(std::io::BufWriter::new(f), g.0 as u32, g.1 as u32);
+            enc.set_color(png::ColorType::Rgba);
+            enc.write_header().unwrap().write_image_data(&g.2).unwrap();
+            println!("{name}: gespeichert ({}x{}, {} Rechtecke bisher)", g.0, g.1, rects.load(Ordering::Relaxed));
+        };
+        let wait = |s: u64| tokio::time::sleep(std::time::Duration::from_secs(s));
+        let session = match open(t, Default::default(), channel(), emit).await {
+            Ok(s) => s,
+            Err(e) => return println!("Verbindung fehlgeschlagen: {e}"),
+        };
+        for _ in 0..30 {
+            if rects.load(Ordering::Relaxed) > 0 {
+                break;
+            }
+            wait(1).await;
+        }
+        wait(3).await;
+        snap("1-start");
+        if !desktop_only {
+            let (os_user, os_pw) = get("Sesam Test");
+            let typ = |text: &str| {
+                for ch in text.chars() {
+                    session.send(Input::Unicode { ch, down: true });
+                    session.send(Input::Unicode { ch, down: false });
+                }
+            };
+            let enter = || {
+                session.send(Input::Scancode { code: 0x1C, down: true });
+                session.send(Input::Scancode { code: 0x1C, down: false });
+            };
+            // GDM: Eintrag des Testkontos anklicken (Tippen springt nicht dorthin, Enter nähme den ersten Benutzer).
+            // Position aus dem ersten Bild, überschreibbar mit SESAM_RDP_CLICK="x,y".
+            let (x, y) = std::env::var("SESAM_RDP_CLICK")
+                .ok()
+                .and_then(|v| v.split_once(',').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?))))
+                .unwrap_or((640u16, 443u16));
+            let _ = &os_user;
+            session.send(Input::Pointer { x, y, buttons: 0 });
+            session.send(Input::Pointer { x, y, buttons: 1 });
+            session.send(Input::Pointer { x, y, buttons: 0 });
+            wait(3).await;
+            snap("3-passwortfeld");
+            if std::env::var("SESAM_RDP_STOP").is_ok() {
+                return session.close(); // nur bis zum Passwortfeld, zum Prüfen des richtigen Kontos
+            }
+            typ(&os_pw);
+            enter();
+        }
+        for i in 0..10 {
+            wait(3).await;
+            snap(&format!("4-danach-{:02}", i * 3));
+        }
+        session.close();
     }
 
     #[tokio::test(flavor = "multi_thread")]

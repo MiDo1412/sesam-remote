@@ -503,3 +503,47 @@ Private-MAC: 4df1d2227cb63bbbaf0821816cb82afffc2c97163d22afb114f68621a55b07c7
         assert!(keys::decode_secret_key(PPK_ECDSA, None).unwrap().algorithm().is_ecdsa());
     }
 }
+
+/// Server-Journal lesen für die RDP-Fehlersuche: als Benutzer aus «Sesam Test» (Tresor) einen Befehl ausführen.
+/// `SESAM_SSH_JOURNAL=192.168.1.4 cargo test --lib probe_journal -- --ignored --nocapture`
+/// Befehl über `SESAM_SSH_CMD` (Standard: GNOME-Remote-Desktop-Meldungen der letzten 10 Minuten).
+#[cfg(test)]
+mod probe {
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn probe_journal() {
+        let Ok(host) = std::env::var("SESAM_SSH_JOURNAL") else { return };
+        let cmd = std::env::var("SESAM_SSH_CMD").unwrap_or_else(|_| "journalctl --no-pager -o short-precise --since '-10min' -t gnome-remote-de -u gnome-remote-desktop -u gdm | tail -n 200".into());
+        let appdata = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("ch.sesam.remote");
+        let creds = crate::creds::load(&appdata.join("credentials.json")).unwrap();
+        let c = creds.iter().find(|c| c.name == "Sesam Test").expect("«Sesam Test» fehlt");
+        let pw = crate::vault::get(&crate::creds::vault_id(&c.id), crate::vault::Kind::Password).unwrap();
+        let t = super::Target {
+            host,
+            port: 22,
+            user: c.user.clone(),
+            password: pw,
+            key: None,
+            trusted: std::env::var("SESAM_SSH_TRUST").ok(),
+            opts: Default::default(),
+            forwards: Vec::new(),
+            jump: None,
+        };
+        let h = match super::connect(&t).await {
+            Ok(h) => h,
+            Err(e) => return println!("SSH: {e}"),
+        };
+        let mut ch = h.channel_open_session().await.unwrap();
+        ch.exec(true, cmd.as_bytes()).await.unwrap();
+        let mut out = Vec::new();
+        while let Some(m) = ch.wait().await {
+            match m {
+                russh::ChannelMsg::Data { data } | russh::ChannelMsg::ExtendedData { data, .. } => out.extend_from_slice(&data),
+                russh::ChannelMsg::ExitStatus { .. } | russh::ChannelMsg::Eof => {}
+                russh::ChannelMsg::Close => break,
+                _ => {}
+            }
+        }
+        println!("{}", String::from_utf8_lossy(&out));
+    }
+}
