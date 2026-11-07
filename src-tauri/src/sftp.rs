@@ -12,8 +12,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub struct Sftp {
     pub s: SftpSession,
-    /// Hält die SSH-Verbindung offen (in Tests ohne SSH).
-    _ssh: Option<Handle<Client>>,
+    /// Hält die SSH-Verbindung offen und dient für Befehle wie `sha256sum` (in Tests ohne SSH).
+    ssh: Option<Handle<Client>>,
 }
 
 fn err(e: impl std::fmt::Display) -> String {
@@ -43,7 +43,7 @@ pub async fn start(h: Handle<Client>) -> Result<Sftp, (Handle<Client>, String)> 
     .await;
     match stream {
         Ok(st) => match SftpSession::new(st).await {
-            Ok(s) => Ok(Sftp { s, _ssh: Some(h) }),
+            Ok(s) => Ok(Sftp { s, ssh: Some(h) }),
             Err(e) => Err((h, format!("SFTP nicht verfügbar: {e}"))),
         },
         Err(e) => Err((h, e)),
@@ -202,6 +202,14 @@ impl Sftp {
         Ok(p)
     }
 
+    /// SHA-256 einer Datei auf dem Server, über einen exec-Kanal derselben Verbindung.
+    pub async fn sha256(&self, path: &str) -> Result<String, String> {
+        match &self.ssh {
+            Some(h) => crate::scp::sha256(h, path).await,
+            None => Err("Inhaltsprüfung nicht möglich: keine SSH-Verbindung".into()),
+        }
+    }
+
     async fn unique(&self, dir: &str, name: &str, is_dir: bool) -> Result<String, String> {
         let mut p = rjoin(dir, name);
         let mut n = 2;
@@ -268,6 +276,15 @@ pub fn local_list(path: &str) -> Result<Listing, String> {
         None => None,
     };
     Ok(Listing { path: p.to_string_lossy().into_owned(), parent, entries })
+}
+
+/// SHA-256 einer lokalen Datei, hexadezimal.
+pub fn local_sha256(path: &str) -> Result<String, String> {
+    use sha2::Digest;
+    let mut f = std::fs::File::open(path).map_err(|e| format!("{path}: {e}"))?;
+    let mut h = sha2::Sha256::new();
+    std::io::copy(&mut f, &mut h).map_err(|e| format!("{path}: {e}"))?;
+    Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 pub(crate) fn local_unique(dir: &Path, name: &str, is_dir: bool) -> PathBuf {
@@ -363,9 +380,11 @@ where
 }
 
 /// Lokale Datei oder lokalen Ordner nach `remote_dir` hochladen. Gibt den Zielpfad zurück.
-pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, report: impl Fn(Progress)) -> Result<String, String> {
+/// `replace` (nur für eine einzelne Datei, nach ausdrücklicher Rückfrage): gleichnamige Datei ersetzen.
+pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, replace: bool, report: impl Fn(Progress)) -> Result<String, String> {
     let name = local.file_name().ok_or("Ungültige Quelle")?.to_string_lossy().into_owned();
-    let root = sftp.unique(remote_dir, &name, local.is_dir()).await?;
+    let replace = replace && local.is_file();
+    let root = if replace { rjoin(remote_dir, &name) } else { sftp.unique(remote_dir, &name, local.is_dir()).await? };
 
     // Plan: Ordner zuerst, dann Dateien; lokal reicht ein synchroner Durchlauf.
     let (mut plan, mut total) = (Vec::new(), 0u64);
@@ -393,6 +412,10 @@ pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, report: im
             let w = sftp.s.create(&tmp).await.map_err(|e| format!("{}: {e}", it.dst))?;
             let mut guard = Partial(Some(Cleanup::Remote(sftp.clone(), tmp.clone())));
             pump(r, w, &mut m, &it.src).await?;
+            if replace {
+                // SFTP-Umbenennen überschreibt nicht; die alte Datei erst weg, wenn die neue vollständig da ist.
+                let _ = sftp.s.remove_file(&it.dst).await;
+            }
             sftp.s.rename(&tmp, &it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
             guard.0 = None;
         }
@@ -402,10 +425,13 @@ pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, report: im
 }
 
 /// Entfernte Datei oder entfernten Ordner nach `local_dir` herunterladen. Gibt den Zielpfad zurück.
-pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, report: impl Fn(Progress)) -> Result<String, String> {
+/// `replace` wie bei `upload` (Umbenennen ersetzt lokal eine Datei, nie einen Ordner).
+pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace: bool, report: impl Fn(Progress)) -> Result<String, String> {
     let meta = sftp.s.metadata(remote).await.map_err(|e| format!("{remote}: {e}"))?;
     let name = remote.trim_end_matches('/').rsplit('/').next().filter(|n| !n.is_empty()).ok_or("Ungültige Quelle")?;
-    let root = local_unique(local_dir, name, meta.file_type().is_dir());
+    crate::scp::check_name(name)?;
+    let is_dir = meta.file_type().is_dir();
+    let root = if replace && !is_dir { local_dir.join(name) } else { local_unique(local_dir, name, is_dir) };
 
     let (mut plan, mut total) = (Vec::new(), 0u64);
     let mut stack = vec![(remote.to_string(), root.clone(), meta)];
@@ -605,7 +631,7 @@ mod tests {
         fs.lock().unwrap().nodes.insert("/home".into(), None);
         let (client, server) = tokio::io::duplex(1 << 20);
         russh_sftp::server::run(server, Server { fs: fs.clone(), listed: HashSet::new() }).await;
-        let sftp = Arc::new(Sftp { s: SftpSession::new(client).await.unwrap(), _ssh: None });
+        let sftp = Arc::new(Sftp { s: SftpSession::new(client).await.unwrap(), ssh: None });
 
         // Lokaler Ordner mit Unterordner und einer Datei über mehrere Puffer (256 KB).
         let base = std::env::temp_dir().join(format!("sesam-xfer-{}", std::process::id()));
@@ -618,7 +644,7 @@ mod tests {
 
         let last = Arc::new(Mutex::new(None));
         let l2 = last.clone();
-        let target = upload(&sftp, &src, "/home", move |p| *l2.lock().unwrap() = Some(p)).await.unwrap();
+        let target = upload(&sftp, &src, "/home", false, move |p| *l2.lock().unwrap() = Some(p)).await.unwrap();
         assert_eq!(target, "/home/projekt");
         assert!(matches!(last.lock().unwrap().take(), Some(Progress::Done { .. })));
         {
@@ -628,17 +654,30 @@ mod tests {
         }
 
         // Zweites Hochladen überschreibt nicht.
-        assert_eq!(upload(&sftp, &src, "/home", |_| {}).await.unwrap(), "/home/projekt (2)");
+        assert_eq!(upload(&sftp, &src, "/home", false, |_| {}).await.unwrap(), "/home/projekt (2)");
         let names: Vec<_> = sftp.list("/home").await.unwrap().entries.into_iter().map(|e| (e.name, e.dir)).collect();
         assert_eq!(names, [("projekt".to_string(), true), ("projekt (2)".to_string(), true)]);
 
         // Zurück auf diesen Computer, neben das Original: wird «projekt (2)».
-        let back = download(&sftp, "/home/projekt", &base, |_| {}).await.unwrap();
+        let back = download(&sftp, "/home/projekt", &base, false, |_| {}).await.unwrap();
         assert_eq!(PathBuf::from(&back), base.join("projekt (2)"));
         assert_eq!(std::fs::read(base.join("projekt (2)").join("unter").join("gross.bin")).unwrap(), big);
         assert_eq!(std::fs::read_to_string(base.join("projekt (2)").join("a.txt")).unwrap(), "Grüezi");
 
-        assert!(download(&sftp, "/home/fehlt", &base, |_| {}).await.is_err());
+        assert!(download(&sftp, "/home/fehlt", &base, false, |_| {}).await.is_err());
+
+        // Ersetzen nur auf ausdrücklichen Wunsch: gleicher Name, neuer Inhalt, keine «(2)».
+        std::fs::write(src.join("a.txt"), "Neu").unwrap();
+        assert_eq!(upload(&sftp, &src.join("a.txt"), "/home/projekt", true, |_| {}).await.unwrap(), "/home/projekt/a.txt");
+        assert_eq!(fs.lock().unwrap().nodes["/home/projekt/a.txt"].as_deref(), Some("Neu".as_bytes()));
+        fs.lock().unwrap().nodes.insert("/home/projekt/a.txt".into(), Some(b"Server".to_vec()));
+        let a = download(&sftp, "/home/projekt/a.txt", &src, true, |_| {}).await.unwrap();
+        assert_eq!(PathBuf::from(&a), src.join("a.txt"));
+        assert_eq!(std::fs::read_to_string(src.join("a.txt")).unwrap(), "Server");
+        // Ohne Ersetzen bleibt es beim Nummerieren.
+        assert!(download(&sftp, "/home/projekt/a.txt", &src, false, |_| {}).await.unwrap().ends_with("a (2).txt"));
+        std::fs::remove_file(src.join("a (2).txt")).unwrap();
+        std::fs::write(src.join("a.txt"), "Grüezi").unwrap();
 
         // Umbenennen und rekursiv löschen.
         assert_eq!(sftp.rename("/home/projekt (2)", "kopie").await.unwrap(), "/home/kopie");
@@ -655,7 +694,7 @@ mod tests {
 
         // Scheitert das Schreiben mittendrin, verschwindet die halbe Datei.
         fs.lock().unwrap().fail_above = Some(300_000);
-        let e = upload(&sftp, &src.join("unter").join("gross.bin"), "/home", |_| {}).await;
+        let e = upload(&sftp, &src.join("unter").join("gross.bin"), "/home", false, |_| {}).await;
         assert!(e.is_err());
         tokio::time::sleep(Duration::from_millis(50)).await; // Aufräumen läuft im Hintergrund
         let fs2 = fs.lock().unwrap();
@@ -671,6 +710,15 @@ mod tests {
         assert_eq!(rparent("/home/mike"), Some("/home".into()));
         assert_eq!(rparent("/home/"), Some("/".into()));
         assert_eq!(rparent("/"), None);
+    }
+
+    #[test]
+    fn local_hash() {
+        let f = std::env::temp_dir().join(format!("sesam-hash-{}", std::process::id()));
+        std::fs::write(&f, "abc").unwrap();
+        assert_eq!(local_sha256(f.to_str().unwrap()).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        std::fs::remove_file(&f).unwrap();
+        assert!(local_sha256(f.to_str().unwrap()).is_err());
     }
 
     #[test]

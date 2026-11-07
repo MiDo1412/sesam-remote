@@ -69,6 +69,29 @@ pub fn quote(s: &str) -> Result<String, String> {
     Ok(format!("'{}'", s.replace('\'', r"'\''")))
 }
 
+/// SHA-256 einer entfernten Datei mit `sha256sum` (macOS: `shasum -a 256`) über einen exec-Kanal.
+pub async fn sha256<R: Remote>(r: &R, path: &str) -> Result<String, String> {
+    let q = quote(path)?;
+    let o = r.run(format!("sha256sum -- {q} 2>/dev/null || shasum -a 256 -- {q}")).await.map_err(|e| format!("Inhaltsprüfung auf dem Server nicht möglich: {e}"))?;
+    match o.code {
+        0 => parse_sha256(&String::from_utf8_lossy(&o.out)).ok_or_else(|| "Unerwartete Antwort von sha256sum".into()),
+        127 => Err("Auf dem Server fehlen sha256sum und shasum, Inhaltsprüfung nicht möglich".into()),
+        c => {
+            let e = String::from_utf8_lossy(&o.err).trim().to_string();
+            Err(if e.is_empty() { format!("Prüfsumme auf dem Server fehlgeschlagen (Code {c})") } else { e })
+        }
+    }
+}
+
+/// Erste Spalte von `sha256sum`: 64 Hex-Zeichen. Bei Namen mit «\» oder Zeilenumbruch steht ein «\» davor.
+pub fn parse_sha256(out: &str) -> Option<String> {
+    let out = out.trim_start();
+    let out = out.strip_prefix('\\').unwrap_or(out);
+    let h = out.get(..64)?;
+    let rest = &out[64..];
+    (h.bytes().all(|b| b.is_ascii_hexdigit()) && (rest.is_empty() || rest.starts_with([' ', '\n']))).then(|| h.to_ascii_lowercase())
+}
+
 /// Ein einzelner Name aus dem SCP-Protokoll oder vom Server: darf nicht aus dem Zielordner führen.
 pub fn check_name(name: &str) -> Result<(), String> {
     let bad_win = cfg!(windows) && name.contains(':');
@@ -244,12 +267,25 @@ impl<R: Remote> Scp<R> {
         self.ok(format!("mkdir -- {}", quote(&p)?)).await?;
         Ok(p)
     }
+
+    pub async fn sha256(&self, path: &str) -> Result<String, String> {
+        sha256(&self.r, path).await
+    }
 }
 
 /// Wie `sftp::upload`, aber über `scp -t`.
-pub async fn upload<R: Remote>(s: &Arc<Scp<R>>, local: &Path, remote_dir: &str, report: impl Fn(Progress)) -> Result<String, String> {
+pub async fn upload<R: Remote>(s: &Arc<Scp<R>>, local: &Path, remote_dir: &str, replace: bool, report: impl Fn(Progress)) -> Result<String, String> {
     let name = local.file_name().ok_or("Ungültige Quelle")?.to_string_lossy().into_owned();
-    let root = s.unique(remote_dir, &name, local.is_dir()).await?;
+    let root = if replace && local.is_file() {
+        let p = rjoin(remote_dir, &name);
+        // mv auf einen Ordner würde hineinschieben statt ersetzen.
+        if s.r.run(format!("test -d {}", quote(&p)?)).await?.code == 0 {
+            return Err(format!("«{name}» ist dort ein Ordner"));
+        }
+        p
+    } else {
+        s.unique(remote_dir, &name, local.is_dir()).await?
+    };
     let (mut steps, mut total) = (Vec::new(), 0);
     plan(local, basename(&root).ok_or("Ungültiges Ziel")?.to_string(), &mut steps, &mut total)?;
 
@@ -302,7 +338,7 @@ pub async fn upload<R: Remote>(s: &Arc<Scp<R>>, local: &Path, remote_dir: &str, 
 }
 
 /// Wie `sftp::download`, aber über `scp -f`. Die Gesamtgrösse von Ordnern wächst mit, weil SCP sie vorher nicht nennt.
-pub async fn download<R: Remote>(s: &Arc<Scp<R>>, remote: &str, local_dir: &Path, report: impl Fn(Progress)) -> Result<String, String> {
+pub async fn download<R: Remote>(s: &Arc<Scp<R>>, remote: &str, local_dir: &Path, replace: bool, report: impl Fn(Progress)) -> Result<String, String> {
     let name = basename(remote).ok_or("Ungültige Quelle")?;
     let mut st = s.r.open(format!("scp -r -f -- {}", quote(remote)?)).await?;
     let w = |e: std::io::Error| format!("SCP: {e}");
@@ -327,7 +363,7 @@ pub async fn download<R: Remote>(s: &Arc<Scp<R>>, remote: &str, local_dir: &Path
         let target = |n: &str, is_dir: bool, root: &mut Option<PathBuf>, cwd: &Vec<PathBuf>| match cwd.last() {
             Some(d) => d.join(n),
             None => {
-                let p = local_unique(local_dir, name, is_dir);
+                let p = if replace && !is_dir { local_dir.join(name) } else { local_unique(local_dir, name, is_dir) };
                 *root = Some(p.clone());
                 p
             }
@@ -393,6 +429,26 @@ mod tests {
         assert!(quote("a\nb").is_err());
         assert!(quote("a\rb").is_err());
         assert_eq!(words(&quote("x'y z").unwrap()), ["x'y z"]);
+    }
+
+    #[test]
+    fn sha256_output() {
+        let h = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        assert_eq!(parse_sha256(&format!("{h}  /home/a b.txt\n")).as_deref(), Some(h));
+        assert_eq!(parse_sha256(&format!("\\{}  /home/a\\\\b\n", h.to_uppercase())).as_deref(), Some(h));
+        assert_eq!(parse_sha256(&format!("{h}x  a")), None);
+        assert_eq!(parse_sha256("sha256sum: a: No such file"), None);
+        assert_eq!(parse_sha256(""), None);
+    }
+
+    #[tokio::test]
+    async fn sha256_command() {
+        let fs: Fs = Default::default();
+        fs.lock().unwrap().insert("/home/it's $(x).txt".into(), Some(b"abc".to_vec()));
+        let r = Fake { fs, fail_above: None };
+        assert_eq!(sha256(&r, "/home/it's $(x).txt").await.unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert_eq!(sha256(&r, "/home/fehlt").await.unwrap_err(), "No such file");
+        assert!(sha256(&r, "a\nb").await.is_err());
     }
 
     #[test]
@@ -475,6 +531,15 @@ l?????????  ? ?    ?        ?            ? kaputt\n";
                 }
                 ["rm", "-f", "--", a] => ok(fs.remove(*a).is_some() || true),
                 ["mkdir", "--", p] => ok(fs.insert(p.to_string(), None).is_none()),
+                ["test", "-d", p] => ok(matches!(fs.get(*p), Some(None))),
+                ["sha256sum", "--", p, "2>/dev/null", "||", "shasum", "-a", "256", "--", q] if p == q => match fs.get(*p) {
+                    Some(Some(d)) => {
+                        use sha2::Digest;
+                        let h: String = sha2::Sha256::digest(d).iter().map(|b| format!("{b:02x}")).collect();
+                        Output { code: 0, out: format!("{h}  {p}\n").into_bytes(), err: vec![] }
+                    }
+                    _ => Output { code: 1, out: vec![], err: b"No such file".to_vec() },
+                },
                 _ => panic!("unerwarteter Befehl: {cmd}"),
             })
         }
@@ -569,7 +634,7 @@ l?????????  ? ?    ?        ?            ? kaputt\n";
 
         let last = Arc::new(Mutex::new(None));
         let l2 = last.clone();
-        assert_eq!(upload(&scp, &src, "/home", move |p| *l2.lock().unwrap() = Some(p)).await.unwrap(), "/home/projekt");
+        assert_eq!(upload(&scp, &src, "/home", false, move |p| *l2.lock().unwrap() = Some(p)).await.unwrap(), "/home/projekt");
         assert!(matches!(last.lock().unwrap().take(), Some(Progress::Done { .. })));
         {
             let fs = fs.lock().unwrap();
@@ -578,19 +643,29 @@ l?????????  ? ?    ?        ?            ? kaputt\n";
             assert!(!fs.keys().any(|k| k.ends_with(PARTIAL)));
         }
         // Nie überschreiben.
-        assert_eq!(upload(&scp, &src, "/home", |_| {}).await.unwrap(), "/home/projekt (2)");
+        assert_eq!(upload(&scp, &src, "/home", false, |_| {}).await.unwrap(), "/home/projekt (2)");
 
-        let back = download(&scp, "/home/projekt", &base, |_| {}).await.unwrap();
+        let back = download(&scp, "/home/projekt", &base, false, |_| {}).await.unwrap();
         assert_eq!(PathBuf::from(&back), base.join("projekt (2)"));
         assert_eq!(std::fs::read(base.join("projekt (2)").join("unter").join("gross.bin")).unwrap(), big);
         assert_eq!(std::fs::read_to_string(base.join("projekt (2)").join("it's.txt")).unwrap(), "Grüezi");
-        let one = download(&scp, "/home/projekt/it's.txt", &base, |_| {}).await.unwrap();
+        let one = download(&scp, "/home/projekt/it's.txt", &base, false, |_| {}).await.unwrap();
         assert_eq!(std::fs::read_to_string(one).unwrap(), "Grüezi");
-        assert!(download(&scp, "/home/fehlt", &base, |_| {}).await.unwrap_err().contains("No such file"));
+        assert!(download(&scp, "/home/fehlt", &base, false, |_| {}).await.unwrap_err().contains("No such file"));
+
+        // Ersetzen nur auf Wunsch; ein Ordner gleichen Namens wird nie ersetzt.
+        std::fs::write(base.join("it's.txt"), "Neu").unwrap();
+        assert_eq!(upload(&scp, &base.join("it's.txt"), "/home/projekt", true, |_| {}).await.unwrap(), "/home/projekt/it's.txt");
+        assert_eq!(fs.lock().unwrap()["/home/projekt/it's.txt"].as_deref(), Some("Neu".as_bytes()));
+        std::fs::write(base.join("unter"), "x").unwrap();
+        assert!(upload(&scp, &base.join("unter"), "/home/projekt", true, |_| {}).await.unwrap_err().contains("Ordner"));
+        fs.lock().unwrap().insert("/home/projekt/it's.txt".into(), Some(b"Server".to_vec()));
+        assert_eq!(PathBuf::from(download(&scp, "/home/projekt/it's.txt", &base, true, |_| {}).await.unwrap()), base.join("it's.txt"));
+        assert_eq!(std::fs::read_to_string(base.join("it's.txt")).unwrap(), "Server");
 
         // Fehler der Gegenstelle: Teildatei wird wieder gelöscht.
         let scp = Arc::new(Scp::new(Fake { fs: fs.clone(), fail_above: Some(1000) }));
-        let e = upload(&scp, &src.join("unter").join("gross.bin"), "/home", |_| {}).await.unwrap_err();
+        let e = upload(&scp, &src.join("unter").join("gross.bin"), "/home", false, |_| {}).await.unwrap_err();
         assert!(e.contains("Kein Platz"), "{e}");
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         let fs = fs.lock().unwrap();
