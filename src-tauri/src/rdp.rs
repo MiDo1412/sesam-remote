@@ -1516,6 +1516,31 @@ mod probe {
         wait(1).await; // Disconnect noch senden lassen
     }
 
+    /// «Zugangsdaten prüfen» gegen einen echten Server, mit «Sesam Test RDP» aus dem Tresor; mit
+    /// `SESAM_RDP_WRONG=1` absichtlich falsches Passwort (erwartet: Anmeldung abgelehnt).
+    /// `SESAM_RDP_CHECK=192.168.1.4:3389 cargo test --lib probe_check -- --ignored --nocapture`
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn probe_check() {
+        let Ok(addr) = std::env::var("SESAM_RDP_CHECK") else { return };
+        let appdata = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("ch.sesam.remote");
+        let creds = crate::creds::load(&appdata.join("credentials.json")).unwrap();
+        let c = creds.iter().find(|c| c.name == "Sesam Test RDP").expect("«Sesam Test RDP» fehlt");
+        let mut pw = crate::vault::get(&crate::creds::vault_id(&c.id), crate::vault::Kind::Password).unwrap().unwrap_or_default();
+        if std::env::var("SESAM_RDP_WRONG").is_ok() {
+            pw = "absichtlich-falsch".into();
+        }
+        let pins: std::collections::HashMap<String, String> =
+            std::fs::read_to_string(appdata.join("known_certs.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let (host, port) = addr.rsplit_once(':').unwrap();
+        let t = Target {
+            host: host.into(), port: port.parse().unwrap(), user: c.user.clone(), domain: None, password: pw,
+            expected_cert: pins.get(&addr).cloned(), skip_cert_check: false, width: 1024, height: 768,
+            clipboard: None, audio: false, share: None, kdc: None, no_ntlm: false, gateway: None,
+        };
+        println!("Ergebnis: {:?}", check_login(t, Default::default()).await);
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn probe_real_server() {
