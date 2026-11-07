@@ -6,6 +6,7 @@ mod kdc;
 mod forward;
 mod ftp;
 mod library;
+mod profiles;
 mod rdp;
 mod relay;
 mod rdp_redir;
@@ -637,6 +638,12 @@ fn local_mkdir(dir: String, name: String) -> Result<String, String> {
 #[tauri::command]
 fn local_rename(path: String, name: String) -> Result<String, String> {
     sftp::local_rename(&path, &name)
+}
+
+/// Profile des lokalen Terminals (installierte Shells und Interpreter).
+#[tauri::command]
+async fn term_profiles() -> Vec<profiles::Profile> {
+    tauri::async_runtime::spawn_blocking(profiles::detect).await.unwrap_or_default()
 }
 
 /// «Beenden» aus dem eigenen Menü (Windows/Linux).
@@ -1410,6 +1417,7 @@ pub fn run() {
             sftp_remove,
             sftp_close,
             app_exit,
+            term_profiles,
             rdp_check,
             rdp_ports,
             desktop_attach,
