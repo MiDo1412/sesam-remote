@@ -433,7 +433,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   const NO_IMAGE = "Der Server sendet noch kein Bild.";
   const watchImage = () =>
     setTimeout(() => {
-      if (!gotImage && sid) status.textContent = `${NO_IMAGE} Bei Ubuntu: Ist die Sitzung gesperrt oder der Bildschirm aus? Sonst trennen und neu verbinden; Details stehen im Protokoll (sesam.log).`;
+      if (!gotImage && sid) status.textContent = `${NO_IMAGE} ${c.os === "ubuntu" || c.os === "linux" ? "Ist die Sitzung gesperrt oder der Bildschirm aus? " : ""}Sonst trennen und neu verbinden; Details stehen im Protokoll (sesam.log).`;
     }, 5000);
   const openSession = async (trust: string | null) => {
     const at = ctx.extra?.attach;

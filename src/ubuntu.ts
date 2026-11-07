@@ -18,7 +18,7 @@ export async function fetchPorts(host: string, port: number, user: string, passw
 /** «Anmeldung abgelehnt» je nach Ziel klar benennen. */
 export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "rdpSessionUser" | "os">) {
   if (!msg.includes("Anmeldung abgelehnt")) return msg;
-  if (c.rdpTarget === "login") return "Der Anmeldebildschirm hat die Zugangsdaten abgelehnt (Zugang zum Anmeldebildschirm, vom Einrichtungs-Script gesetzt).";
+  if (c.rdpTarget === "login") return "Der Anmeldebildschirm hat die Zugangsdaten abgelehnt. Gefragt sind die Zugangsdaten der Systemfreigabe von GNOME Remote Desktop (Sesam-Setup-Script oder «sudo grdctl --system»), nicht unbedingt die des Ubuntu-Kontos.";
   if (c.rdpTarget === "session") return `Die Freigabe von ${c.rdpSessionUser || "diesem Benutzer"} hat die Zugangsdaten abgelehnt (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe).`;
   const win = "Bei Windows mit Microsoft-Konto: die E-Mail-Adresse und das Microsoft-Kennwort eingeben (nicht die Windows-Hello-PIN). Bei einem lokalen Konto: den Kontonamen, nicht den angezeigten vollen Namen.";
   const linux = "Bei GNOME-Remote-Desktop (Ubuntu) gelten die Zugangsdaten aus Einstellungen › System › Remote-Desktop, nicht unbedingt das Konto-Passwort; bei xrdp das Passwort des Linux-Kontos.";
@@ -35,7 +35,7 @@ export function initUbuntu(blank: () => Connection, reload: () => void) {
     <form class="sheet" method="dialog" style="width:min(560px,calc(100vw - 48px))">
       <h2 id="ubuntu-title">Ubuntu-PC hinzufügen</h2>
       <p class="note span">Sesam liest per SSH, welche Zugänge das Einrichtungs-Script auf dem PC angelegt hat, und legt passende Einträge an. Nur lesend, ohne sudo.</p>
-      <label>Name<input name="name" placeholder="z. B. doerig-02" /></label>
+      <label>Name<input name="name" placeholder="z. B. PC Büro" /></label>
       <label>Hostname oder IP-Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
       <label>Ubuntu-Benutzername<input name="user" required autocomplete="off" spellcheck="false" /></label>
       <label>Passwort<input name="password" type="password" autocomplete="off" /></label>

@@ -110,8 +110,8 @@ function syncRdpTarget() {
   note.hidden = !v;
   note.textContent =
     v === "login"
-      ? "Zugang zum Anmeldebildschirm (vom Einrichtungs-Script gesetzt). Danach meldest du dich wie gewohnt mit deinem Ubuntu-Konto an. Leer lassen, wenn es dieselben Angaben wie unter «Anmeldung» sind (empfohlen)."
-      : `Freigabe-Zugangsdaten von ${who} (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe). Leer lassen, wenn es dieselben Angaben wie unter «Anmeldung» sind (empfohlen).`;
+      ? "Zugang zum Anmeldebildschirm: die Systemfreigabe von GNOME Remote Desktop (eingerichtet mit dem Sesam-Setup-Script oder «sudo grdctl --system»). Danach meldest du dich wie gewohnt mit deinem Ubuntu-Konto an. Leer lassen, wenn es dieselben Angaben wie unter «Anmeldung» sind."
+      : `Freigabe-Zugangsdaten von ${who} (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe). Leer lassen, wenn es dieselben Angaben wie unter «Anmeldung» sind.`;
   if (v === "login" && !fld("rdpPort").value) fld("rdpPort").value = "3389";
 }
 rdpTargetSel.addEventListener("change", () => {
@@ -424,7 +424,8 @@ function renderDetails() {
       btn("Dateien", "", () => open(c, "files"), !filesProtocol(c)),
     ),
     btn("Bearbeiten …", "plain", () => edit(c)),
-    ...(c.sshPort ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
+    // Das Setup-Script richtet GNOME Remote Desktop ein: nur für Linux-Ziele oder unbekanntes System anbieten.
+    ...(c.sshPort && !["windows", "macos"].includes(c.os ?? "") ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
   );
 }
 

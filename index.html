@@ -86,7 +86,7 @@
         <label data-tip="Frei wählbar, erscheint in der Bibliothek. Beispiel: «Büro-PC». Pflichtfeld.">Name<input name="name" required /></label>
         <label data-tip="Optional. Verbindungen mit gleicher Gruppe stehen in der Seitenleiste zusammen. Beispiel: «Homelab».">Gruppe<input name="group" list="groups" /></label>
         <datalist id="groups"></datalist>
-        <label class="span" data-tip="Name oder IP-Adresse des Zielrechners, ohne Port. Beispiele: 192.168.1.4, doerig-02.local. Pflichtfeld.">Hostname oder IP-Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
+        <label class="span" data-tip="Name oder IP-Adresse des Zielrechners, ohne Port. Beispiele: 192.168.1.20, pc-buero.local. Pflichtfeld.">Hostname oder IP-Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
         <label data-tip="Bestimmt das Symbol in der Bibliothek, solange es noch kein Bild vom Desktop gibt.">Betriebssystem
           <select name="os">
             <option value="">Unbekannt</option>
@@ -143,8 +143,8 @@
               </select>
             </label>
             <div class="span pair" id="rdp-session-row" hidden>
-              <label>Sitzung von<input name="rdpSessionUser" list="rdp-users" autocomplete="off" spellcheck="false" placeholder="z. B. darts" /></label>
-              <span class="fetch"><button type="button" id="rdp-ports-fetch">Vom PC abrufen</button><small id="rdp-ports-note">liest die Ports per SSH</small></span>
+              <label>Sitzung von<input name="rdpSessionUser" list="rdp-users" autocomplete="off" spellcheck="false" placeholder="Benutzername" /></label>
+              <span class="fetch"><button type="button" id="rdp-ports-fetch">Vom PC abrufen</button><small id="rdp-ports-note">nur wenn mit dem Sesam-Setup-Script eingerichtet; liest die Ports per SSH</small></span>
             </div>
             <datalist id="rdp-users"></datalist>
             <label data-tip="Standard 3389. GNOME-Bildschirmfreigabe einzelner Benutzer: der Port aus der Übersicht des Setup-Scripts (z. B. 3390).">Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
@@ -313,7 +313,7 @@
           </div>
         </div>
         <label class="span">Hostname oder IP-Adresse
-          <input name="address" required autocomplete="off" spellcheck="false" class="mono" placeholder="192.168.1.4 · ssh mike@server · rdp://host:3389" />
+          <input name="address" required autocomplete="off" spellcheck="false" class="mono" placeholder="192.168.1.20 · ssh benutzer@server · rdp://host:3389" />
         </label>
         <label>Port<input name="port" type="number" min="1" max="65535" class="mono" /></label>
         <label>Benutzername<input name="user" autocomplete="off" /></label>

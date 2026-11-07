@@ -283,9 +283,12 @@ async fn rdp_ports(
     };
     let opts = ssh::Options { agent: conn.as_ref().is_some_and(|c| c.ssh_agent), ..Default::default() };
     let t = ssh::Target { host, port, user, password, key, trusted: trust, opts, forwards: Vec::new(), jump: None };
-    let text = ssh::exec(&t, "cat /etc/sesam-rdp/ports").await.map_err(|e| {
+    let text = ssh::exec(&t, "if [ -r /etc/sesam-rdp/ports ]; then cat /etc/sesam-rdp/ports; else echo __sesam_none__; fi").await.map_err(|e| {
         if e.starts_with(ssh::HOSTKEY_UNKNOWN) { e } else { format!("Ports nicht lesbar: {e}") }
     })?;
+    if text.trim() == "__sesam_none__" {
+        return Err("Auf diesem PC hat das Sesam-Setup-Script keine Ports angelegt. Port von Hand eintragen: in Ubuntu unter Einstellungen › System › Remote-Desktop › Desktopfreigabe (meist 3389, mit Remote-Anmeldung oft 3390).".into());
+    }
     Ok(ssh::parse_ports(&text))
 }
 
@@ -1395,6 +1398,7 @@ pub fn run() {
                     .separator()
                     .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")
                     .text("help:rdp-windows", "RDP mit Windows")
+                    .text("help:rdp-xrdp", "RDP mit xrdp (Linux)")
                     .text("help:vnc", "VNC allgemein")
                     .text("help:wayvnc", "wayvnc (wlroots)")
                     .text("help:macos", "macOS-Bildschirmfreigabe")

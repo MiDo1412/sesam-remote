@@ -5,6 +5,7 @@ import wayvnc from "../docs/hilfe/wayvnc.md?raw";
 import macos from "../docs/hilfe/macos.md?raw";
 import rdpGnome from "../docs/hilfe/rdp-gnome.md?raw";
 import rdpWindows from "../docs/hilfe/rdp-windows.md?raw";
+import rdpXrdp from "../docs/hilfe/rdp-xrdp.md?raw";
 import ssh from "../docs/hilfe/ssh.md?raw";
 import ftp from "../docs/hilfe/ftp.md?raw";
 import creds from "../docs/hilfe/zugangsdaten.md?raw";
@@ -14,6 +15,7 @@ export const topics = [
   { id: "zugangsdaten", title: "Welche Zugangsdaten?", md: creds },
   { id: "rdp-gnome", title: "RDP mit GNOME (Ubuntu)", md: rdpGnome },
   { id: "rdp-windows", title: "RDP mit Windows", md: rdpWindows },
+  { id: "rdp-xrdp", title: "RDP mit xrdp (Linux)", md: rdpXrdp },
   { id: "vnc", title: "VNC allgemein", md: vnc },
   { id: "wayvnc", title: "wayvnc (wlroots)", md: wayvnc },
   { id: "macos", title: "macOS-Bildschirmfreigabe", md: macos },
