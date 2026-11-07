@@ -465,12 +465,14 @@ fn shell_attach(sid: String, on_event: Channel<ssh::ShellEvent>) -> Result<(), S
 }
 
 /// Sitzung in ein eigenes Fenster abkoppeln; `token` verweist auf die Übergabe im localStorage.
+/// Asynchron: ein Fenster in einem synchronen Befehl zu erzeugen, blockiert unter Windows (leeres Fenster, X reagiert nicht).
 #[tauri::command]
-fn open_detached(app: AppHandle, token: String, title: String) -> Result<(), String> {
+async fn open_detached(app: AppHandle, token: String, title: String) -> Result<(), String> {
     if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err("Ungültige Übergabe".into());
     }
-    let builder = tauri::WebviewWindowBuilder::new(&app, format!("detached-{token}"), tauri::WebviewUrl::App(format!("index.html?detach={token}").into()))
+    let builder = tauri::WebviewWindowBuilder::new(&app, format!("detached-{token}"), tauri::WebviewUrl::App("index.html".into()))
+        .initialization_script(format!("window.__SESAM_DETACH__ = '{token}';"))
         .title(title)
         .inner_size(1200.0, 800.0)
         .min_inner_size(480.0, 320.0)

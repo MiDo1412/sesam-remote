@@ -32,3 +32,28 @@ impl<T: IpcResponse> Relay<T> {
 /// Kanäle der offenen Desktop-Sitzungen (VNC und RDP) und Shells, nach Sitzungs-ID.
 pub static DESKTOPS: LazyLock<Mutex<HashMap<String, Relay<InvokeResponseBody>>>> = LazyLock::new(Default::default);
 pub static SHELLS: LazyLock<Mutex<HashMap<String, Relay<crate::ssh::ShellEvent>>>> = LazyLock::new(Default::default);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Abkoppeln/Andocken: nach dem Tausch kommen die Ereignisse nur noch im neuen Fenster an.
+    #[test]
+    fn swap_moves_events_to_new_window() {
+        let (a, b) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+        let ch = |n: Arc<AtomicUsize>| {
+            Channel::<InvokeResponseBody>::new(move |_| {
+                n.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
+        };
+        let r = Relay::new(ch(a.clone()));
+        let copy = r.clone(); // so hält sie die laufende Sitzung
+        copy.send(InvokeResponseBody::Raw(vec![1])).unwrap();
+        r.swap(ch(b.clone()));
+        copy.send(InvokeResponseBody::Raw(vec![2])).unwrap();
+        copy.send(InvokeResponseBody::Raw(vec![3])).unwrap();
+        assert_eq!((a.load(Ordering::SeqCst), b.load(Ordering::SeqCst)), (1, 2));
+    }
+}

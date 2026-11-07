@@ -2,7 +2,7 @@ import { api, desktopProtocol, type Connection } from "./api";
 import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
-import { detachedWindow, initTabs, openTab, runTool, takeOver } from "./tabs";
+import { detachedWindow, detachToken, initTabs, openTab, runTool, takeOver } from "./tabs";
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
 import { initTitlebar } from "./titlebar";
@@ -286,7 +286,7 @@ initTabs({ desktop: desktopTab, shell: shellTab, files: filesTab }, () => reload
 // Abgekoppeltes Fenster: nur die übergebene Sitzung, keine Bibliothek.
 if (detachedWindow) {
   document.body.classList.add("detached");
-  if (!takeOver(new URLSearchParams(location.search).get("detach") ?? "")) void import("@tauri-apps/api/window").then((w) => w.getCurrentWindow().destroy());
+  if (!takeOver(detachToken)) void import("@tauri-apps/api/window").then((w) => w.getCurrentWindow().destroy());
 }
 
 // ---------- Sheet «Verbindung bearbeiten» ----------

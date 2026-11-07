@@ -2,13 +2,14 @@
 import type { Connection } from "./api";
 import { ICON } from "./icons";
 import { openMenu } from "./menu";
-import { ask, tell } from "./ui";
+import { ask, choose, tell } from "./ui";
 import { emit, emitTo, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 /** Dieses Fenster zeigt abgekoppelte Sitzungen (ohne Bibliothek). */
-export const detachedWindow = new URLSearchParams(location.search).has("detach");
+export const detachToken: string = (window as unknown as { __SESAM_DETACH__?: string }).__SESAM_DETACH__ ?? new URLSearchParams(location.search).get("detach") ?? "";
+export const detachedWindow = detachToken !== "";
 
 export type Kind = "desktop" | "shell" | "files";
 
@@ -255,10 +256,21 @@ function removeTab(tab: Tab) {
 
 /** Abgekoppeltes Fenster: Schliessen trennt seine Sitzungen (mit Rückfrage bei laufenden Übertragungen). */
 if (detachedWindow) {
+  // Schliessen: Standard ist Andocken (Sitzung zurück ins Hauptfenster), sonst Trennen. Das Fenster geht in jedem Fall zu.
   getCurrentWindow().onCloseRequested(async (e) => {
     if (!tabs.length) return;
     e.preventDefault();
-    for (const t of [...tabs]) await closeTab(t);
+    const v = await choose("Fenster schliessen", "Die Sitzung wieder ins Hauptfenster nehmen oder trennen?", "Beim Andocken bleibt die Verbindung bestehen.", "Wieder andocken", "Trennen");
+    if (v === null) return;
+    for (const t of [...tabs]) {
+      if (v === "alt" || t.state !== "connected") await closeTab(t, true);
+      else await detachTab(t);
+    }
+    // Falls ein Andocken nicht bestätigt wird: nach kurzer Zeit trotzdem schliessen (Sitzung bleibt im Hauptfenster nicht erhalten).
+    setTimeout(() => {
+      for (const t of [...tabs]) closeTab(t, true);
+      getCurrentWindow().destroy().catch(() => {});
+    }, 8000);
   });
 }
 
@@ -309,9 +321,9 @@ export function showLibrary() {
   onLibrary();
 }
 
-export async function closeTab(tab: Tab) {
+export async function closeTab(tab: Tab, force = false) {
   const why = tab.handle.busy?.();
-  if (why && !(await ask("Sitzung trennen?", why, "Trennen"))) return;
+  if (why && !force && !(await ask("Sitzung trennen?", why, "Trennen"))) return;
   tab.handle.close();
   removeTab(tab);
 }
