@@ -144,7 +144,7 @@ export const api = {
   save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; gatewayPassword?: string; sshKey?: string }) =>
     invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
-  rdpCheck: (id: string) => invoke<void>("rdp_check", { id }),
+  rdpCheck: (id: string, trust?: string, remember?: boolean) => invoke<void>("rdp_check", { id, trust, remember }),
   rdpPorts: (host: string, port: number, user: string, password: string | undefined, id: string | undefined, trust: string | null) =>
     invoke<[string, number][]>("rdp_ports", { host, port, user, password, id, trust }),
   groupsList: () => invoke<Group[]>("groups_list"),

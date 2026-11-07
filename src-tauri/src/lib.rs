@@ -218,18 +218,20 @@ fn rdp_login(path: &LibraryPath, c: &Connection) -> Result<(String, String), Str
 
 /// «Zugangsdaten prüfen»: nur bis zur Anmeldung (NLA), dann sauber trennen. Zertifikat muss schon bestätigt sein.
 #[tauri::command]
-async fn rdp_check(path: State<'_, LibraryPath>, id: String) -> Result<(), String> {
+async fn rdp_check(path: State<'_, LibraryPath>, id: String, trust: Option<String>, remember: Option<bool>) -> Result<(), String> {
     let c = find(&path, &id)?;
     let port = c.rdp_port.ok_or("RDP ist für diese Verbindung ausgeschaltet")?;
     let (user, password) = rdp_login(&path, &c)?;
-    let pins = load_pins(&path.0.with_file_name("known_certs.json"));
+    let pins_path = path.0.with_file_name("known_certs.json");
+    let mut pins = load_pins(&pins_path);
+    let pin_key = format!("{}:{port}", c.address);
     let t = rdp::Target {
         host: c.address.clone(),
         port,
         user,
         domain: (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string()),
         password,
-        expected_cert: pins.get(&format!("{}:{port}", c.address)).cloned(),
+        expected_cert: trust.clone().or_else(|| pins.get(&pin_key).cloned()),
         skip_cert_check: c.skip_cert_check,
         width: 1024,
         height: 768,
@@ -240,7 +242,14 @@ async fn rdp_check(path: State<'_, LibraryPath>, id: String) -> Result<(), Strin
         no_ntlm: c.rdp_no_ntlm,
         gateway: None,
     };
-    rdp::check_login(t, Default::default()).await
+    let seen: rdp::SeenCert = Default::default();
+    rdp::check_login(t, seen.clone()).await?;
+    // Wie beim Verbinden: bestätigtes Zertifikat merken, damit die nächste Verbindung nicht erneut fragt.
+    if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && seen.lock().unwrap().as_ref() == Some(fp)) {
+        pins.insert(pin_key, fp);
+        let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+    }
+    Ok(())
 }
 
 /// Ports aus /etc/sesam-rdp/ports per SSH lesen (nur `cat`, kein sudo). Passwort aus dem Formular

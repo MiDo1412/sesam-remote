@@ -270,6 +270,8 @@ export function filesTab(ctx: TabCtx): TabHandle {
       if (i > 0 || lead || drives) p.pathEl.append(el("span", "crumb-sep", "›"));
       p.pathEl.append(crumb(p, part, acc));
     });
+    // Lange Pfade: das Ende (aktueller Ordner) bleibt sichtbar.
+    requestAnimationFrame(() => (p.pathEl.scrollLeft = p.pathEl.scrollWidth));
   }
   function crumb(p: Pane, label: string, target: string) {
     const b = el("button", "crumb", label) as HTMLButtonElement;
@@ -358,7 +360,11 @@ export function filesTab(ctx: TabCtx): TabHandle {
     );
     if (!p.body.children.length) {
       const tr = el("tr");
-      const td = el("td", "empty", !l.entries.length ? "Leerer Ordner" : diff && onlyDiff ? "Keine Unterschiede" : "Keine Treffer");
+      const why = !l.entries.length ? "Leerer Ordner"
+        : p.filter ? "Keine Treffer"
+        : diff && onlyDiff ? "Keine Unterschiede"
+        : "Nur versteckte Dateien – «Versteckte Dateien» einschalten";
+      const td = el("td", "empty", why);
       td.colSpan = 3;
       tr.append(td);
       p.body.append(tr);

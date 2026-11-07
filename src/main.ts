@@ -1,11 +1,11 @@
-import { api, desktopProtocol, filesProtocol, ftpLabel, type Connection, type Group } from "./api";
+import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol, filesProtocol, ftpLabel, type Connection, type Group } from "./api";
 import { ICON } from "./icons";
 import { groupDot, groupMenu, initGroups, moveGroupBefore } from "./groups";
 import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
 import { detachedWindow, detachToken, initTabs, openTab, runTool, takeOver } from "./tabs";
-import { ask, tell } from "./ui";
+import { ask, choose, tell } from "./ui";
 import { openHelp } from "./help";
 import { initTitlebar, isMac } from "./titlebar";
 import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
@@ -140,11 +140,37 @@ document.getElementById("rdp-check")!.onclick = async () => {
   const out = document.getElementById("rdp-check-result")!;
   if (!editing || !items.some((x) => x.id === editing!.id)) return void (out.textContent = "Bitte zuerst sichern, dann prüfen.");
   out.textContent = "Prüfe (gespeicherter Stand) …";
-  try {
-    await api.rdpCheck(editing.id);
-    out.textContent = "Stimmt: die Zugangsdaten wurden angenommen.";
-  } catch (e) {
-    out.textContent = explainRdpError(String(e), editing);
+  const c = editing;
+  let trust: string | undefined;
+  let remember = true;
+  for (;;) {
+    try {
+      await api.rdpCheck(c.id, trust, remember);
+      out.textContent = "Stimmt: die Zugangsdaten wurden angenommen.";
+    } catch (e) {
+      const msg = String(e);
+      const changed = msg.startsWith(CERT_CHANGED);
+      if (trust === undefined && (changed || msg.startsWith(CERT_UNKNOWN))) {
+        const fp = msg.slice((changed ? CERT_CHANGED : CERT_UNKNOWN).length);
+        const choice = await choose(
+          changed ? "Zertifikat hat sich geändert" : "Unbekanntes Zertifikat",
+          changed
+            ? `Das Zertifikat von ${c.address}:${c.rdpPort} ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn das Zertifikat auf dem Server erneuert wurde.`
+            : `${c.address}:${c.rdpPort} nutzt ein eigenes Zertifikat. Vergleiche den Fingerabdruck mit dem Server, bevor du ihm vertraust.`,
+          `SHA-256
+${fp.replace(/^SHA256:/, "").toLowerCase()}`,
+          changed ? "Neuem Zertifikat vertrauen" : "Vertrauen und prüfen",
+          "Nur dieses Mal prüfen",
+        );
+        if (choice) {
+          trust = fp;
+          remember = choice === "ok";
+          continue;
+        }
+        out.textContent = "Nicht geprüft: Zertifikat nicht bestätigt.";
+      } else out.textContent = explainRdpError(msg, c);
+    }
+    break;
   }
 };
 

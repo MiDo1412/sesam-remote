@@ -435,7 +435,7 @@ fieldset.svc legend { float: none; padding: 0; }
 .desktop.drop { outline: 3px dashed var(--chrome-accent); outline-offset: -6px; }
 
 /* ---------- Dateien: Brotkrumen, Filter, Sortierung, Typen ---------- */
-.crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; direction: ltr; }
+.pane-head .path.crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; direction: ltr; }
 .crumb { height: 22px; padding: 0 4px; border: 0; background: transparent; border-radius: 4px; font: 12px "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; color: var(--muted); white-space: nowrap; }
 .crumb:hover { background: var(--hover); color: var(--text); }
 .crumb:last-child { color: var(--text); font-weight: 600; }

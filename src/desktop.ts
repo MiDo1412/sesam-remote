@@ -478,7 +478,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
           changed ? "Zertifikat hat sich geändert" : "Unbekanntes Zertifikat",
           changed
             ? `Das Zertifikat von ${c.address}:${port} ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn das Zertifikat auf dem Server erneuert wurde.`
-            : `${c.address}:${port} nutzt ein eigenes Zertifikat. Vergleiche den Fingerabdruck mit dem Server (z. B. Übersicht des Setup-Scripts oder grdctl), bevor du ihm vertraust.`,
+            : `${c.address}:${port} nutzt ein eigenes Zertifikat. Vergleiche den Fingerabdruck mit dem Server${rdp && (c.os === "ubuntu" || c.os === "linux") ? " (z. B. Übersicht des Setup-Scripts oder grdctl)" : ""}, bevor du ihm vertraust.`,
           `SHA-256\n${fp.replace(/^SHA256:/, "").toLowerCase()}`,
           changed ? "Neuem Zertifikat vertrauen" : "Vertrauen und verbinden",
           "Nur dieses Mal verbinden",

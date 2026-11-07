@@ -16,11 +16,15 @@ export async function fetchPorts(host: string, port: number, user: string, passw
 }
 
 /** «Anmeldung abgelehnt» je nach Ziel klar benennen. */
-export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "rdpSessionUser">) {
+export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "rdpSessionUser" | "os">) {
   if (!msg.includes("Anmeldung abgelehnt")) return msg;
   if (c.rdpTarget === "login") return "Der Anmeldebildschirm hat die Zugangsdaten abgelehnt (Zugang zum Anmeldebildschirm, vom Einrichtungs-Script gesetzt).";
   if (c.rdpTarget === "session") return `Die Freigabe von ${c.rdpSessionUser || "diesem Benutzer"} hat die Zugangsdaten abgelehnt (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe).`;
-  return "Benutzer oder Passwort falsch. Bei Windows mit Microsoft-Konto: die E-Mail-Adresse und das Microsoft-Kennwort eingeben (nicht die Windows-Hello-PIN). Bei einem lokalen Konto: den Kontonamen, nicht den angezeigten vollen Namen.";
+  const win = "Bei Windows mit Microsoft-Konto: die E-Mail-Adresse und das Microsoft-Kennwort eingeben (nicht die Windows-Hello-PIN). Bei einem lokalen Konto: den Kontonamen, nicht den angezeigten vollen Namen.";
+  const linux = "Bei GNOME-Remote-Desktop (Ubuntu) gelten die Zugangsdaten aus Einstellungen › System › Remote-Desktop, nicht unbedingt das Konto-Passwort; bei xrdp das Passwort des Linux-Kontos.";
+  if (c.os === "windows") return `Benutzer oder Passwort falsch. ${win}`;
+  if (c.os === "ubuntu" || c.os === "linux" || c.os === "raspberry") return `Benutzer oder Passwort falsch. ${linux}`;
+  return "Benutzer oder Passwort falsch.";
 }
 
 /** Assistent: Adresse und SSH-Login, Sesam liest die Ports und schlägt Einträge vor. */
