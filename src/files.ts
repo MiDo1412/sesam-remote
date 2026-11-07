@@ -1,6 +1,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
-import { ask, askHostKey, askText, tell } from "./ui";
+import { ask, askHostKey, askText, chooseAll, tell } from "./ui";
+import { compareDirs, MARK_LABEL, type Mark } from "./compare";
 import { openMenu, type MenuItem } from "./menu";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
@@ -61,6 +62,10 @@ interface Pane {
   desc: boolean;
   hidden: boolean;
   filter: string;
+  /** Verlauf für Zurück/Vorwärts. */
+  back: string[];
+  fwd: string[];
+  nav: { back: HTMLButtonElement; fwd: HTMLButtonElement; up: HTMLButtonElement };
 }
 
 /** Dateien (SFTP) als Tab. */
@@ -91,7 +96,31 @@ export function filesTab(ctx: TabCtx): TabHandle {
   transfers.append(transferHead, transferList);
   const grid = el("div", "panes");
   grid.append(panes.local.root, panes.remote.root);
-  host.append(grid, transfers);
+
+  // Vergleich der beiden offenen Ordner (gleiche Namen).
+  let comparing = false;
+  let onlyDiff = false;
+  /** Ergebnis von «Inhalt prüfen»: Schlüssel aus Pfaden, Grössen und Zeiten → gleicher Inhalt. */
+  const hashes = new Map<string, boolean>();
+  const bar = el("div", "compare-bar");
+  bar.hidden = true;
+  const summary = el("span", "compare-summary");
+  summary.setAttribute("aria-live", "polite");
+  const diffLabel = el("label", "pane-hidden");
+  const diffBox = Object.assign(document.createElement("input"), { type: "checkbox" });
+  diffLabel.append(diffBox, document.createTextNode(" Nur Unterschiede"));
+  const barButton = (label: string, onClick: () => void, cls = "") => {
+    const b = el("button", cls, label) as HTMLButtonElement;
+    b.type = "button";
+    b.onclick = onClick;
+    return b;
+  };
+  const checkBtn = barButton("Inhalt prüfen", () => checkContent());
+  checkBtn.title = "Gleichnamige Dateien per SHA-256 vergleichen (auf dem Server mit sha256sum)";
+  const syncBtn = barButton("Unterschiede übertragen …", () => syncDiffs(), "primary");
+  bar.append(summary, el("span", "grow"), diffLabel, checkBtn, syncBtn, barButton("Beenden", () => toggleCompare(), "plain"));
+  diffBox.onchange = () => ((onlyDiff = diffBox.checked), renderAll());
+  host.append(bar, grid, transfers);
 
   let sid: string | null = null;
   let scp = false;
@@ -105,21 +134,27 @@ export function filesTab(ctx: TabCtx): TabHandle {
     root.dataset.side = side;
     root.setAttribute("aria-label", title);
     const head = el("div", "pane-head");
-    const up = el("button", "plain", "‹");
-    up.type = "button";
-    up.title = "Übergeordneter Ordner (Rücktaste)";
-    up.setAttribute("aria-label", "Übergeordneter Ordner");
-    const refresh = el("button", "plain", "↻");
-    refresh.type = "button";
-    refresh.title = "Neu laden";
-    refresh.setAttribute("aria-label", "Neu laden");
-    // Pfad: Brotkrumen, Klick darauf macht ein Eingabefeld daraus.
+    const navButton = (icon: string, label: string, hint: string) => {
+      const b = el("button", "plain nav") as HTMLButtonElement;
+      b.type = "button";
+      b.innerHTML = icon;
+      b.title = `${label} (${hint})`;
+      b.setAttribute("aria-label", label);
+      return b;
+    };
+    const back = navButton(ICON.back, "Zurück", "Alt+Links");
+    const fwd = navButton(ICON.forward, "Vorwärts", "Alt+Rechts");
+    const up = navButton(ICON.up, "Übergeordneter Ordner", "Alt+Hoch oder Rücktaste");
+    const home = navButton(ICON.home, side === "local" ? "Benutzerordner" : "Startordner", side === "local" ? "Home" : "Ordner nach dem Anmelden");
+    const refresh = navButton(ICON.refresh, "Neu laden", "F5");
+    // Pfad: Brotkrumen; Klick daneben oder auf den Stift macht ein Eingabefeld daraus.
     const pathEl = el("span", "path crumbs");
+    const edit = navButton(ICON.rename, "Pfad eingeben", "oder Klick neben den Pfad");
     const marks = el("button", "plain", "★");
     marks.type = "button";
     marks.title = "Lesezeichen";
     marks.setAttribute("aria-label", "Lesezeichen");
-    head.append(up, el("h2", "", title), pathEl, el("span", "grow"), marks, refresh);
+    head.append(back, fwd, up, home, el("h2", "", title), pathEl, edit, marks, refresh);
     const tools = el("div", "pane-tools");
     const filter = el("input", "pane-filter") as HTMLInputElement;
     filter.type = "search";
@@ -152,13 +187,34 @@ export function filesTab(ctx: TabCtx): TabHandle {
     const scroller = el("div", "pane-list");
     scroller.append(table);
     root.append(head, tools, scroller);
-    const pane: Pane = { side, root, body, pathEl, listing: null, selected: new Set(), sep, sort: "name", desc: false, hidden: false, filter: "" };
-    up.onclick = () => pane.listing?.parent != null && load(pane, pane.listing.parent);
-    refresh.onclick = () => pane.listing && load(pane, pane.listing.path);
+    const pane: Pane = { side, root, body, pathEl, listing: null, selected: new Set(), sep, sort: "name", desc: false, hidden: false, filter: "", back: [], fwd: [], nav: { back, fwd, up } };
+    const goUp = () => pane.listing?.parent != null && load(pane, pane.listing.parent, "go");
+    const reload = () => pane.listing && load(pane, pane.listing.path);
+    up.onclick = goUp;
+    refresh.onclick = reload;
+    back.onclick = () => step(pane, "back");
+    fwd.onclick = () => step(pane, "fwd");
+    // Server: "" ist der Ordner nach dem Anmelden.
+    home.onclick = async () => load(pane, side === "local" ? await api.localHome() : "", "go");
+    edit.onclick = () => editPath(pane);
+    // Tastatur, solange die Seite den Fokus hat.
+    root.tabIndex = -1;
+    root.onkeydown = (ev) => {
+      const typing = (ev.target as HTMLElement).matches("input, textarea");
+      const act =
+        ev.altKey && ev.key === "ArrowLeft" ? () => step(pane, "back")
+        : ev.altKey && ev.key === "ArrowRight" ? () => step(pane, "fwd")
+        : (ev.altKey && ev.key === "ArrowUp") || (ev.key === "Backspace" && !typing && !ev.altKey) ? goUp
+        : ev.key === "F5" ? reload
+        : null;
+      if (!act) return;
+      ev.preventDefault();
+      act();
+    };
     filter.oninput = () => ((pane.filter = filter.value.toLowerCase()), render(pane));
     hiddenBox.onchange = () => ((pane.hidden = hiddenBox.checked), render(pane));
     marks.onclick = () => bookmarkMenu(pane, marks);
-    pathEl.ondblclick = () => editPath(pane);
+    pathEl.onclick = (ev) => ev.target === pathEl && editPath(pane);
     scroller.oncontextmenu = (ev) => {
       ev.preventDefault();
       pane.selected.clear();
@@ -168,41 +224,61 @@ export function filesTab(ctx: TabCtx): TabHandle {
     return pane;
   }
 
-  async function load(p: Pane, path: string) {
+  /** Ordner laden; `nav` führt den Verlauf (go = neuer Schritt, back/fwd = im Verlauf). */
+  async function load(p: Pane, path: string, nav: "go" | "back" | "fwd" | null = null) {
     try {
-      p.listing = p.side === "local" ? await api.localList(path) : await api.sftpList(sid!, path);
+      const l = p.side === "local" ? await api.localList(path) : await api.sftpList(sid!, path);
+      const cur = p.listing?.path;
+      if (nav === "go" && cur != null && cur !== l.path) {
+        p.back.push(cur);
+        p.fwd.length = 0;
+      } else if (nav === "back" || nav === "fwd") {
+        const [from, to] = nav === "back" ? [p.back, p.fwd] : [p.fwd, p.back];
+        from.pop();
+        if (cur != null) to.push(cur);
+      }
+      p.listing = l;
       p.selected.clear();
-      render(p);
+      if (comparing) renderAll();
+      else render(p);
     } catch (e) {
       status.textContent = String(e);
     }
+  }
+  function step(p: Pane, dir: "back" | "fwd") {
+    const list = dir === "back" ? p.back : p.fwd;
+    const target = list[list.length - 1];
+    if (target != null) load(p, target, dir);
   }
 
   /** Pfad als Brotkrumen; Doppelklick = eintippen. */
   function renderCrumbs(p: Pane) {
     const path = p.listing!.path;
-    p.pathEl.title = `${path}\nDoppelklick: Pfad eingeben`;
-    if (!path) return void (p.pathEl.textContent = "Laufwerke");
+    p.pathEl.title = `${path || "Laufwerke"}\nKlick neben den Pfad: Pfad eingeben`;
+    p.pathEl.replaceChildren();
+    // Unter Windows führt der erste Teil zur Laufwerksliste.
+    const drives = p.side === "local" && isWin;
+    if (drives) p.pathEl.append(crumb(p, "Laufwerke", ""));
+    if (!path) return;
     const parts = path.split(/[\\/]/).filter(Boolean);
     const lead = p.sep === "/" ? "/" : "";
-    p.pathEl.replaceChildren();
     let acc = lead;
     if (lead) p.pathEl.append(crumb(p, "/", "/"));
     parts.forEach((part, i) => {
       acc = i === 0 && !lead ? `${part}${p.sep}` : `${acc}${acc.endsWith(p.sep) ? "" : p.sep}${part}`;
-      if (i > 0 || lead) p.pathEl.append(el("span", "crumb-sep", "›"));
+      if (i > 0 || lead || drives) p.pathEl.append(el("span", "crumb-sep", "›"));
       p.pathEl.append(crumb(p, part, acc));
     });
   }
   function crumb(p: Pane, label: string, target: string) {
     const b = el("button", "crumb", label) as HTMLButtonElement;
     b.type = "button";
-    b.onclick = () => load(p, target);
+    b.onclick = () => load(p, target, "go");
     return b;
   }
   async function editPath(p: Pane) {
     const v = await askText("Gehe zu", p.side === "local" ? "Ordner auf diesem Computer" : `Ordner auf ${c.name}`, "Öffnen", p.listing?.path ?? "");
-    if (v) load(p, v);
+    if (v) load(p, v, "go");
   }
 
   // Lesezeichen pro Seite und Verbindung (nur Pfade, lokal gespeichert).
@@ -217,16 +293,18 @@ export function filesTab(ctx: TabCtx): TabHandle {
       { value: "del", label: "Diesen Ordner vergessen", disabled: !list.includes(here) },
     ]);
     if (!v) return;
-    if (v.startsWith("go:")) load(p, v.slice(3));
+    if (v.startsWith("go:")) load(p, v.slice(3), "go");
     if (v === "add") localStorage.setItem(markKey(p), JSON.stringify([...list, here]));
     if (v === "del") localStorage.setItem(markKey(p), JSON.stringify(list.filter((m) => m !== here)));
   }
 
-  function visible(p: Pane) {
+  function visible(p: Pane, diff: Map<string, Mark> | null) {
     const l = p.listing!;
     const dir = p.desc ? -1 : 1;
+    // «Nur Unterschiede»: gleiche Dateien ausblenden, Ordner auf beiden Seiten bleiben zum Hineingehen.
+    const shown = (e: Entry) => !diff || !onlyDiff || (diff.has(e.name) ? diff.get(e.name) !== "same" : e.dir);
     return l.entries
-      .filter((e) => (p.hidden || !e.name.startsWith(".")) && (!p.filter || e.name.toLowerCase().includes(p.filter)))
+      .filter((e) => (p.hidden || !e.name.startsWith(".")) && (!p.filter || e.name.toLowerCase().includes(p.filter)) && shown(e))
       .sort((a, b) => {
         if (a.dir !== b.dir) return a.dir ? -1 : 1;
         const d = p.sort === "size" ? a.size - b.size : p.sort === "date" ? (a.modified ?? 0) - (b.modified ?? 0) : a.name.localeCompare(b.name, "de-CH", { numeric: true });
@@ -240,14 +318,24 @@ export function filesTab(ctx: TabCtx): TabHandle {
     for (const h of p.root.querySelectorAll<HTMLElement>("th[data-key]")) {
       h.setAttribute("aria-sort", h.dataset.key === p.sort ? (p.desc ? "descending" : "ascending") : "none");
     }
+    p.nav.back.disabled = !p.back.length;
+    p.nav.fwd.disabled = !p.fwd.length;
+    p.nav.up.disabled = l.parent == null;
+    const diff = diffOf(p);
     p.body.replaceChildren(
-      ...visible(p).map((e) => {
+      ...visible(p, diff).map((e) => {
         const tr = el("tr");
         tr.tabIndex = -1;
         tr.dataset.name = e.name;
         tr.setAttribute("aria-selected", String(p.selected.has(e.name)));
         const name = el("td", "name");
-        name.append(el("span", `icon ${fileKind(e.name, e.dir)}`), document.createTextNode(e.name));
+        name.append(el("span", `icon ${fileKind(e.name, e.dir)}`), el("span", "fname", e.name));
+        const m = diff?.get(e.name);
+        if (m) {
+          const badge = el("span", `cmp cmp-${m}`, MARK_LABEL[m]);
+          badge.title = MARK_TITLE[m];
+          name.append(badge);
+        }
         tr.append(name, el("td", "size", e.dir ? "—" : formatSize(e.size)), el("td", "date", formatDate(e.modified)));
         tr.onclick = (ev) => select(p, e.name, ev.ctrlKey || ev.metaKey);
         tr.ondblclick = () => activate(p, e);
@@ -255,7 +343,6 @@ export function filesTab(ctx: TabCtx): TabHandle {
           if (ev.key === "Enter") activate(p, e);
           if (ev.key === "F2") p.side === "remote" ? renameRemote() : renameLocal();
           if (p.side === "remote" && ev.key === "Delete") deleteRemote();
-          if (ev.key === "Backspace" && l.parent != null) load(p, l.parent);
         };
         tr.onpointerdown = (ev) => startDrag(p, e.name, ev);
         tr.oncontextmenu = (ev) => {
@@ -270,7 +357,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
     );
     if (!p.body.children.length) {
       const tr = el("tr");
-      const td = el("td", "empty", l.entries.length ? "Keine Treffer" : "Leerer Ordner");
+      const td = el("td", "empty", !l.entries.length ? "Leerer Ordner" : diff && onlyDiff ? "Keine Unterschiede" : "Keine Treffer");
       td.colSpan = 3;
       tr.append(td);
       p.body.append(tr);
@@ -285,8 +372,127 @@ export function filesTab(ctx: TabCtx): TabHandle {
   }
 
   function activate(p: Pane, e: Entry) {
-    if (e.dir) load(p, join(p, e.name));
+    if (e.dir) load(p, join(p, e.name), "go");
     else transfer(p, [e.name]);
+  }
+
+  // ---------- Vergleichen ----------
+  const MARK_TITLE: Record<Mark, string> = {
+    only: "Nur auf dieser Seite",
+    newer: "Hier neuer als auf der anderen Seite",
+    older: "Auf der anderen Seite neuer",
+    same: "Gleiche Grösse und Änderungszeit (± 2 s) oder gleicher Inhalt",
+    differ: "Verschieden ohne klare Richtung: gleiche Zeit, aber andere Grösse oder anderer Inhalt, oder Datei gegen Ordner",
+  };
+  /** Markierungen der Seite `p`, solange verglichen wird (nicht in der Laufwerksliste). */
+  function diffOf(p: Pane) {
+    const [L, R] = [panes.local.listing, panes.remote.listing];
+    if (!comparing || !L?.path || !R) return null;
+    const lmap = new Map(L.entries.map((e) => [e.name, e]));
+    const rmap = new Map(R.entries.map((e) => [e.name, e]));
+    const content = (n: string) => {
+      const [a, b] = [lmap.get(n), rmap.get(n)];
+      return a && b ? hashes.get(hashKey(a, b)) : undefined;
+    };
+    return p.side === "local" ? compareDirs(L.entries, R.entries, 2, content) : compareDirs(R.entries, L.entries, 2, content);
+  }
+  const hashKey = (a: Entry, b: Entry) => [panes.local.listing!.path, panes.remote.listing!.path, a.name, a.size, a.modified, b.size, b.modified].join("\n");
+
+  function renderAll() {
+    for (const p of Object.values(panes)) if (p.listing) render(p);
+    bar.hidden = !comparing;
+    compareBtn.classList.toggle("on", comparing);
+    compareBtn.setAttribute("aria-pressed", String(comparing));
+    if (!comparing) return;
+    const [lm, rm] = [diffOf(panes.local), diffOf(panes.remote)];
+    checkBtn.disabled = syncBtn.disabled = !lm;
+    if (!lm || !rm) return void (summary.textContent = "Zum Vergleichen links einen Ordner öffnen.");
+    const n = (m: Map<string, Mark>, k: Mark) => [...m.values()].filter((v) => v === k).length;
+    const parts = [
+      [n(lm, "only"), "nur auf diesem Computer"],
+      [n(rm, "only"), `nur auf ${c.name}`],
+      [n(lm, "newer"), "hier neuer"],
+      [n(lm, "older"), `auf ${c.name} neuer`],
+      [n(lm, "differ"), "verschieden"],
+      [n(lm, "same"), "gleich"],
+    ].filter(([k]) => k) as [number, string][];
+    summary.textContent = parts.length ? parts.map(([k, t]) => `${k} ${t}`).join(" · ") : "Keine Dateien zum Vergleichen";
+  }
+
+  function toggleCompare() {
+    comparing = !comparing;
+    renderAll();
+  }
+
+  /** SHA-256 hier und auf dem Server für alle gleichnamigen Dateien. */
+  async function checkContent() {
+    const [L, R] = [panes.local.listing, panes.remote.listing];
+    if (!sid || !L?.path || !R) return;
+    const rmap = new Map(R.entries.filter((e) => !e.dir).map((e) => [e.name, e]));
+    const pairs = L.entries.filter((e) => !e.dir && rmap.has(e.name)).map((a) => [a, rmap.get(a.name)!] as const);
+    if (!pairs.length) return tell("Nichts zu prüfen", "In beiden Ordnern gibt es keine gleichnamigen Dateien.");
+    const s = sid;
+    checkBtn.disabled = true;
+    try {
+      for (const [i, [a, b]] of pairs.entries()) {
+        const key = hashKey(a, b);
+        if (hashes.has(key)) continue;
+        summary.textContent = `Prüfe Inhalt ${i + 1} von ${pairs.length}: ${a.name}`;
+        const [x, y] = await Promise.all([api.localSha256(join(panes.local, a.name)), api.sftpSha256(s, join(panes.remote, b.name))]);
+        hashes.set(key, x === y);
+      }
+    } catch (e) {
+      tell("Inhalt nicht geprüft", `${e}\n\nDer Vergleich nach Grösse und Änderungszeit bleibt.`);
+    } finally {
+      checkBtn.disabled = false;
+      renderAll();
+    }
+  }
+
+  /** Was fehlt oder neuer ist, auf die andere Seite kopieren. Ersetzt nur nach Rückfrage. */
+  async function syncDiffs() {
+    const [lm, rm] = [diffOf(panes.local), diffOf(panes.remote)];
+    if (!sid || !lm || !rm) return;
+    const pick = (m: Map<string, Mark>) => [...m].filter(([, k]) => k === "only" || k === "newer").map(([n]) => n);
+    const jobs = [...pick(lm).map((n) => ({ upload: true, name: n, exists: lm.get(n) === "newer" })), ...pick(rm).map((n) => ({ upload: false, name: n, exists: rm.get(n) === "newer" }))];
+    const unclear = [...lm.values()].filter((k) => k === "differ").length;
+    const skipped = unclear ? `${unclear} Element(e) unterscheiden sich ohne klare Richtung und werden nicht übertragen.` : "";
+    if (!jobs.length) return tell("Nichts zu übertragen", skipped || "Die Dateien in beiden Ordnern stimmen überein.");
+    const lines = jobs.map((j) => `${j.upload ? "↑" : "↓"} ${j.name}${j.exists ? " (dort älter)" : ""}`);
+    const shown = lines.slice(0, 12).join("\n") + (lines.length > 12 ? `\n… und ${lines.length - 12} weitere` : "");
+    const ok = await ask(
+      `${jobs.length} Element(e) übertragen?`,
+      `↑ nach ${c.name} hochladen, ↓ auf diesen Computer herunterladen:\n\n${shown}\n\n${skipped ? `${skipped}\n` : ""}Gibt es eine Datei dort schon (älter), wird nachgefragt.`,
+      "Übertragen",
+    );
+    if (!ok) return;
+    let all: "replace" | "keep" | "skip" | null = null;
+    for (const j of jobs) {
+      const from = j.upload ? panes.local : panes.remote;
+      const to = other(from);
+      if (!sid || !from.listing || !to.listing) return;
+      let replace = false;
+      if (j.exists) {
+        let v: "replace" | "keep" | "skip" | null = all;
+        if (!v) {
+          const info = (e?: Entry) => (e ? `${formatSize(e.size)}, ${formatDate(e.modified)}` : "");
+          const r = await chooseAll(
+            `«${j.name}» ersetzen?`,
+            `${j.upload ? `Auf ${c.name}` : "Auf diesem Computer"} gibt es «${j.name}» schon, in einer älteren Fassung.`,
+            `Neu:       ${info(from.listing.entries.find((e) => e.name === j.name))}\nVorhanden: ${info(to.listing.entries.find((e) => e.name === j.name))}`,
+            "Beide behalten",
+            "Ersetzen",
+            "Überspringen",
+            "Für alle weiteren übernehmen",
+          );
+          v = r.v === "alt" ? "replace" : r.v === "ok" ? "keep" : "skip";
+          if (r.all) all = v;
+        }
+        if (v === "skip") continue;
+        replace = v === "replace";
+      }
+      start(j.upload, join(from, j.name), to.listing.path, j.name, replace);
+    }
   }
 
   // ---------- Übertragungen ----------
@@ -300,9 +506,9 @@ export function filesTab(ctx: TabCtx): TabHandle {
     for (const name of names) start(from.side === "local", join(from, name), to.listing.path, name);
   }
 
-  function start(upload: boolean, src: string, destDir: string, name: string) {
+  function start(upload: boolean, src: string, destDir: string, name: string, replace = false) {
     const row = el("div", "transfer");
-    const label = el("span", "transfer-name", `${upload ? "↑" : "↓"} ${name} → ${upload ? c.name : "Dieser Computer"}`);
+    const label = el("span", "transfer-name", `${upload ? "↑" : "↓"} ${name} → ${upload ? c.name : "Dieser Computer"}${replace ? " (ersetzt)" : ""}`);
     const bar = el("progress");
     bar.max = 1;
     bar.value = 0;
@@ -339,7 +545,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
           const to = upload ? panes.remote : panes.local;
           if (to.listing?.path === destDir) load(to, destDir);
         } else finish(`Fehler: ${p.error}`);
-      })
+      }, replace)
       .then((id) => {
         tid = id;
         running.add(id);
@@ -469,10 +675,13 @@ export function filesTab(ctx: TabCtx): TabHandle {
   }
 
   const renameBtn = toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2" });
+  const compareBtn = toolButton(ICON.compare, "Vergleichen", () => toggleCompare(), { text: true, shortcut: "linken und rechten Ordner" });
+  compareBtn.setAttribute("aria-pressed", "false");
   const trashBtn = toolButton(ICON.trash, "Löschen", () => deleteRemote(), { shortcut: "Entf", danger: true });
   ctx.toolbar.append(
     toolButton(ICON.upload, "Hochladen", () => transfer(panes.local, [...panes.local.selected]), { text: true }),
     toolButton(ICON.download, "Herunterladen", () => transfer(panes.remote, [...panes.remote.selected]), { text: true }),
+    compareBtn,
     toolSep(),
     toolButton(ICON.newFolder, "Neuer Ordner", () => mkdir()),
     toolButton(ICON.plus, "Neue Datei", () => newFile()),

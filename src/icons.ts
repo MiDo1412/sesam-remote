@@ -1,5 +1,10 @@
 /** Phosphor Icons (MIT), nur die gebrauchten, als Inline-SVG mit currentColor. */
 import arrowClockwise from "@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw";
+import arrowLeft from "@phosphor-icons/core/assets/regular/arrow-left.svg?raw";
+import arrowRight from "@phosphor-icons/core/assets/regular/arrow-right.svg?raw";
+import arrowUp from "@phosphor-icons/core/assets/regular/arrow-up.svg?raw";
+import arrowsLeftRight from "@phosphor-icons/core/assets/regular/arrows-left-right.svg?raw";
+import house from "@phosphor-icons/core/assets/regular/house.svg?raw";
 import arrowSquareOut from "@phosphor-icons/core/assets/regular/arrow-square-out.svg?raw";
 import question from "@phosphor-icons/core/assets/regular/question.svg?raw";
 import screencast from "@phosphor-icons/core/assets/regular/screencast.svg?raw";
@@ -37,6 +42,11 @@ const sized = (s: string, n = 16) => s.replace("<svg ", `<svg width="${n}" heigh
 
 export const ICON = {
   refresh: sized(arrowClockwise),
+  back: sized(arrowLeft),
+  forward: sized(arrowRight),
+  up: sized(arrowUp),
+  compare: sized(arrowsLeftRight),
+  home: sized(house),
   detach: sized(arrowSquareOut),
   span: sized(arrowsOut),
   screenshot: sized(camera),
