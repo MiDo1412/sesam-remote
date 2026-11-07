@@ -173,7 +173,7 @@ const savePrefs = () => {
     /* nicht gemerkt */
   }
 };
-const services = (c: Connection) => [c.rdpPort && "RDP", c.vncPort && "VNC", c.sshPort && "SSH"].filter(Boolean) as string[];
+const services = (c: Connection) => [c.rdpPort && "RDP", c.vncPort && "VNC", c.sshPort && "SSH", c.ftpPort && "FTP"].filter(Boolean) as string[];
 const byName = (a: Connection, b: Connection) => a.name.localeCompare(b.name, "de-CH", { numeric: true });
 const SORT: Record<SortKey, (a: Connection, b: Connection) => number> = {
   name: byName,
@@ -287,7 +287,7 @@ function renderTable(visible: Connection[]) {
   for (const th of document.querySelectorAll<HTMLElement>("#conn-table th[data-key]"))
     th.setAttribute("aria-sort", th.dataset.key === prefs.sort ? (prefs.desc ? "descending" : "ascending") : "none");
   const tabId = visible.some((c) => c.id === selected) ? selected : visible[0]?.id;
-  const svcIcon: Record<string, string> = { RDP: ICON.desktop, VNC: ICON.screencast, SSH: ICON.shell };
+  const svcIcon: Record<string, string> = { RDP: ICON.desktop, VNC: ICON.screencast, SSH: ICON.shell, FTP: ICON.globe };
   const port: Record<string, (c: Connection) => number | null> = { RDP: (c) => c.rdpPort, VNC: (c) => c.vncPort, SSH: (c) => c.sshPort };
   $("conn-rows").replaceChildren(
     ...visible.map((c) => {
