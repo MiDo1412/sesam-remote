@@ -6,6 +6,7 @@ import macos from "../docs/hilfe/macos.md?raw";
 import rdpGnome from "../docs/hilfe/rdp-gnome.md?raw";
 import rdpWindows from "../docs/hilfe/rdp-windows.md?raw";
 import ssh from "../docs/hilfe/ssh.md?raw";
+import ftp from "../docs/hilfe/ftp.md?raw";
 import creds from "../docs/hilfe/zugangsdaten.md?raw";
 
 /** Anleitungen aus docs/hilfe; die IDs nutzt auch das Menü «Hilfe» (lib.rs). */
@@ -17,6 +18,7 @@ export const topics = [
   { id: "wayvnc", title: "wayvnc (wlroots)", md: wayvnc },
   { id: "macos", title: "macOS-Bildschirmfreigabe", md: macos },
   { id: "ssh", title: "SSH und SFTP", md: ssh },
+  { id: "ftp", title: "FTP und FTPS", md: ftp },
 ] as const;
 
 export type TopicId = (typeof topics)[number]["id"];

@@ -475,6 +475,9 @@ fieldset.svc legend { float: none; padding: 0; }
 .row-actions { display: flex; gap: 12px; }
 #cred-form { width: 480px; }
 .svc-fields:has(input[name=rdpOwn]:not(:checked)) #rdp-own, .svc-fields:has(input[name=vncOwn]:not(:checked)) #vnc-own { display: none; }
+/* FTP ohne Verschlüsselung: Warnung nur dann, immer rot umrandet */
+.svc-fields:not(:has(select[name=ftpSecurity] option[value=none]:checked)) #ftp-plain-warn { display: none; }
+#ftp-plain-warn { border-color: var(--danger); }
 
 /* ---------- Abgekoppeltes Fenster ---------- */
 body.detached #library, body.detached #session-back { display: none !important; }
@@ -505,8 +508,8 @@ fieldset.adv .adv-fields > label.span, fieldset.adv .adv-fields > .span, fieldse
 
 /* ---------- Schnelle Verbindung ---------- */
 #quick-form.no-ssh .ssh-only { display: none; }
-.quick-kind .segmented { display: grid; grid-template-columns: repeat(4, 1fr); }
-#quick-form .segmented label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; padding: 0 12px; }
+.quick-kind .segmented { display: grid; grid-template-columns: repeat(5, 1fr); }
+#quick-form .segmented label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; padding: 0 8px; }
 .seg-icon { display: inline-flex; }
 .seg-icon svg { width: 16px; height: 16px; }
 

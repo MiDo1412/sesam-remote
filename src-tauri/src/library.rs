@@ -65,6 +65,14 @@ pub struct Connection {
     pub has_key: bool,
     /// Dateiübertragung: "auto" (SFTP, sonst SCP) | "sftp" | "scp".
     pub file_transfer: String,
+    /// `None` = Dateien über FTP ausgeschaltet.
+    pub ftp_port: Option<u16>,
+    /// FTP-Verschlüsselung: "explicit" (FTPS mit AUTH TLS) | "implicit" (FTPS ab Verbindungsbeginn) | "none".
+    pub ftp_security: String,
+    /// FTP im aktiven Modus (Server verbindet zurück); sonst passiv.
+    pub ftp_active: bool,
+    /// Bei SSH *und* FTP: womit «Dateien» verbindet ("ssh" | "ftp").
+    pub files_via: String,
     /// SSH: veraltete Algorithmen erlauben (SHA-1, CBC, 3DES, ssh-rsa).
     pub ssh_legacy: bool,
     /// SSH-Keepalive in Sekunden, 0 = aus.
@@ -120,6 +128,10 @@ impl Default for Connection {
             has_gateway_password: false,
             has_key: false,
             file_transfer: "auto".into(),
+            ftp_port: None,
+            ftp_security: "explicit".into(),
+            ftp_active: false,
+            files_via: "ssh".into(),
             ssh_legacy: false,
             ssh_keepalive: 0,
             ssh_compression: false,
@@ -138,6 +150,11 @@ impl Connection {
         [&self.credential_id, &self.rdp_credential_id, &self.vnc_credential_id, &self.gateway_credential_id].map(|x| x.as_deref())
     }
 
+    /// «Dateien» über FTP: FTP an und entweder kein SSH oder bei beiden FTP gewählt.
+    pub fn files_over_ftp(&self) -> bool {
+        self.ftp_port.is_some() && (self.ssh_port.is_none() || self.files_via == "ftp")
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if !["", "login", "session"].contains(&self.rdp_target.as_str()) {
             return Err("Ungültige Auswahl für RDP".into());
@@ -151,7 +168,7 @@ impl Connection {
         if self.address.trim().is_empty() || self.address.chars().any(char::is_whitespace) {
             return Err("Adresse fehlt oder enthält Leerzeichen".into());
         }
-        if self.vnc_port == Some(0) || self.ssh_port == Some(0) || self.rdp_port == Some(0) {
+        if self.vnc_port == Some(0) || self.ssh_port == Some(0) || self.rdp_port == Some(0) || self.ftp_port == Some(0) {
             return Err("Port 0 ist ungültig".into());
         }
         if !["desktop", "shell", "files"].contains(&self.default_view.as_str()) {
@@ -162,6 +179,10 @@ impl Connection {
         }
         if !["auto", "sftp", "scp"].contains(&self.file_transfer.as_str()) {
             return Err("Unbekannte Dateiübertragung".into());
+        }
+        crate::ftp::Security::parse(&self.ftp_security)?;
+        if !["ssh", "ftp"].contains(&self.files_via.as_str()) {
+            return Err("Unbekannter Weg für Dateien".into());
         }
         if self.forwards.len() > 32 {
             return Err("Höchstens 32 Weiterleitungen".into());
@@ -333,6 +354,13 @@ mod tests {
         assert!(Connection { rdp_gateway: "https://gw/x".into(), ..ok.clone() }.validate().is_err());
         assert!(Connection { rdp_kdc: "https://gw.contoso.ch/KdcProxy".into(), rdp_gateway: "gw.contoso.ch:443".into(), ..ok.clone() }.validate().is_ok());
         assert!(Connection { file_transfer: "ftp".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { ftp_port: Some(0), ..ok.clone() }.validate().is_err());
+        assert!(Connection { ftp_security: "tls".into(), ..ok.clone() }.validate().is_err());
+        assert!(Connection { files_via: "x".into(), ..ok.clone() }.validate().is_err());
+        let ftp = Connection { ftp_port: Some(21), ..ok.clone() };
+        assert!(ftp.validate().is_ok() && !ftp.files_over_ftp(), "SSH geht vor, solange nicht FTP gewählt ist");
+        assert!(Connection { ssh_port: None, ..ftp.clone() }.files_over_ftp());
+        assert!(Connection { files_via: "ftp".into(), ..ftp }.files_over_ftp());
         assert!(Connection { forwards: vec!["L8080 localhost:80".into(), "D1080".into()], ..ok.clone() }.validate().is_ok());
         assert!(Connection { forwards: vec!["L8080".into()], ..ok.clone() }.validate().is_err());
         assert!(Connection { jump_host: "x".into(), ..ok.clone() }.validate().is_err());
@@ -397,5 +425,6 @@ mod tests {
         assert_eq!(c.ssh_port, Some(22));
         assert_eq!((c.rdp_port, c.desktop_protocol.as_str()), (None, "vnc"));
         assert_eq!(c.file_transfer, "auto");
+        assert_eq!((c.ftp_port, c.ftp_security.as_str(), c.files_via.as_str()), (None, "explicit", "ssh"));
     }
 }
