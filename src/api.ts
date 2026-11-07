@@ -89,6 +89,8 @@ export type ShellEvent = { kind: "data"; data: number[] } | { kind: "closed"; re
 /** Präfix eines Fehlers bei unbekanntem Host: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>` */
 export const HOSTKEY_UNKNOWN = "HOSTKEY_UNKNOWN:";
 /** VNC über TLS: `CERT_UNKNOWN:<SHA256>` bzw. `CERT_CHANGED:<SHA256>` */
+/** Anzeigeskalierung dieses Bildschirms in Prozent (Windows «Skalierung», macOS Retina), für RDP. */
+const displayScale = () => Math.min(500, Math.max(100, Math.round((devicePixelRatio || 1) * 100)));
 export const CERT_UNKNOWN = "CERT_UNKNOWN:";
 export const CERT_CHANGED = "CERT_CHANGED:";
 
@@ -196,7 +198,7 @@ export const api = {
   rdpOpen: (id: string, trust: string | null, remember: boolean, width: number, height: number, onFrame: (buf: ArrayBuffer) => void) => {
     const ch = new Channel<ArrayBuffer>();
     ch.onmessage = (m) => onFrame(asArrayBuffer(m));
-    return invoke<string>("rdp_open", { id, trust, remember, width, height, onEvent: ch });
+    return invoke<string>("rdp_open", { id, trust, remember, width, height, scale: displayScale(), onEvent: ch });
   },
   rdpPointer: (sid: string, x: number, y: number, buttons: number) => invoke<void>("rdp_pointer", { sid, x, y, buttons }),
   rdpWheel: (sid: string, vertical: boolean, units: number) => invoke<void>("rdp_wheel", { sid, vertical, units }),
@@ -204,7 +206,7 @@ export const api = {
   rdpReleaseAll: (sid: string) => invoke<void>("rdp_release_all", { sid }),
   rdpSetMonitors: (sid: string, monitors: { left: number; top: number; width: number; height: number; primary: boolean }[]) =>
     invoke<void>("rdp_set_monitors", { sid, monitors }),
-  rdpSetSize: (sid: string, width: number, height: number) => invoke<void>("rdp_set_size", { sid, width, height }),
+  rdpSetSize: (sid: string, width: number, height: number) => invoke<void>("rdp_set_size", { sid, width, height, scale: displayScale() }),
   rdpClose: (sid: string) => invoke<void>("rdp_close", { sid }),
   /** scp: Server ohne SFTP, Übertragung über SCP (eingeschränkt). */
   /** trust: SSH-Host-Schlüssel oder (FTPS) Zertifikat; remember: Zertifikat merken. */

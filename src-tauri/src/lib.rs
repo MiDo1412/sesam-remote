@@ -235,6 +235,7 @@ async fn rdp_check(path: State<'_, LibraryPath>, id: String, trust: Option<Strin
         skip_cert_check: c.skip_cert_check,
         width: 1024,
         height: 768,
+        scale: 100,
         clipboard: None,
         audio: false,
         share: None,
@@ -1191,6 +1192,7 @@ async fn rdp_open(
     remember: Option<bool>,
     width: u16,
     height: u16,
+    scale: Option<u32>,
     on_event: Channel<InvokeResponseBody>,
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
@@ -1231,6 +1233,7 @@ async fn rdp_open(
         skip_cert_check: c.skip_cert_check,
         width: width.clamp(200, 8192),
         height: height.clamp(200, 8192),
+        scale: scale.unwrap_or(100).clamp(100, 500),
         clipboard: None,
         audio: c.play_audio,
         share: (!c.shared_folder.trim().is_empty()).then(|| PathBuf::from(c.shared_folder.trim())),
@@ -1299,8 +1302,8 @@ fn rdp_release_all(sessions: State<RdpSessions>, sid: String) -> Result<(), Stri
 }
 
 #[tauri::command]
-fn rdp_set_size(sessions: State<RdpSessions>, sid: String, width: u16, height: u16) -> Result<(), String> {
-    rdp_send(&sessions, &sid, rdp::Input::Resize { width, height })
+fn rdp_set_size(sessions: State<RdpSessions>, sid: String, width: u16, height: u16, scale: Option<u32>) -> Result<(), String> {
+    rdp_send(&sessions, &sid, rdp::Input::Resize { width, height, scale: scale.unwrap_or(100).clamp(100, 500) })
 }
 
 #[tauri::command]

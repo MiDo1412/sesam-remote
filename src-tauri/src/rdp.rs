@@ -40,6 +40,8 @@ pub struct Target {
     pub skip_cert_check: bool,
     pub width: u16,
     pub height: u16,
+    /// Anzeigeskalierung des Clients in Prozent (100 = keine), wie die Windows-Einstellung «Skalierung».
+    pub scale: u32,
     /// Zwischenablage (cliprdr); für jede Verbindung, auch nach Umleitungen, ein neues Backend.
     pub clipboard: Option<ClipFactory>,
     /// Ton des entfernten Rechners hier abspielen.
@@ -82,7 +84,8 @@ pub enum Input {
     Wheel { vertical: bool, units: i16 },
     Scancode { code: u16, down: bool },
     Unicode { ch: char, down: bool },
-    Resize { width: u16, height: u16 },
+    /// `scale`: Anzeigeskalierung in Prozent.
+    Resize { width: u16, height: u16, scale: u32 },
     /// Mehrere Monitore: Position relativ zum Hauptmonitor, Grösse in Pixeln.
     Monitors(Vec<Monitor>),
     ReleaseAll,
@@ -331,6 +334,15 @@ fn apply_redirect(t: &mut Target, hop: &mut Hop, r: &Redir) -> Result<(), String
     Ok(())
 }
 
+/// [MS-RDPBCGR] erlaubt für den Gerätefaktor nur 100, 140 und 180 %.
+fn device_scale(scale: u32) -> u32 {
+    match scale {
+        ..=120 => 100,
+        121..=160 => 140,
+        _ => 180,
+    }
+}
+
 fn connector_config(t: &Target) -> ironrdp_connector::Config {
     use ironrdp_pdu::rdp::capability_sets::{MajorPlatformType, client_codecs_capabilities};
     ironrdp_connector::Config {
@@ -348,10 +360,10 @@ fn connector_config(t: &Target) -> ironrdp_connector::Config {
         dig_product_id: String::new(),
         desktop_size: DesktopSize { width: t.width, height: t.height },
         monitor_layout: None,
-        desktop_scale_factor: 0,
+        desktop_scale_factor: t.scale,
         desktop_physical_size: None,
         desktop_orientation: None,
-        device_scale_factor: None,
+        device_scale_factor: Some(device_scale(t.scale)),
         monitor_extended_layout: None,
         relative_mouse_input: false,
         bitmap: Some(ironrdp_connector::BitmapConfig {
@@ -1006,6 +1018,10 @@ async fn active(
     }
     // Zeitüberschreitungen der Zwischenablage (Sperren) regelmässig abarbeiten.
     let mut clip_tick = tokio::time::interval(std::time::Duration::from_secs(5));
+    // Grössenwunsch (Breite, Höhe, Skalierung), bis der Anzeigekanal bereit ist.
+    let mut pending_resize: Option<(u32, u32, u32)> = None;
+    let mut resize_hint = false;
+    let started = std::time::Instant::now();
 
     loop {
         let outputs = tokio::select! {
@@ -1095,15 +1111,10 @@ async fn active(
                         }
                         continue;
                     }
-                    Input::Resize { width, height } => {
+                    Input::Resize { width, height, scale } => {
                         let (w, h) = MonitorLayoutEntry::adjust_display_size(u32::from(width), u32::from(height));
-                        match stage.encode_resize(w, h, None, None) {
-                            Some(frame) => {
-                                let frame = frame.map_err(err)?;
-                                writer.write_all(&frame).await.map_err(|e| e.to_string())?;
-                            }
-                            None => { emit(Event::Info("Der Server kann seine Auflösung nicht anpassen; die Anzeige wird skaliert.".into())); }
-                        }
+                        pending_resize = Some((w, h, scale));
+                        send_pending_resize(&mut stage, &mut writer, &mut pending_resize).await?;
                         continue;
                     }
                 };
@@ -1112,6 +1123,14 @@ async fn active(
             }
         };
 
+        // Der Anzeigekanal (DISP) öffnet sich erst nach der Anmeldung: wartenden Grössenwunsch jetzt senden.
+        if pending_resize.is_some() {
+            send_pending_resize(&mut stage, &mut writer, &mut pending_resize).await?;
+            if pending_resize.is_some() && !resize_hint && started.elapsed() > std::time::Duration::from_secs(10) {
+                resize_hint = true;
+                emit(Event::Info("Der Server kann seine Auflösung nicht anpassen; die Anzeige wird skaliert.".into()));
+            }
+        }
         for out in outputs {
             match out {
                 ActiveStageOutput::ResponseFrame(f) => writer.write_all(&f).await.map_err(|e| e.to_string())?,
@@ -1205,6 +1224,14 @@ async fn active(
             }
         }
     }
+}
+
+/// Sendet den wartenden Grössenwunsch, sobald der Server den Anzeigekanal (DISP) bereitgestellt hat.
+async fn send_pending_resize<W: FramedWrite>(stage: &mut ActiveStage, w: &mut W, pending: &mut Option<(u32, u32, u32)>) -> Result<(), String> {
+    let Some((width, height, scale)) = *pending else { return Ok(()) };
+    let Some(frame) = stage.encode_resize(width, height, Some(scale), None) else { return Ok(()) };
+    *pending = None;
+    w.write_all(&frame.map_err(err)?).await.map_err(|e| e.to_string())
 }
 
 async fn write_all<W: FramedWrite>(w: &mut W, outs: &[ActiveStageOutput]) -> Result<(), String> {
@@ -1326,6 +1353,7 @@ mod tests {
             skip_cert_check: false,
             width: 800,
             height: 600,
+            scale: 100,
             clipboard: None,
             audio: false,
             share: None,
@@ -1424,6 +1452,7 @@ mod probe {
             skip_cert_check: false,
             width: 1280,
             height: 800,
+            scale: 100,
             clipboard: None,
             audio: false,
             share: None,
@@ -1483,7 +1512,7 @@ mod probe {
         // Wie die App: Grösse sofort nach dem Verbinden nachschieben (SESAM_RDP_RESIZE_NOW=WxH).
         if let Some((w, h)) = std::env::var("SESAM_RDP_RESIZE_NOW").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))) {
             tokio::time::sleep(std::time::Duration::from_millis(std::env::var("SESAM_RDP_RESIZE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1500))).await;
-            session.send(Input::Resize { width: w, height: h });
+            session.send(Input::Resize { width: w, height: h, scale: 100 });
         }
         for _ in 0..30 {
             if rects.load(Ordering::Relaxed) > 0 {
@@ -1496,7 +1525,7 @@ mod probe {
         // Grösse mitten in der Sitzung ändern wie die App (DisplayControl), z. B. SESAM_RDP_RESIZE=300x1296.
         if let Some((w, h)) = std::env::var("SESAM_RDP_RESIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))) {
             let before = rects.load(Ordering::Relaxed);
-            session.send(Input::Resize { width: w, height: h });
+            session.send(Input::Resize { width: w, height: h, scale: 100 });
             wait(4).await;
             println!("Nach Grössenänderung: {} neue Rechtecke", rects.load(Ordering::Relaxed) - before);
             snap("2-nach-groessenaenderung");
@@ -1566,7 +1595,7 @@ mod probe {
         let (host, port) = addr.rsplit_once(':').unwrap();
         let t = Target {
             host: host.into(), port: port.parse().unwrap(), user, domain, password: pw,
-            expected_cert: std::env::var("SESAM_RDP_TRUST").ok().or_else(|| pins.get(&addr).cloned()), skip_cert_check: false, width: 1024, height: 768,
+            expected_cert: std::env::var("SESAM_RDP_TRUST").ok().or_else(|| pins.get(&addr).cloned()), skip_cert_check: false, width: 1024, height: 768, scale: 100,
             clipboard: None, audio: false, share: None, kdc: None, no_ntlm: false, gateway: None,
         };
         println!("Ergebnis: {:?}", check_login(t, Default::default()).await);
@@ -1587,6 +1616,7 @@ mod probe {
             skip_cert_check: false,
             width: 1280,
             height: 800,
+            scale: 100,
             clipboard: None,
             audio: false,
             share: None,
