@@ -987,6 +987,7 @@ async fn active(
     let (mut reader, mut writer) = split_tokio_framed(framed);
     let size = result.desktop_size;
     let mut image = DecodedImage::new(ironrdp_graphics::image_processing::PixelFormat::RgbA32, size.width, size.height);
+    let mut shown = (image.width(), image.height());
     let activation = result.activation_factory;
     let mut stage: ActiveStage = ActiveStageBuilder {
         static_channels: result.static_channels,
@@ -1115,6 +1116,15 @@ async fn active(
             match out {
                 ActiveStageOutput::ResponseFrame(f) => writer.write_all(&f).await.map_err(|e| e.to_string())?,
                 ActiveStageOutput::GraphicsUpdate(r) => {
+                    // EGFX ResetGraphics (z. B. nach einer Grössenänderung) vergrössert/verkleinert `image` selbst:
+                    // neue Grösse zuerst melden, sonst landen die Bildteile in der alten Fläche (schwarz/verschoben).
+                    if (image.width(), image.height()) != shown {
+                        shown = (image.width(), image.height());
+                        tracing::info!(width = shown.0, height = shown.1, "RDP: neue Bildgrösse");
+                        if !emit(Event::Resize { width: shown.0, height: shown.1 }) {
+                            return Ok(Flow::Closed("Fenster geschlossen".into()));
+                        }
+                    }
                     if let Some(rect) = rect_of(&r, &image) {
                         if !emit(Event::Rect { rect, rgba: crop(&image, rect) }) {
                             return Ok(Flow::Closed("Fenster geschlossen".into()));
@@ -1169,6 +1179,7 @@ async fn active(
                                 ..
                             } => {
                                 image = DecodedImage::new(ironrdp_graphics::image_processing::PixelFormat::RgbA32, desktop_size.width, desktop_size.height);
+                                shown = (image.width(), image.height());
                                 if !stage.reactivate(
                                     seq.io_channel_id(),
                                     seq.user_channel_id(),
@@ -1477,6 +1488,14 @@ mod probe {
         }
         wait(3).await;
         snap("1-start");
+        // Grösse mitten in der Sitzung ändern wie die App (DisplayControl), z. B. SESAM_RDP_RESIZE=300x1296.
+        if let Some((w, h)) = std::env::var("SESAM_RDP_RESIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))) {
+            let before = rects.load(Ordering::Relaxed);
+            session.send(Input::Resize { width: w, height: h });
+            wait(4).await;
+            println!("Nach Grössenänderung: {} neue Rechtecke", rects.load(Ordering::Relaxed) - before);
+            snap("2-nach-groessenaenderung");
+        }
         if !desktop_only {
             let (os_user, os_pw) = get("Sesam Test");
             let typ = |text: &str| {

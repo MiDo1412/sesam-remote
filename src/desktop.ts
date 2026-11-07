@@ -391,6 +391,8 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     const text = () => new TextDecoder().decode(new Uint8Array(buf, 1));
     switch (v.getUint8(0)) {
       case 0: {
+        if (!gotImage && status.textContent?.startsWith(NO_IMAGE)) status.textContent = "";
+        gotImage = true;
         const [x, y, w, h] = [v.getUint16(1), v.getUint16(3), v.getUint16(5), v.getUint16(7)];
         g.putImageData(new ImageData(new Uint8ClampedArray(buf, 9, w * h * 4), w, h), x, y);
         break;
@@ -426,6 +428,13 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   };
 
   let remember = true;
+  // Kommt nach dem Verbinden kein Bild, das sagen statt eine schwarze Fläche zu zeigen.
+  let gotImage = false;
+  const NO_IMAGE = "Der Server sendet noch kein Bild.";
+  const watchImage = () =>
+    setTimeout(() => {
+      if (!gotImage && sid) status.textContent = `${NO_IMAGE} Bei Ubuntu: Ist die Sitzung gesperrt oder der Bildschirm aus? Sonst trennen und neu verbinden; Details stehen im Protokoll (sesam.log).`;
+    }, 5000);
   const openSession = async (trust: string | null) => {
     const at = ctx.extra?.attach;
     if (at) {
@@ -454,6 +463,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     try {
       sid = await openSession(trust);
       status.textContent = "";
+      watchImage();
       ctx.setState("connected");
       if (ctx.isActive()) canvas.focus();
       syncClipboard();
