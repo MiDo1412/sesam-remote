@@ -381,8 +381,9 @@ fieldset.svc > label.switch { grid-column: 2; grid-row: 1; padding: 0; }
 fieldset.svc .svc-fields { grid-column: span 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 fieldset.svc:has(> label.switch input:not(:checked)) .svc-fields { display: none; }
 fieldset.svc:has(> label.switch input:not(:checked)) { padding-bottom: 14px; opacity: 0.85; }
-.tip-btn { height: 16px; width: 16px; padding: 0; margin-left: 6px; border-radius: 8px; font-size: 10px; font-weight: 700; line-height: 1; color: var(--muted); border: 1px solid var(--line); background: transparent; vertical-align: 1px; }
-.tip-btn:hover { color: var(--accent); border-color: var(--accent); }
+.label-line { display: inline-flex; align-items: center; gap: 4px; }
+.tip-btn { height: 18px; width: 18px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 9px; color: var(--muted); background: transparent; opacity: 0.7; }
+.tip-btn:hover, .tip-btn:focus-visible { color: var(--accent); opacity: 1; }
 .sheet label[data-tip] { flex-direction: column; }
 .popover { position: fixed; z-index: 120; max-width: 300px; padding: 10px 12px; border-radius: 10px; font-size: 12px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--card) 90%, transparent); backdrop-filter: blur(20px); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); animation: menu-in 120ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .popover { animation: none; } }
@@ -430,3 +431,19 @@ body.detached #library, body.detached #session-back { display: none !important; 
 .terminal .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
 .terminal .xterm-viewport::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--term-fg, #888) 30%, transparent); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
 .tab-pane.shell .status { background: transparent; color: var(--term-fg, inherit); }
+
+/* ---------- Verbindungs-Formular: breiter, Reiter, Knöpfe immer sichtbar ---------- */
+#editor-form { width: min(800px, calc(100vw - 48px)); column-gap: 24px; }
+#editor-form .sec-hidden { display: none !important; }
+.sheet-tabs { justify-self: center; }
+.sheet-tabs button { height: 28px; padding: 0 14px; border: 0; border-radius: 6px; background: transparent; font-size: 12px; }
+.sheet-tabs button[aria-selected=true] { background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); font-weight: 600; }
+#editor { height: min(640px, calc(100vh - 48px)); overflow: hidden; }
+#editor-form { height: 100%; box-sizing: border-box; overflow-y: auto; align-content: start; padding-bottom: 88px; }
+#editor-form > .actions { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 12px 24px 16px; background: var(--card); border-top: 1px solid var(--line); z-index: 1; }
+#editor-form > h2 { position: sticky; top: -24px; padding-top: 0; background: var(--card); z-index: 1; }
+fieldset.adv .adv-fields { grid-column: span 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+fieldset.adv .adv-fields > label.span, fieldset.adv .adv-fields > .span, fieldset.adv .adv-fields > label.option, fieldset.adv .adv-fields > .pair { grid-column: span 2; }
+.thumb-mini { width: 56px; height: 34px; flex-shrink: 0; border-radius: 5px; overflow: hidden; border: 1px solid var(--line); background: var(--hover) center / cover; }
+.thumb-mini > * { width: 100%; height: 100%; }
+#thumb-menu { width: auto !important; flex-shrink: 0; }

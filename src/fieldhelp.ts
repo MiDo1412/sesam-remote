@@ -1,4 +1,5 @@
-/** Kleine Hilfe pro Feld: «?» neben der Beschriftung öffnet ein Popover mit Text aus data-tip. */
+/** Kleine Hilfe pro Feld: Fragezeichen rechts neben der Beschriftung, Popover bei Klick oder Hover (Text aus data-tip). */
+import { ICON } from "./icons";
 let open: HTMLElement | null = null;
 
 function close() {
@@ -12,13 +13,11 @@ export function initFieldHelp(root: HTMLElement) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "tip-btn";
-    b.textContent = "?";
+    b.innerHTML = ICON.question;
     const name = label.firstChild?.textContent?.trim() ?? "";
     b.setAttribute("aria-label", `Hilfe zu ${name}`);
-    b.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (open?.dataset.for === name) return close();
+    const show = () => {
+      if (open?.dataset.for === name) return;
       close();
       const pop = document.createElement("div");
       pop.className = "popover";
@@ -32,8 +31,23 @@ export function initFieldHelp(root: HTMLElement) {
       pop.style.top = `${r.bottom + 6 + p.height > innerHeight ? r.top - p.height - 6 : r.bottom + 6}px`;
       open = pop;
     };
-    // Erster Textknoten ist die Beschriftung: Knopf direkt dahinter.
-    label.firstChild ? label.firstChild.after(b) : label.prepend(b);
+    let byHover = false;
+    b.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (open?.dataset.for === name && !byHover) return close();
+      byHover = false;
+      show();
+    };
+    b.onmouseenter = () => !open && ((byHover = true), show());
+    b.onmouseleave = () => byHover && ((byHover = false), close());
+    // Beschriftung und Knopf auf eine Zeile (die Beschriftung ist der erste Textknoten).
+    const line = document.createElement("span");
+    line.className = "label-line";
+    const text = label.firstChild;
+    if (text?.nodeType === Node.TEXT_NODE) line.append(text.textContent!.trim()), text.remove();
+    line.append(b);
+    label.prepend(line);
   }
 }
 

@@ -262,6 +262,32 @@ if (detachedWindow) {
 
 // ---------- Sheet «Verbindung bearbeiten» ----------
 
+/** Reiter oben im Formular: je Abschnitt (h3.sec) eine Seite, damit nichts lange scrollt. */
+const sectionTabs = document.createElement("div");
+sectionTabs.className = "segmented sheet-tabs span";
+sectionTabs.setAttribute("role", "tablist");
+{
+  const form = document.getElementById("editor-form")!;
+  let sec = "";
+  for (const n of [...form.children] as HTMLElement[]) {
+    if (n.matches("h3.sec")) {
+      sec = n.textContent!.trim();
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.textContent = sec;
+      b.onclick = () => showSection(b.textContent!);
+      sectionTabs.append(b);
+      n.hidden = true; // Titel steckt im Reiter
+    } else if (sec && !n.matches(".actions, #editor-error")) n.dataset.sec = sec;
+  }
+  form.querySelector("h2")!.after(sectionTabs);
+}
+function showSection(name: string) {
+  for (const b of sectionTabs.children) b.setAttribute("aria-selected", String(b.textContent === name));
+  for (const n of document.querySelectorAll<HTMLElement>("#editor-form > [data-sec]")) n.classList.toggle("sec-hidden", n.dataset.sec !== name);
+}
+
 const dlg = $<HTMLDialogElement>("editor");
 const form = $<HTMLFormElement>("editor-form");
 let editing: Connection | null = null;
@@ -349,14 +375,14 @@ function edit(c: Connection | null, asNew = false) {
   pendingThumb = null;
   clearThumb = false;
   $("thumb-name").textContent = editing.customThumb ? "Eigenes Bild" : "Letzter Desktop";
+  renderThumb($("thumb-preview"), editing);
+  showSection("Allgemein");
   f.rdpNoNtlm.checked = editing.rdpNoNtlm;
   f.rdpKdc.value = editing.rdpKdc;
   f.rdpGateway.value = editing.rdpGateway;
   f.rdpGatewayUser.value = editing.rdpGatewayUser;
   f.gatewayPassword.value = "";
   showPwHint("gw-pw", editing.hasGatewayPassword, "Nur mit eigenem Gateway-Benutzer.");
-  ($("rdp-advanced") as HTMLDetailsElement).open = editing.rdpNoNtlm || !!editing.rdpKdc || !!editing.rdpGateway;
-  ($("advanced") as HTMLDetailsElement).open = editing.skipCertCheck;
   f.fileTransfer.value = editing.fileTransfer ?? "auto";
   fileTransferMenu.sync();
   f.sshKeepalive.value = editing.sshKeepalive ? String(editing.sshKeepalive) : "";
@@ -373,15 +399,6 @@ function edit(c: Connection | null, asNew = false) {
   );
   jumpHost.value = editing.jumpHost ?? "";
   jumpHostMenu.sync();
-  // Aufgeklappt, sobald etwas vom Standard abweicht.
-  ($("ssh-advanced") as HTMLDetailsElement).open =
-    f.fileTransfer.value !== "auto" ||
-    !!editing.sshKeepalive ||
-    editing.sshCompression ||
-    editing.sshLegacy ||
-    f.forwards.value !== "" ||
-    jumpHost.value !== "" ||
-    editing.sshAgent;
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
@@ -416,11 +433,18 @@ for (const n of ["vncOn", "rdpOn"]) (form.elements.namedItem(n) as HTMLInputElem
 
 let pendingThumb: string | null = null;
 let clearThumb = false;
-$("thumb-pick").onclick = async () => {
+$("thumb-menu").onclick = async () => {
+  const v = await openMenu($("thumb-menu"), [
+    { value: "pick", label: "Eigenes Bild wählen …" },
+    { value: "clear", label: "Letzter Desktop (Standard)" },
+  ]);
+  if (v === "pick") pickThumb();
+  if (v === "clear") ((pendingThumb = null), (clearThumb = true), ($("thumb-name").textContent = "Letzter Desktop"));
+};
+const pickThumb = async () => {
   const f = await pickFolder({ title: "Bild für die Verbindung", filters: [{ name: "Bilder", extensions: ["png", "jpg", "jpeg", "webp"] }] });
   if (typeof f === "string") ((pendingThumb = f), ($("thumb-name").textContent = f.split(/[\\/]/).pop() ?? f));
 };
-$("thumb-clear").onclick = () => ((pendingThumb = null), (clearThumb = true), ($("thumb-name").textContent = "Letzter Desktop"));
 
 const sharedFolder = form.elements.namedItem("sharedFolder") as HTMLInputElement;
 $("share-pick").onclick = async () => {

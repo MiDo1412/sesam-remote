@@ -78,7 +78,7 @@
           </select>
         </label>
         <label data-tip="Standard: das letzte Bild des Desktops, gespeichert beim Trennen. Optional ein eigenes Bild.">Vorschaubild
-          <span class="pick"><span id="thumb-name" class="pick-name"></span><button type="button" id="thumb-pick">Wählen …</button><button type="button" id="thumb-clear" class="plain">Standard</button></span>
+          <span class="pick"><span id="thumb-preview" class="thumb-mini" aria-hidden="true"></span><span id="thumb-name" class="pick-name"></span><button type="button" id="thumb-menu" class="menu-button">Ändern</button></span>
         </label>
 
         <div class="row span"><span>Bei Doppelklick öffnen</span>
@@ -133,21 +133,6 @@
               </span>
             </label>
             <label class="option span"><span><b>Ton abspielen</b><small>Ton des entfernten Rechners hier hören</small></span><input type="checkbox" name="playAudio" /></label>
-            <details id="rdp-advanced" class="more span">
-              <summary>Erweitert: Kerberos und Gateway</summary>
-            <label class="option"><span><b>NTLM nicht erlauben</b><small>RDP nur mit Kerberos anmelden. Benutzer als benutzer@domain.tld, Server mit Namen statt IP-Adresse.</small></span><input type="checkbox" name="rdpNoNtlm" /></label>
-            <div class="pair">
-              <label data-tip="Meist leer: Sesam findet den Domänencontroller selbst. Sonst Name[:Port] des KDC oder die Adresse eines KDC-Proxys (https://…/KdcProxy).">Kerberos-KDC<input name="rdpKdc" class="mono" autocomplete="off" spellcheck="false" placeholder="automatisch per DNS" title="host[:port] oder KDC-Proxy https://…/KdcProxy" /></label>
-              <label data-tip="Nur wenn der Rechner nur über ein Remotedesktop-Gateway erreichbar ist (wie in mstsc unter «Erweitert»). Beispiel: gateway.firma.ch">RD-Gateway<input name="rdpGateway" class="mono" autocomplete="off" spellcheck="false" placeholder="aus, sonst host[:port]" /></label>
-            </div>
-            <div class="pair">
-              <label data-tip="Leer = gleiche Anmeldung wie für die Verbindung.">Gateway-Benutzer<input name="rdpGatewayUser" autocomplete="off" spellcheck="false" placeholder="gleiche wie Verbindung" /></label>
-              <label>Gateway-Passwort
-                <input name="gatewayPassword" type="password" autocomplete="new-password" />
-                <span class="hint"><small id="gw-pw-hint"></small><button type="button" class="link" id="gw-pw-clear" hidden>Entfernen</button></span>
-              </label>
-            </div>
-            </details>
           </div>
         </fieldset>
         <fieldset class="span svc">
@@ -169,28 +154,6 @@
           <label class="switch"><input type="checkbox" name="sshOn" /> Ein</label>
           <div class="svc-fields">
             <label data-tip="Standard 22.">Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
-            <details id="ssh-advanced" class="more span">
-              <summary>Erweitert: Dateiübertragung, Sprungserver, Weiterleitungen</summary>
-                <label data-tip="Automatisch: SFTP, und wenn der Server das nicht anbietet, SCP (ohne Umbenennen/Löschen)." class="span">Dateiübertragung
-                  <select name="fileTransfer">
-                    <option value="auto">Automatisch (SFTP, sonst SCP)</option>
-                    <option value="sftp">Nur SFTP</option>
-                    <option value="scp">Nur SCP</option>
-                  </select>
-                </label>
-                <label data-tip="Hält die Verbindung offen, wenn ein Router inaktive Verbindungen trennt. Üblich: 30. Leer oder 0 = aus.">SSH-Keepalive (Sekunden)<input name="sshKeepalive" type="number" min="0" max="3600" class="mono" placeholder="0 = aus" /></label>
-                <label class="option"><span><b>SSH-Kompression</b><small>Hilft bei langsamen Leitungen</small></span><input type="checkbox" name="sshCompression" /></label>
-                <label data-tip="Erst zu diesem Server verbinden und von dort weiter, wie «ProxyJump» bei OpenSSH. Er muss als eigene Verbindung mit SSH in der Bibliothek stehen." class="span">Sprungserver (ProxyJump)
-                  <select name="jumpHost"><option value="">Keiner, direkt verbinden</option></select>
-                </label>
-                <label class="option"><span><b>SSH-Agent verwenden</b><small>Zuerst die Schlüssel aus Pageant oder dem OpenSSH-Agenten von Windows probieren</small></span><input type="checkbox" name="sshAgent" /></label>
-                <label class="option warn"><span><b>Agent an den Server weiterreichen</b><small>Der Server kann deine Agent-Schlüssel benutzen, solange die Shell offen ist. Nur bei vertrauenswürdigen Servern.</small></span><input type="checkbox" name="agentForward" /></label>
-                <label data-tip="Wie bei PuTTY › Tunnels. L8080 localhost:80 = lokaler Port 8080 führt zu Port 80 auf dem Server." class="span">Portweiterleitungen (aktiv, solange eine Shell offen ist)
-                  <textarea name="forwards" rows="3" class="mono" spellcheck="false" placeholder="L8080 localhost:80&#10;R9000 localhost:3000&#10;D1080"></textarea>
-                  <small class="note">Je Zeile eine Regel: L = lokaler Port über den Server, R = Server-Port hierher, D = SOCKS5-Proxy. Lokal nur auf 127.0.0.1.</small>
-                </label>
-                <label class="option warn"><span><b>Veraltete Algorithmen erlauben</b><small>Für alte Server: SHA-1, CBC, 3DES, ssh-rsa. Schwächer, nur wenn nötig.</small></span><input type="checkbox" name="sshLegacy" /></label>
-            </details>
           </div>
         </fieldset>
 
@@ -209,10 +172,56 @@
         </div>
         <label class="option"><span><b>An Fenster anpassen</b><small>Die Auflösung des entfernten Rechners folgt der Fenstergrösse</small></span><input type="checkbox" name="fitToWindow" /></label>
         <label class="option"><span><b>Gemeinsame Zwischenablage</b><small>Text, Bilder und Dateien hier kopieren, dort einfügen</small></span><input type="checkbox" name="sharedClipboard" /></label>
-        <details id="advanced" class="more span">
-          <summary>Erweitert: Zertifikat</summary>
-          <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
-        </details>
+
+
+        <h3 class="sec span">Erweitert</h3>
+        <fieldset class="span svc adv" id="rdp-advanced">
+          <legend>Remotedesktop <small>RDP: Kerberos und Gateway</small></legend>
+          <div class="adv-fields">
+            <label class="option"><span><b>NTLM nicht erlauben</b><small>RDP nur mit Kerberos anmelden. Benutzer als benutzer@domain.tld, Server mit Namen statt IP-Adresse.</small></span><input type="checkbox" name="rdpNoNtlm" /></label>
+            <div class="pair">
+              <label data-tip="Meist leer: Sesam findet den Domänencontroller selbst. Sonst Name[:Port] des KDC oder die Adresse eines KDC-Proxys (https://…/KdcProxy).">Kerberos-KDC<input name="rdpKdc" class="mono" autocomplete="off" spellcheck="false" placeholder="automatisch per DNS" title="host[:port] oder KDC-Proxy https://…/KdcProxy" /></label>
+              <label data-tip="Nur wenn der Rechner nur über ein Remotedesktop-Gateway erreichbar ist (wie in mstsc unter «Erweitert»). Beispiel: gateway.firma.ch">RD-Gateway<input name="rdpGateway" class="mono" autocomplete="off" spellcheck="false" placeholder="aus, sonst host[:port]" /></label>
+            </div>
+            <div class="pair">
+              <label data-tip="Leer = gleiche Anmeldung wie für die Verbindung.">Gateway-Benutzer<input name="rdpGatewayUser" autocomplete="off" spellcheck="false" placeholder="gleiche wie Verbindung" /></label>
+              <label>Gateway-Passwort
+                <input name="gatewayPassword" type="password" autocomplete="new-password" />
+                <span class="hint"><small id="gw-pw-hint"></small><button type="button" class="link" id="gw-pw-clear" hidden>Entfernen</button></span>
+              </label>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="span svc adv" id="ssh-advanced">
+          <legend>Shell und Dateien <small>SSH</small></legend>
+          <div class="adv-fields">
+            <label data-tip="Automatisch: SFTP, und wenn der Server das nicht anbietet, SCP (ohne Umbenennen/Löschen)." class="span">Dateiübertragung
+              <select name="fileTransfer">
+                <option value="auto">Automatisch (SFTP, sonst SCP)</option>
+                <option value="sftp">Nur SFTP</option>
+                <option value="scp">Nur SCP</option>
+              </select>
+            </label>
+            <label data-tip="Hält die Verbindung offen, wenn ein Router inaktive Verbindungen trennt. Üblich: 30. Leer oder 0 = aus.">SSH-Keepalive (Sekunden)<input name="sshKeepalive" type="number" min="0" max="3600" class="mono" placeholder="0 = aus" /></label>
+            <label class="option"><span><b>SSH-Kompression</b><small>Hilft bei langsamen Leitungen</small></span><input type="checkbox" name="sshCompression" /></label>
+            <label data-tip="Erst zu diesem Server verbinden und von dort weiter, wie «ProxyJump» bei OpenSSH. Er muss als eigene Verbindung mit SSH in der Bibliothek stehen." class="span">Sprungserver (ProxyJump)
+              <select name="jumpHost"><option value="">Keiner, direkt verbinden</option></select>
+            </label>
+            <label class="option"><span><b>SSH-Agent verwenden</b><small>Zuerst die Schlüssel aus Pageant oder dem OpenSSH-Agenten von Windows probieren</small></span><input type="checkbox" name="sshAgent" /></label>
+            <label class="option warn"><span><b>Agent an den Server weiterreichen</b><small>Der Server kann deine Agent-Schlüssel benutzen, solange die Shell offen ist. Nur bei vertrauenswürdigen Servern.</small></span><input type="checkbox" name="agentForward" /></label>
+            <label data-tip="Wie bei PuTTY › Tunnels. L8080 localhost:80 = lokaler Port 8080 führt zu Port 80 auf dem Server." class="span">Portweiterleitungen (aktiv, solange eine Shell offen ist)
+              <textarea name="forwards" rows="3" class="mono" spellcheck="false" placeholder="L8080 localhost:80&#10;R9000 localhost:3000&#10;D1080"></textarea>
+              <small class="note">Je Zeile eine Regel: L = lokaler Port über den Server, R = Server-Port hierher, D = SOCKS5-Proxy. Lokal nur auf 127.0.0.1.</small>
+            </label>
+            <label class="option warn"><span><b>Veraltete Algorithmen erlauben</b><small>Für alte Server: SHA-1, CBC, 3DES, ssh-rsa. Schwächer, nur wenn nötig.</small></span><input type="checkbox" name="sshLegacy" /></label>
+          </div>
+        </fieldset>
+        <fieldset class="span svc adv" id="advanced">
+          <legend>Zertifikat <small>RDP, VNC</small></legend>
+          <div class="adv-fields">
+            <label class="option warn"><span><b>Zertifikat nicht prüfen</b><small>Unsicher: Sesam erkennt dann nicht, wenn sich jemand als dieser Server ausgibt. Nur für Tests im eigenen Netz.</small></span><input type="checkbox" name="skipCertCheck" /></label>
+          </div>
+        </fieldset>
 
         <p id="editor-error" class="error span" role="alert"></p>
         <div class="row actions">
