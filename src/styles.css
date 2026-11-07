@@ -360,7 +360,7 @@ button.tool:active { background: var(--chrome-active); }
 button.tool.on { background: var(--chrome-active); color: var(--chrome-accent); }
 button.tool.danger { color: var(--chrome-danger); }
 .tool-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--chrome-line); }
-.files ~ .status, .tab-pane.files .status { background: var(--surface); }
+.files ~ .status, .tab-pane.tab-files .status { background: var(--surface); }
 
 /* Aktive Sitzungen in der Bibliothek */
 .active-sessions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); }
@@ -496,7 +496,7 @@ body.detached #library, body.detached #session-back { display: none !important; 
 .terminal .xterm-viewport::-webkit-scrollbar { width: 10px; }
 .terminal .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
 .terminal .xterm-viewport::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--term-fg, #888) 30%, transparent); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
-.tab-pane.shell .status { background: transparent; color: var(--term-fg, inherit); }
+.tab-pane.tab-shell .status { background: transparent; color: var(--term-fg, inherit); }
 
 /* ---------- Verbindungs-Formular: breiter, Reiter, Knöpfe immer sichtbar ---------- */
 #editor-form { width: min(800px, calc(100vw - 48px)); column-gap: 24px; }

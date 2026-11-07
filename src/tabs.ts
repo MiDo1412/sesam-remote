@@ -160,7 +160,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   if (existing) return activate(existing);
 
   const id = `tab${++seq}`;
-  const pane = Object.assign(document.createElement("div"), { className: `tab-pane ${kind}` });
+  const pane = Object.assign(document.createElement("div"), { className: `tab-pane tab-${kind}` });
   const toolbar = Object.assign(document.createElement("div"), { className: "tools tab-tools" });
   const status = Object.assign(document.createElement("div"), { className: "status" });
   status.setAttribute("role", "status");
