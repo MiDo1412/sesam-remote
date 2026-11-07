@@ -10,7 +10,7 @@ import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from ".
 import { createKeyboard, isTouch, termSequence } from "./osk";
 import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings } from "./termthemes";
 
-const FONT = "'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
+const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
 
 /** SSH-Shell als Tab. */
 export function shellTab(ctx: TabCtx): TabHandle {
