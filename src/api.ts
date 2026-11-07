@@ -70,6 +70,13 @@ export interface Cred {
   hasKey: boolean;
 }
 
+/** Gruppe der Seitenleiste (Reihenfolge, Farbe); Mitglieder über `Connection.group`. */
+export interface Group {
+  name: string;
+  /** "" oder eine Vorgabe aus GROUP_COLORS (groups.ts) */
+  color: string;
+}
+
 export type ShellEvent = { kind: "data"; data: number[] } | { kind: "closed"; reason: string };
 
 /** Präfix eines Fehlers bei unbekanntem Host: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>` */
@@ -111,6 +118,10 @@ export const api = {
   rdpCheck: (id: string) => invoke<void>("rdp_check", { id }),
   rdpPorts: (host: string, port: number, user: string, password: string | undefined, id: string | undefined, trust: string | null) =>
     invoke<[string, number][]>("rdp_ports", { host, port, user, password, id, trust }),
+  groupsList: () => invoke<Group[]>("groups_list"),
+  groupsSave: (groups: Group[]) => invoke<void>("groups_save", { groups }),
+  groupRename: (from: string, to: string) => invoke<void>("group_rename", { from, to }),
+  groupDelete: (name: string) => invoke<void>("group_delete", { name }),
   credsList: () => invoke<[Cred, number][]>("creds_list"),
   credSave: (cred: Cred, password?: string, sshKey?: string) => invoke<Cred>("cred_save", { cred, password, sshKey }),
   credDelete: (id: string) => invoke<void>("cred_delete", { id }),

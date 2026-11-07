@@ -1,4 +1,6 @@
-import { api, desktopProtocol, type Connection } from "./api";
+import { api, desktopProtocol, type Connection, type Group } from "./api";
+import { ICON } from "./icons";
+import { groupDot, groupMenu, initGroups, moveGroupBefore } from "./groups";
 import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
@@ -146,8 +148,50 @@ document.getElementById("rdp-check")!.onclick = async () => {
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 let items: Connection[] = [];
+/** Gruppen in der Reihenfolge der Seitenleiste (auch leere). */
+let groups: Group[] = [];
 let filter: { kind: "all" } | { kind: "group"; name: string } = { kind: "all" };
 let selected: string | null = null;
+/** Gerade angezeigte Verbindungen (für die Pfeiltasten in der Liste). */
+let shown: Connection[] = [];
+
+// Darstellung «Kacheln / Liste» und Sortierung der Liste, lokal gemerkt.
+type SortKey = "name" | "address" | "services" | "group" | "lastUsed";
+const VIEW_KEY = "sesam.library";
+let prefs: { view: "grid" | "list"; sort: SortKey; desc: boolean } = { view: "grid", sort: "name", desc: false };
+try {
+  prefs = { ...prefs, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") };
+} catch {
+  /* Standard */
+}
+const savePrefs = () => {
+  try {
+    localStorage.setItem(VIEW_KEY, JSON.stringify(prefs));
+  } catch {
+    /* nicht gemerkt */
+  }
+};
+const services = (c: Connection) => [c.rdpPort && "RDP", c.vncPort && "VNC", c.sshPort && "SSH"].filter(Boolean) as string[];
+const byName = (a: Connection, b: Connection) => a.name.localeCompare(b.name, "de-CH", { numeric: true });
+const SORT: Record<SortKey, (a: Connection, b: Connection) => number> = {
+  name: byName,
+  address: (a, b) => a.address.localeCompare(b.address, "de-CH", { numeric: true }),
+  services: (a, b) => services(a).join(" ").localeCompare(services(b).join(" ")),
+  // Ohne Gruppe zuletzt (aufsteigend)
+  group: (a, b) => (a.group || "￿").localeCompare(b.group || "￿", "de-CH"),
+  lastUsed: (a, b) => (Date.parse(a.lastUsed ?? "") || 0) - (Date.parse(b.lastUsed ?? "") || 0),
+};
+
+/** «vor 3 Tagen», «gestern», «Nie». */
+function ago(iso: string | null) {
+  const t = Date.parse(iso ?? "");
+  if (!t) return "Nie";
+  const s = (t - Date.now()) / 1000;
+  const rtf = new Intl.RelativeTimeFormat("de-CH", { numeric: "auto" });
+  const units = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]] as const;
+  for (const [u, n] of units) if (Math.abs(s) >= n) return rtf.format(Math.round(s / n), u);
+  return "gerade eben";
+}
 
 const el = (tag: string, props: Record<string, string> = {}, ...kids: (Node | string)[]) => {
   const e = document.createElement(tag);
@@ -159,10 +203,12 @@ const el = (tag: string, props: Record<string, string> = {}, ...kids: (Node | st
 let startLinkDone = false;
 async function reload() {
   try {
-    items = await api.list();
+    [items, groups] = await Promise.all([api.list(), api.groupsList()]);
   } catch (e) {
     tell("Bibliothek nicht lesbar", String(e));
   }
+  const f = filter;
+  if (f.kind === "group" && !groups.some((g) => g.name === f.name)) filter = { kind: "all" };
   render();
   if (!startLinkDone && !detachedWindow) {
     startLinkDone = true;
@@ -171,31 +217,48 @@ async function reload() {
 }
 
 function render() {
-  const groups = [...new Set(items.map((c) => c.group).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de-CH"));
-  const navItem = (label: string, count: number, on: boolean, click: () => void, group?: string) => {
-    const a = el("button", { type: "button", class: "nav-item", "aria-current": on ? "page" : "false" }, el("span", {}, label), el("span", { class: "count" }, String(count)));
+  const navItem = (label: string, count: number, on: boolean, click: () => void, group?: string, color = "") => {
+    const a = el("button", { type: "button", class: "nav-item", "aria-current": on ? "page" : "false" }, el("span", {}, groupDot(color), label), el("span", { class: "count" }, String(count)));
     a.onclick = click;
     if (group !== undefined) a.dataset.group = group;
     return a;
   };
+  const all = navItem("Alle", items.length, filter.kind === "all", () => ((filter = { kind: "all" }), render()), "");
+  all.oncontextmenu = (e) => (e.preventDefault(), groupAction(all, null));
+  const header = el("div", { class: "nav-header" }, "Gruppen");
+  header.oncontextmenu = (e) => (e.preventDefault(), groupAction(all, null));
   $("nav").replaceChildren(
-    navItem("Alle", items.length, filter.kind === "all", () => ((filter = { kind: "all" }), render()), ""),
-    ...(groups.length ? [el("div", { class: "nav-header" }, "Gruppen")] : []),
-    ...groups.map((g) =>
-      navItem(g, items.filter((c) => c.group === g).length, filter.kind === "group" && filter.name === g, () => ((filter = { kind: "group", name: g }), render()), g),
-    ),
+    all,
+    ...(groups.length ? [header] : []),
+    ...groups.map((g) => {
+      const a = navItem(g.name, items.filter((c) => c.group === g.name).length, filter.kind === "group" && filter.name === g.name, () => ((filter = { kind: "group", name: g.name }), render()), g.name, g.color);
+      a.title = "Rechtsklick: Gruppe bearbeiten · Ziehen: Reihenfolge ändern";
+      a.onpointerdown = (e) => dragGroup(e, a, g.name);
+      a.oncontextmenu = (e) => (e.preventDefault(), groupAction(a, g));
+      return a;
+    }),
   );
-  $("groups").replaceChildren(...groups.map((g) => el("option", { value: g })));
+  $("groups").replaceChildren(...groups.map((g) => el("option", { value: g.name })));
   $("title").textContent = filter.kind === "all" ? "Alle Verbindungen" : filter.name;
 
   const q = ($<HTMLInputElement>("search").value || "").toLowerCase();
+  const dir = prefs.desc ? -1 : 1;
   const visible = items
     .filter((c) => filter.kind === "all" || c.group === filter.name)
     .filter((c) => !q || `${c.name} ${c.address} ${c.group}`.toLowerCase().includes(q))
-    .sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
+    .sort(prefs.view === "list" ? (a, b) => SORT[prefs.sort](a, b) * dir || byName(a, b) : byName);
+  shown = visible;
+  // Fokus nach dem Neuzeichnen auf der Auswahl halten (Pfeiltasten, Klick).
+  const refocus = $("grid").contains(document.activeElement) || $("conn-rows").contains(document.activeElement);
+  const list = prefs.view === "list";
+  for (const r of document.querySelectorAll<HTMLInputElement>("[name=libView]")) r.checked = r.value === prefs.view;
+  $("grid").hidden = list;
+  $("conn-table").hidden = !list || !items.length;
+  if (list) renderTable(visible);
+  else $("conn-rows").replaceChildren();
 
   $("grid").replaceChildren(
-    ...visible.map((c) => {
+    ...(list ? [] : visible).map((c) => {
       const proto = desktopProtocol(c);
       const kind = proto ? proto.toUpperCase() : c.sshPort ? "Shell" : "–";
       const card = el(
@@ -213,8 +276,90 @@ function render() {
     }),
   );
   $("empty").hidden = items.length > 0;
+  if (refocus) $(list ? "conn-rows" : "grid").querySelector<HTMLElement>(list ? "tr[tabindex='0']" : ".card[aria-pressed=true]")?.focus();
   renderDetails();
 }
+
+/** Listenansicht: eine Zeile je Verbindung; nur die ausgewählte (sonst die erste) ist per Tab erreichbar. */
+function renderTable(visible: Connection[]) {
+  for (const th of document.querySelectorAll<HTMLElement>("#conn-table th[data-key]"))
+    th.setAttribute("aria-sort", th.dataset.key === prefs.sort ? (prefs.desc ? "descending" : "ascending") : "none");
+  const tabId = visible.some((c) => c.id === selected) ? selected : visible[0]?.id;
+  const svcIcon: Record<string, string> = { RDP: ICON.desktop, VNC: ICON.screencast, SSH: ICON.shell };
+  const port: Record<string, (c: Connection) => number | null> = { RDP: (c) => c.rdpPort, VNC: (c) => c.vncPort, SSH: (c) => c.sshPort };
+  $("conn-rows").replaceChildren(
+    ...visible.map((c) => {
+      const svc = el("td", { class: "svc-col" });
+      for (const s of services(c)) {
+        const i = el("span", { class: "svc-icon", role: "img", "aria-label": s, title: `${s} · Port ${port[s](c)}` });
+        i.innerHTML = svcIcon[s];
+        svc.append(i);
+      }
+      const grp = el("td", {}, ...(c.group ? [groupDot(groups.find((g) => g.name === c.group)?.color ?? ""), c.group] : ["–"]));
+      const date = el("td", { class: "date-col" }, ago(c.lastUsed));
+      if (c.lastUsed) date.title = new Date(c.lastUsed).toLocaleString("de-CH");
+      const tr = el("tr", { "aria-selected": String(c.id === selected) }, el("td", { class: "name" }, c.name), el("td", { class: "mono" }, c.address), svc, grp, date);
+      tr.tabIndex = c.id === tabId ? 0 : -1;
+      tr.onclick = () => ((selected = c.id), render());
+      tr.onpointerdown = (e) => dragCard(e, tr, c);
+      tr.ondblclick = () => open(c, c.defaultView);
+      tr.oncontextmenu = (e) => (e.preventDefault(), cardMenu(tr, c));
+      return tr;
+    }),
+    ...(visible.length ? [] : [el("tr", {}, el("td", { class: "empty", colspan: "5" }, "Keine Verbindungen gefunden."))]),
+  );
+}
+
+// Liste: Spaltenköpfe sortieren (Knopf: Enter/Leertaste), Pfeiltasten wählen, Enter verbindet.
+for (const th of document.querySelectorAll<HTMLElement>("#conn-table th[data-key]")) {
+  th.querySelector("button")!.onclick = () => {
+    const k = th.dataset.key as SortKey;
+    prefs.desc = prefs.sort === k ? !prefs.desc : k === "lastUsed"; // Neueste zuerst
+    prefs.sort = k;
+    savePrefs();
+    render();
+  };
+}
+$("conn-rows").onkeydown = (e) => {
+  const rows = [...$<HTMLTableSectionElement>("conn-rows").rows];
+  const i = rows.indexOf(document.activeElement as HTMLTableRowElement);
+  const c = shown[i];
+  if (i < 0 || !c) return;
+  const j = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: shown.length - 1, PageDown: i + 10, PageUp: i - 10 }[e.key];
+  if (j !== undefined) selected = shown[Math.max(0, Math.min(shown.length - 1, j))].id;
+  else if (e.key === "Enter") open(c, c.defaultView);
+  else if (e.key === " ") selected = c.id;
+  else return;
+  e.preventDefault();
+  render();
+};
+for (const r of document.querySelectorAll<HTMLInputElement>("[name=libView]")) r.onchange = () => ((prefs.view = r.value as typeof prefs.view), savePrefs(), render());
+for (const s of document.querySelectorAll<HTMLElement>(".view-switch .seg-icon")) s.innerHTML = ICON[s.dataset.icon as keyof typeof ICON];
+
+/** Kontextmenü der Seitenleiste (Gruppe oder «Neue Gruppe»). */
+async function groupAction(anchor: HTMLElement, g: Group | null) {
+  const count = g ? items.filter((c) => c.group === g.name).length : 0;
+  const r = await groupMenu(anchor, g, count, g ? groups.indexOf(g) : -1, groups.length);
+  if (r !== null) afterGroupChange(r || g?.name || null, g?.name);
+}
+
+/** Nach einer Gruppenänderung neu laden; die Auswahl in der Seitenleiste folgt einer umbenannten Gruppe. */
+async function afterGroupChange(name: string | null, from?: string) {
+  const followed = filter.kind === "group" && filter.name === from;
+  await reload();
+  if (followed && name && from && !groups.some((g) => g.name === from) && groups.some((g) => g.name === name)) {
+    filter = { kind: "group", name };
+    render();
+  }
+  if (document.querySelector("dialog[open]")) return;
+  const navs = [...$("nav").querySelectorAll<HTMLElement>(".nav-item[data-group]")];
+  (navs.find((n) => n.dataset.group === name) ?? navs[0])?.focus();
+}
+addEventListener("sesam:groups-changed", (e) => {
+  const d = (e as CustomEvent<{ from?: string; to?: string }>).detail;
+  afterGroupChange(d.to ?? null, d.from);
+});
+initGroups();
 
 function renderDetails() {
   const c = items.find((x) => x.id === selected);
@@ -256,44 +401,88 @@ function renderDetails() {
 /** Verbindung auf eine Gruppe (Seitenleiste) ziehen = Gruppe wechseln. «Alle» = ohne Gruppe.
  *  Eigene Zeiger-Logik, weil Tauri HTML-Drag&Drop für Systemdateien abfängt. */
 function dragCard(e: PointerEvent, card: HTMLElement, c: Connection) {
+  pointerDrag(
+    e,
+    card,
+    c.name,
+    (m) => {
+      const t = document.elementFromPoint(m.clientX, m.clientY)?.closest<HTMLElement>(".nav-item[data-group]");
+      return t ? { el: t, cls: "drop" } : null;
+    },
+    async (hit) => {
+      const group = hit?.el.dataset.group;
+      if (group === undefined || group === c.group) return;
+      try {
+        await api.save({ ...c, group }, {});
+        reload();
+      } catch (err) {
+        tell("Nicht verschoben", String(err));
+      }
+    },
+  );
+}
+
+/** Gruppe in der Seitenleiste ziehen = Reihenfolge ändern (Tastatur: Kontextmenü «Nach oben/unten»). */
+function dragGroup(e: PointerEvent, item: HTMLElement, name: string) {
+  pointerDrag(
+    e,
+    item,
+    name,
+    (m) => {
+      const t = document.elementFromPoint(m.clientX, m.clientY)?.closest<HTMLElement>(".nav-item[data-group]");
+      if (!t?.dataset.group || t === item) return null;
+      const r = t.getBoundingClientRect();
+      return { el: t, cls: m.clientY < r.top + r.height / 2 ? "insert-before" : "insert-after" };
+    },
+    async (hit) => {
+      if (!hit) return;
+      const names = groups.map((g) => g.name);
+      const target = hit.el.dataset.group!;
+      const before = hit.cls === "insert-before" ? target : (names[names.indexOf(target) + 1] ?? null);
+      if (await moveGroupBefore(name, before)) afterGroupChange(name);
+    },
+  );
+}
+
+/** Eigene Zeiger-Logik für Ziehen und Ablegen; `pick` liefert das Ziel unter dem Zeiger und dessen Markierung. */
+function pointerDrag(
+  e: PointerEvent,
+  src: HTMLElement,
+  label: string,
+  pick: (m: PointerEvent) => { el: HTMLElement; cls: string } | null,
+  drop: (hit: { el: HTMLElement; cls: string } | null) => void,
+) {
   if (e.button !== 0) return;
   const [sx, sy] = [e.clientX, e.clientY];
   let ghost: HTMLElement | null = null;
-  let target: HTMLElement | null = null;
+  let hit: { el: HTMLElement; cls: string } | null = null;
   const move = (m: PointerEvent) => {
     if (!ghost && Math.hypot(m.clientX - sx, m.clientY - sy) < 6) return;
     if (!ghost) {
-      card.setPointerCapture(m.pointerId);
-      ghost = el("div", { class: "drag-ghost" }, c.name);
+      src.setPointerCapture(m.pointerId);
+      ghost = el("div", { class: "drag-ghost" }, label);
       document.body.append(ghost);
     }
     ghost.style.transform = `translate(${m.clientX + 12}px, ${m.clientY + 8}px)`;
-    const hit = document.elementFromPoint(m.clientX, m.clientY)?.closest<HTMLElement>(".nav-item[data-group]") ?? null;
-    if (hit !== target) {
-      target?.classList.remove("drop");
-      target = hit;
-      target?.classList.add("drop");
+    const h = pick(m);
+    if (h?.el !== hit?.el || h?.cls !== hit?.cls) {
+      hit?.el.classList.remove(hit.cls);
+      hit = h;
+      hit?.el.classList.add(hit.cls);
     }
   };
-  const up = async () => {
-    card.removeEventListener("pointermove", move);
-    card.removeEventListener("pointerup", up);
+  const up = () => {
+    src.removeEventListener("pointermove", move);
+    src.removeEventListener("pointerup", up);
     if (!ghost) return;
     ghost.remove();
-    target?.classList.remove("drop");
+    hit?.el.classList.remove(hit.cls);
     // Nach dem Ziehen keinen Klick auslösen
-    card.addEventListener("click", (ev) => ev.stopImmediatePropagation(), { capture: true, once: true });
-    const group = target?.dataset.group;
-    if (group === undefined || group === c.group) return;
-    try {
-      await api.save({ ...c, group }, {});
-      reload();
-    } catch (err) {
-      tell("Nicht verschoben", String(err));
-    }
+    src.addEventListener("click", (ev) => ev.stopImmediatePropagation(), { capture: true, once: true });
+    drop(hit);
   };
-  card.addEventListener("pointermove", move);
-  card.addEventListener("pointerup", up);
+  src.addEventListener("pointermove", move);
+  src.addEventListener("pointerup", up);
 }
 
 /** Kontextmenü einer Verbindung in der Bibliothek. */

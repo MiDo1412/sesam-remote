@@ -421,6 +421,34 @@ fieldset.svc legend { float: none; padding: 0; }
 .icon.pdf { background: #c5574a; }
 .icon.txt { background: #6b8e7d; }
 
+/* ---------- Bibliothek: Kacheln/Liste, Gruppen ---------- */
+.view-switch { grid-auto-columns: 32px; }
+.view-switch label { display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); }
+.view-switch label:has(input:checked) { color: var(--text); }
+.group-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+.nav-item span.group-dot { flex: none; }
+.nav-item.insert-before { box-shadow: inset 0 2px 0 var(--accent); }
+.nav-item.insert-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.cert-host .group-dot { margin-right: 6px; }
+.conn-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.conn-table th { position: sticky; top: 0; z-index: 1; background: var(--card); text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); padding: 6px 12px; border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; }
+.conn-table th button.sort { height: 22px; margin-left: -4px; padding: 0 4px; border: 0; border-radius: 4px; background: none; font: inherit; color: inherit; }
+.conn-table th button.sort:hover { background: var(--hover); color: var(--text); }
+.conn-table th[aria-sort=ascending] button.sort::after { content: " ▲"; font-size: 9px; }
+.conn-table th[aria-sort=descending] button.sort::after { content: " ▼"; font-size: 9px; }
+.conn-table td { padding: 7px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; border-top: 1px solid var(--line); }
+.conn-table tbody tr:first-child td { border-top: 0; }
+.conn-table td.name { font-weight: 600; }
+.conn-table td.empty { text-align: center; color: var(--muted); padding: 24px; }
+.conn-table tbody tr:hover { background: var(--hover); }
+.conn-table tbody tr[aria-selected=true] { background: var(--accent); color: var(--on-accent); }
+.conn-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.conn-table tbody tr[aria-selected=true]:focus-visible { outline-color: var(--on-accent); outline-offset: -3px; }
+.conn-table .svc-col { width: 104px; }
+.conn-table .date-col { width: 160px; font-variant-numeric: tabular-nums; }
+.svc-icon { display: inline-flex; margin-right: 6px; vertical-align: -3px; color: var(--muted); }
+.conn-table tr[aria-selected=true] .svc-icon { color: inherit; }
+
 /* ---------- Zugangsdaten ---------- */
 .sheet.uses-cred .own-cred, .sheet.uses-cred #key-row { display: none; }
 .row-actions { display: flex; gap: 12px; }

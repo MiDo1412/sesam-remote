@@ -192,7 +192,7 @@ pub fn load(path: &Path) -> Result<Vec<Connection>, String> {
 }
 
 /// Schreibt zuerst eine Temp-Datei und benennt sie dann um, damit ein Absturz die Liste nicht zerstört.
-pub fn save(path: &Path, items: &[Connection]) -> Result<(), String> {
+pub fn save<T: Serialize>(path: &Path, items: &[T]) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
@@ -213,6 +213,87 @@ pub fn remove(items: &mut Vec<Connection>, id: &str) -> bool {
     let n = items.len();
     items.retain(|x| x.id != id);
     items.len() != n
+}
+
+/// Gruppe der Seitenleiste: Reihenfolge und Farbe. Liegt in `groups.json` neben der Bibliothek;
+/// welche Verbindung in welcher Gruppe ist, steht weiter im Feld `group` der Verbindung.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Group {
+    pub name: String,
+    /// "" = keine, sonst eine der Vorgaben in `GROUP_COLORS`.
+    pub color: String,
+}
+
+pub const GROUP_COLORS: [&str; 8] = ["", "red", "orange", "yellow", "green", "blue", "purple", "gray"];
+
+pub fn validate_group_name(name: &str) -> Result<(), String> {
+    if name.trim().is_empty() || name.trim() != name {
+        return Err("Gruppenname fehlt oder beginnt/endet mit Leerzeichen".into());
+    }
+    if name.chars().count() > 100 || name.chars().any(char::is_control) {
+        return Err("Gruppenname zu lang oder mit Steuerzeichen".into());
+    }
+    Ok(())
+}
+
+pub fn validate_groups(groups: &[Group]) -> Result<(), String> {
+    if groups.len() > 1000 {
+        return Err("Zu viele Gruppen".into());
+    }
+    for (i, g) in groups.iter().enumerate() {
+        validate_group_name(&g.name)?;
+        if !GROUP_COLORS.contains(&g.color.as_str()) {
+            return Err("Unbekannte Gruppenfarbe".into());
+        }
+        if groups[..i].iter().any(|x| x.name == g.name) {
+            return Err(format!("Gruppe «{}» doppelt", g.name));
+        }
+    }
+    Ok(())
+}
+
+pub fn load_groups(path: &Path) -> Result<Vec<Group>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(s) => serde_json::from_str(&s).map_err(|e| format!("Gruppenliste ist beschädigt: {e}")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Gespeicherte Gruppen in ihrer Reihenfolge, dahinter alphabetisch die, die nur in Verbindungen vorkommen.
+pub fn merged_groups(mut stored: Vec<Group>, items: &[Connection]) -> Vec<Group> {
+    let mut extra: Vec<&str> = items.iter().map(|c| c.group.as_str()).filter(|g| !g.is_empty() && !stored.iter().any(|s| s.name == *g)).collect();
+    extra.sort_unstable();
+    extra.dedup();
+    extra.sort_by_key(|g| g.to_lowercase());
+    stored.extend(extra.into_iter().map(|name| Group { name: name.into(), color: String::new() }));
+    stored
+}
+
+/// Umbenennen; gibt es den neuen Namen schon, werden die Gruppen zusammengeführt (Farbe/Platz des Ziels).
+pub fn rename_group(items: &mut [Connection], groups: &mut Vec<Group>, from: &str, to: &str) -> Result<(), String> {
+    validate_group_name(to)?;
+    if from == to {
+        return Ok(());
+    }
+    for c in items.iter_mut().filter(|c| c.group == from) {
+        c.group = to.into();
+    }
+    if groups.iter().any(|g| g.name == to) {
+        groups.retain(|g| g.name != from);
+    } else if let Some(g) = groups.iter_mut().find(|g| g.name == from) {
+        g.name = to.into();
+    }
+    Ok(())
+}
+
+/// Gruppe entfernen; ihre Verbindungen kommen nach «Ohne Gruppe».
+pub fn delete_group(items: &mut [Connection], groups: &mut Vec<Group>, name: &str) {
+    for c in items.iter_mut().filter(|c| c.group == name) {
+        c.group.clear();
+    }
+    groups.retain(|g| g.name != name);
 }
 
 #[cfg(test)]
@@ -257,6 +338,57 @@ mod tests {
         assert!(Connection { jump_host: "x".into(), ..ok.clone() }.validate().is_err());
         assert!(Connection { jump_host: "bastion-1".into(), ..ok.clone() }.validate().is_ok());
         assert!(Connection { default_view: "x".into(), ..ok }.validate().is_err());
+    }
+
+    fn conn(id: &str, group: &str) -> Connection {
+        Connection { id: id.into(), name: id.into(), address: "h".into(), group: group.into(), ..Default::default() }
+    }
+    fn g(name: &str, color: &str) -> Group {
+        Group { name: name.into(), color: color.into() }
+    }
+
+    #[test]
+    fn groups_order_roundtrip_and_merge() {
+        let path = std::env::temp_dir().join(format!("sesam-groups-{}/groups.json", std::process::id()));
+        assert!(load_groups(&path).unwrap().is_empty());
+        let stored = vec![g("Kunden", "blue"), g("Leer", "")];
+        validate_groups(&stored).unwrap();
+        save(&path, &stored).unwrap();
+        assert_eq!(load_groups(&path).unwrap(), stored);
+        // Gruppen nur aus Verbindungen hinten anhängen, alphabetisch, ohne Doppel.
+        let items = [conn("a", "homelab"), conn("b", "Büro"), conn("c", "Kunden"), conn("d", "homelab"), conn("e", "")];
+        let names: Vec<_> = merged_groups(load_groups(&path).unwrap(), &items).into_iter().map(|x| x.name).collect();
+        assert_eq!(names, ["Kunden", "Leer", "Büro", "homelab"]);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn rename_and_delete_group() {
+        let mut items = vec![conn("a", "Alt"), conn("b", "Alt"), conn("c", "Neu"), conn("d", "")];
+        let mut groups = vec![g("Alt", "red"), g("Neu", "green")];
+        rename_group(&mut items, &mut groups, "Alt", "Büro").unwrap();
+        assert_eq!(items.iter().map(|c| c.group.as_str()).collect::<Vec<_>>(), ["Büro", "Büro", "Neu", ""]);
+        assert_eq!(groups, [g("Büro", "red"), g("Neu", "green")]);
+        // Auf bestehenden Namen: zusammenführen, Ziel behält Farbe und Platz.
+        rename_group(&mut items, &mut groups, "Büro", "Neu").unwrap();
+        assert!(items[..3].iter().all(|c| c.group == "Neu"));
+        assert_eq!(groups, [g("Neu", "green")]);
+        assert!(rename_group(&mut items, &mut groups, "Neu", " ").is_err());
+        assert!(rename_group(&mut items, &mut groups, "Neu", " x").is_err());
+
+        delete_group(&mut items, &mut groups, "Neu");
+        assert!(items.iter().all(|c| c.group.is_empty()));
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn rejects_bad_groups() {
+        assert!(validate_groups(&[g("A", "pink")]).is_err());
+        assert!(validate_groups(&[g("A", ""), g("A", "red")]).is_err());
+        assert!(validate_groups(&[g("", "")]).is_err());
+        assert!(validate_groups(&[g("a\nb", "")]).is_err());
+        assert!(validate_groups(&[g(&"x".repeat(101), "")]).is_err());
+        assert!(validate_groups(&[g("A", "gray"), g("a", "")]).is_ok());
     }
 
     #[test]
