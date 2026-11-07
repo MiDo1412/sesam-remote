@@ -22,6 +22,10 @@ export interface Connection {
   os: "" | "ubuntu" | "linux" | "macos" | "windows" | "raspberry";
   customThumb: boolean;
   credentialId: string | null;
+  /** Gespeicherte Zugangsdaten nur für RDP, VNC bzw. das RD-Gateway */
+  rdpCredentialId: string | null;
+  vncCredentialId: string | null;
+  gatewayCredentialId: string | null;
   /** RDP nur mit Kerberos. */
   rdpNoNtlm: boolean;
   /** KDC oder KDC-Proxy-URL; leer = per DNS. */

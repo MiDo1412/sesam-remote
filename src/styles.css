@@ -482,3 +482,8 @@ header.toolbar .win-controls { position: absolute; right: 0; top: 0; bottom: 0; 
 /* ---------- Schrift ---------- */
 body.mac { --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", sans-serif; font-family: var(--font-ui); font-feature-settings: normal; }
 .pane td.size, .pane td.date, .count, .transfer-state, .cert-row code, .mono { font-variant-numeric: tabular-nums; }
+
+/* ---------- Zugangsdaten pro Dienst ---------- */
+.own-svc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.own-svc > .own-fields, .adv-fields > .own-fields { grid-column: span 2; }
+.own-fields[hidden] { display: none !important; }

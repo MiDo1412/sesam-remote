@@ -145,6 +145,16 @@ fn find(path: &LibraryPath, id: &str) -> Result<Connection, String> {
     Ok(c)
 }
 
+/// Benutzer und Passwort gespeicherter Zugangsdaten (für RDP, VNC, Gateway).
+fn cred_login(path: &LibraryPath, cid: &str) -> Result<(String, Option<String>), String> {
+    let cred = creds::load(&creds_path(path))?.into_iter().find(|x| x.id == cid).ok_or("Zugewiesene Zugangsdaten gibt es nicht mehr")?;
+    let pw = vault::get(&creds::vault_id(cid), Kind::Password)?;
+    if let Some(p) = &pw {
+        diag::add_secret(p);
+    }
+    Ok((cred.user, pw))
+}
+
 fn creds_path(path: &LibraryPath) -> PathBuf {
     path.0.with_file_name("credentials.json")
 }
@@ -155,7 +165,7 @@ fn creds_list(path: State<LibraryPath>) -> Result<Vec<(creds::Cred, usize)>, Str
     Ok(creds::load(&creds_path(&path))?
         .into_iter()
         .map(|c| {
-            let uses = lib.iter().filter(|x| x.credential_id.as_deref() == Some(c.id.as_str())).count();
+            let uses = lib.iter().filter(|x| x.cred_ids().contains(&Some(c.id.as_str()))).count();
             (c, uses)
         })
         .collect())
@@ -208,8 +218,12 @@ fn cred_delete(path: State<LibraryPath>, id: String) -> Result<(), String> {
     vault::delete(&vid, Kind::Password)?;
     vault::delete(&vid, Kind::SshKey)?;
     let mut lib = library::load(&path.0)?;
-    for c in lib.iter_mut().filter(|c| c.credential_id.as_deref() == Some(id.as_str())) {
-        c.credential_id = None;
+    for c in lib.iter_mut() {
+        for slot in [&mut c.credential_id, &mut c.rdp_credential_id, &mut c.vnc_credential_id, &mut c.gateway_credential_id] {
+            if slot.as_deref() == Some(id.as_str()) {
+                *slot = None;
+            }
+        }
     }
     library::save(&path.0, &lib)
 }
@@ -706,7 +720,10 @@ async fn vnc_open(
     let c = find(&path, &id)?;
     let port = c.vnc_port.ok_or("Desktop (VNC) ist für diese Verbindung ausgeschaltet")?;
     let password = login_secret(&c, Kind::Password)?;
-    let vnc_password = vault::get(&c.id, Kind::VncPassword)?;
+    let vnc_password = match &c.vnc_credential_id {
+        Some(cid) => cred_login(&path, cid)?.1,
+        None => vault::get(&c.id, Kind::VncPassword)?,
+    };
     let pins_path = path.0.with_file_name("known_certs.json");
     let mut pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
@@ -932,15 +949,27 @@ async fn rdp_open(
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
     let port = c.rdp_port.ok_or("Desktop über RDP ist für diese Verbindung ausgeschaltet")?;
-    let password = vault::get(&c.id, Kind::RdpPassword)?.or(login_secret(&c, Kind::Password)?).unwrap_or_default();
-    // «Eigene Zugangsdaten für RDP»: eigener Benutzer, sonst der der Verbindung.
-    let user = match c.rdp_user.trim() {
-        "" => c.user.clone(),
-        u => u.to_string(),
+    // «Eigene Zugangsdaten für RDP»: gespeicherte, eigener Benutzer/Passwort, sonst die der Verbindung.
+    let (user, password) = match &c.rdp_credential_id {
+        Some(cid) => {
+            let (u, p) = cred_login(&path, cid)?;
+            (u, p.unwrap_or_default())
+        }
+        None => (
+            match c.rdp_user.trim() {
+                "" => c.user.clone(),
+                u => u.to_string(),
+            },
+            vault::get(&c.id, Kind::RdpPassword)?.or(login_secret(&c, Kind::Password)?).unwrap_or_default(),
+        ),
     };
     let domain = (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string());
     let gateway = match c.rdp_gateway.trim() {
         "" => None,
+        gw if c.gateway_credential_id.is_some() => {
+            let (u, p) = cred_login(&path, c.gateway_credential_id.as_deref().unwrap_or_default())?;
+            Some(rdp::Gateway { endpoint: gw.to_string(), user: u, password: p.unwrap_or_default() })
+        }
         gw if c.rdp_gateway_user.trim().is_empty() => Some(rdp::Gateway {
             endpoint: gw.to_string(),
             // «Gleiche wie Verbindung»: Domäne wie bei mstsc vor den Benutzer.

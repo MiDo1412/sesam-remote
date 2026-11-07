@@ -11,7 +11,7 @@ import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
 import { initFieldHelp } from "./fieldhelp";
 import { forgetThumb, renderThumb } from "./thumbs";
-import { adoptFromConnection, initCreds } from "./creds";
+import { adoptFromConnection, initCreds, openCred } from "./creds";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrent as deepLinkCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { openMenu } from "./menu";
@@ -45,6 +45,7 @@ function syncCredFields() {
 credSelect.addEventListener("change", syncCredFields);
 initCreds();
 addEventListener("sesam:creds-changed", () => editing && fillCreds(credSelect.value || null));
+addEventListener("sesam:creds-changed", () => editing && svcPickers.forEach((p) => void p.fill(p.value())));
 document.getElementById("cred-adopt")!.onclick = async () => {
   if (!editing) return;
   const c = await adoptFromConnection(editing.id, editing.user ? `${editing.user} (${editing.name})` : editing.name);
@@ -55,6 +56,33 @@ document.getElementById("cred-adopt")!.onclick = async () => {
   }
 };
 const formEls = (document.getElementById("editor-form") as HTMLFormElement).elements;
+
+/** Gespeicherte Zugangsdaten auch pro Dienst (RDP, VNC, Gateway): Liste, «Eigene …» mit Feldern, «Neue speichern …». */
+const NEW_CRED = "__new";
+const svcPickers = (["rdpCredentialId", "vncCredentialId", "gatewayCredentialId"] as const).map((name) => {
+  const sel = formEls.namedItem(name) as HTMLSelectElement;
+  const fields = sel.closest(".own-svc, .adv-fields")!.querySelector<HTMLElement>(".own-fields")!;
+  const menu = enhanceSelect(sel);
+  let last = "";
+  const sync = () => (fields.hidden = sel.value !== "");
+  const fill = async (selected: string | null) => {
+    const list = await api.credsList().catch(() => []);
+    sel.replaceChildren(
+      new Option(sel.dataset.own!, ""),
+      ...list.map(([c]) => new Option(`${c.name}${c.user ? ` (${c.user})` : ""}`, c.id)),
+      new Option("Neue Zugangsdaten speichern …", NEW_CRED),
+    );
+    sel.value = last = selected && list.some(([c]) => c.id === selected) ? selected : "";
+    menu.sync();
+    sync();
+  };
+  sel.addEventListener("change", async () => {
+    if (sel.value !== NEW_CRED) return ((last = sel.value), sync());
+    const c = await openCred(null);
+    await fill(c ? c.id : last);
+  });
+  return { name, sel, fill, value: () => sel.value || null };
+});
 const keyModeMenu = enhanceSelect(formEls.namedItem("keyMode") as HTMLSelectElement);
 const fileTransferMenu = enhanceSelect(formEls.namedItem("fileTransfer") as HTMLSelectElement);
 const jumpHost = formEls.namedItem("jumpHost") as HTMLSelectElement;
@@ -312,6 +340,9 @@ const blank = (): Connection => ({
   os: "",
   customThumb: false,
   credentialId: null,
+  rdpCredentialId: null,
+  vncCredentialId: null,
+  gatewayCredentialId: null,
   sharedFolder: "",
   skipCertCheck: false,
   rdpNoNtlm: false,
@@ -349,8 +380,8 @@ function edit(c: Connection | null, asNew = false) {
   f.rdpPort.value = String(editing.rdpPort ?? 3389);
   f.rdpDomain.value = editing.rdpDomain;
   f.rdpUser.value = editing.rdpUser ?? "";
-  f.rdpOwn.checked = editing.hasRdpPassword || !!editing.rdpUser;
-  f.vncOwn.checked = editing.hasVncPassword;
+  f.rdpOwn.checked = editing.hasRdpPassword || !!editing.rdpUser || !!editing.rdpCredentialId;
+  f.vncOwn.checked = editing.hasVncPassword || !!editing.vncCredentialId;
   f.rdpPassword.value = "";
   form.querySelector<HTMLInputElement>(`[name=desktopProtocol][value=${editing.desktopProtocol}]`)!.checked = true;
   f.sshOn.checked = editing.sshPort !== null;
@@ -372,6 +403,7 @@ function edit(c: Connection | null, asNew = false) {
   f.skipCertCheck.checked = editing.skipCertCheck;
   (form.elements.namedItem("os") as HTMLSelectElement).value = editing.os ?? "";
   fillCreds(editing.credentialId ?? null);
+  for (const p of svcPickers) void p.fill(editing[p.name] ?? null);
   osMenu.sync();
   pendingThumb = null;
   clearThumb = false;
@@ -487,6 +519,10 @@ form.onsubmit = async (ev) => {
     rdpPort: port("rdpOn", "rdpPort"),
     rdpDomain: s("rdpDomain"),
     rdpUser: fd.get("rdpOwn") ? s("rdpUser") : "",
+    // Gespeicherte Zugangsdaten pro Dienst (nur wenn der Schalter des Dienstes ein ist).
+    rdpCredentialId: fd.get("rdpOwn") ? svcPickers[0].value() : null,
+    vncCredentialId: fd.get("vncOwn") ? svcPickers[1].value() : null,
+    gatewayCredentialId: svcPickers[2].value(),
     desktopProtocol: (s("desktopProtocol") || "rdp") as Connection["desktopProtocol"],
     user: s("user"),
     sharedClipboard: fd.get("sharedClipboard") !== null,

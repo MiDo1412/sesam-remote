@@ -118,12 +118,15 @@
             <label data-tip="Standard 3389. GNOME-Bildschirmfreigabe einzelner Benutzer: der Port aus der Übersicht des Setup-Scripts (z. B. 3390).">Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
             <label data-tip="Nur in Windows-Domänen, sonst leer lassen. Beispiel: FIRMA.">Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="meist leer" /></label>
             <label class="option span"><span><b>Eigene Zugangsdaten für RDP</b><small>Nur wenn RDP einen anderen Benutzer oder ein anderes Passwort braucht, z. B. bei GNOME (Ubuntu): die Angaben aus Einstellungen › System › Remote-Desktop.</small></span><input type="checkbox" name="rdpOwn" /></label>
-            <div class="pair span own-svc" id="rdp-own">
+            <div class="span own-svc" id="rdp-own">
+              <label class="span">Zugangsdaten für RDP<select name="rdpCredentialId" data-own="Eigene für RDP (Felder unten)"></select></label>
+              <div class="pair own-fields">
               <label data-tip="Leer = Benutzername oben. Bei GNOME: der Benutzername aus Einstellungen › System › Remote-Desktop.">RDP-Benutzername<input name="rdpUser" autocomplete="off" spellcheck="false" placeholder="wie oben" /></label>
               <label>RDP-Passwort
                 <input name="rdpPassword" type="password" autocomplete="new-password" />
                 <span class="hint"><small id="rdp-pw-hint"></small><button type="button" class="link" id="rdp-pw-clear" hidden>Entfernen</button></span>
               </label>
+              </div>
             </div>
             <label class="span" data-tip="Optional. Dieser Ordner erscheint auf dem entfernten Rechner als Laufwerk. Standardmässig aus.">Ordner als Laufwerk freigeben
               <span class="pick">
@@ -141,11 +144,14 @@
           <div class="svc-fields">
             <label data-tip="Standard 5900. Für macOS-Bildschirmfreigabe und wayvnc.">Port<input name="vncPort" type="number" min="1" max="65535" class="mono" /></label>
             <label class="option span"><span><b>Eigenes VNC-Passwort</b><small>Nur bei VNC-Servern mit eigenem Passwort ohne Benutzername. Nicht bei macOS und wayvnc: dort gilt die Anmeldung oben.</small></span><input type="checkbox" name="vncOwn" /></label>
-            <div class="pair span own-svc" id="vnc-own">
+            <div class="span own-svc" id="vnc-own">
+              <label class="span">Passwort für VNC<select name="vncCredentialId" data-own="Eigenes VNC-Passwort (Feld unten)"></select></label>
+              <div class="pair own-fields">
               <label>VNC-Passwort
                 <input name="vncPassword" type="password" autocomplete="new-password" />
                 <span class="hint"><small id="vnc-pw-hint"></small><button type="button" class="link" id="vnc-pw-clear" hidden>Entfernen</button></span>
               </label>
+              </div>
             </div>
           </div>
         </fieldset>
@@ -183,7 +189,8 @@
               <label data-tip="Meist leer: Sesam findet den Domänencontroller selbst. Sonst Name[:Port] des KDC oder die Adresse eines KDC-Proxys (https://…/KdcProxy).">Kerberos-KDC<input name="rdpKdc" class="mono" autocomplete="off" spellcheck="false" placeholder="automatisch per DNS" title="host[:port] oder KDC-Proxy https://…/KdcProxy" /></label>
               <label data-tip="Nur wenn der Rechner nur über ein Remotedesktop-Gateway erreichbar ist (wie in mstsc unter «Erweitert»). Beispiel: gateway.firma.ch">RD-Gateway<input name="rdpGateway" class="mono" autocomplete="off" spellcheck="false" placeholder="aus, sonst host[:port]" /></label>
             </div>
-            <div class="pair">
+            <label class="span">Zugangsdaten für das Gateway<select name="gatewayCredentialId" data-own="Wie die Verbindung bzw. Felder unten"></select></label>
+            <div class="pair own-fields" id="gw-own">
               <label data-tip="Leer = gleiche Anmeldung wie für die Verbindung.">Gateway-Benutzer<input name="rdpGatewayUser" autocomplete="off" spellcheck="false" placeholder="gleiche wie Verbindung" /></label>
               <label>Gateway-Passwort
                 <input name="gatewayPassword" type="password" autocomplete="new-password" />

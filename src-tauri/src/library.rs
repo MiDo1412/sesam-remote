@@ -40,6 +40,10 @@ pub struct Connection {
     pub custom_thumb: bool,
     /// Gespeicherte Zugangsdaten statt eigener (Benutzername, Passwort, SSH-Schlüssel).
     pub credential_id: Option<String>,
+    /// Gespeicherte Zugangsdaten nur für RDP, VNC (Passwort) bzw. das RD-Gateway.
+    pub rdp_credential_id: Option<String>,
+    pub vnc_credential_id: Option<String>,
+    pub gateway_credential_id: Option<String>,
     /// RDP: nur Kerberos, kein Rückfall auf NTLM.
     pub rdp_no_ntlm: bool,
     /// RDP: KDC (`host[:port]`, `tcp://`, `udp://`) oder KDC-Proxy (`https://…/KdcProxy`); leer = per DNS.
@@ -96,6 +100,9 @@ impl Default for Connection {
             os: String::new(),
             custom_thumb: false,
             credential_id: None,
+            rdp_credential_id: None,
+            vnc_credential_id: None,
+            gateway_credential_id: None,
             rdp_no_ntlm: false,
             rdp_kdc: String::new(),
             rdp_gateway: String::new(),
@@ -120,6 +127,11 @@ impl Default for Connection {
 }
 
 impl Connection {
+    /// Alle zugewiesenen gespeicherten Zugangsdaten (Anmeldung, RDP, VNC, Gateway).
+    pub fn cred_ids(&self) -> [Option<&str>; 4] {
+        [&self.credential_id, &self.rdp_credential_id, &self.vnc_credential_id, &self.gateway_credential_id].map(|x| x.as_deref())
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.id.trim().is_empty() || self.id.len() > 64 || !self.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Err("Ungültige ID".into());
