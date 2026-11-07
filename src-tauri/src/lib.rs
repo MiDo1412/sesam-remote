@@ -456,10 +456,15 @@ fn open_detached(app: AppHandle, token: String, title: String) -> Result<(), Str
     if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err("Ungültige Übergabe".into());
     }
-    tauri::WebviewWindowBuilder::new(&app, format!("detached-{token}"), tauri::WebviewUrl::App(format!("index.html?detach={token}").into()))
+    let builder = tauri::WebviewWindowBuilder::new(&app, format!("detached-{token}"), tauri::WebviewUrl::App(format!("index.html?detach={token}").into()))
         .title(title)
         .inner_size(1200.0, 800.0)
         .min_inner_size(480.0, 320.0)
+        .decorations(cfg!(target_os = "macos"))
+        .shadow(true);
+    #[cfg(target_os = "macos")]
+    let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+    builder
         .build()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -1096,16 +1101,20 @@ pub fn run() {
                 .text("help:ssh", "SSH und SFTP")
                 .build()?;
             // macOS braucht das Standardmenü (Bearbeiten: Kopieren/Einfügen); Windows nur «Hilfe».
-            let menu = if cfg!(target_os = "macos") {
+            // macOS: native Menüleiste oben am Bildschirm. Windows/Linux: eigene Titelleiste mit Menüknopf (src/titlebar.ts).
+            if cfg!(target_os = "macos") {
                 let m = tauri::menu::Menu::default(app.handle())?;
                 m.insert(&file, 1)?;
                 m.append(&session)?;
                 m.append(&help)?;
-                m
+                app.set_menu(m)?;
             } else {
-                MenuBuilder::new(app).item(&file).item(&session).item(&help).build()?
-            };
-            app.set_menu(menu)?;
+                let _ = MenuBuilder::new(app).item(&file).item(&session).item(&help).build()?;
+                if let Some(w) = app.get_webview_window("main") {
+                    w.set_decorations(false)?;
+                    let _ = w.set_shadow(true);
+                }
+            }
             app.on_menu_event(|app, e| {
                 if let Some(topic) = e.id().as_ref().strip_prefix("help:") {
                     let _ = app.emit("help", topic);

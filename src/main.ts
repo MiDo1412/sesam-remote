@@ -5,6 +5,7 @@ import { filesTab } from "./files";
 import { detachedWindow, initTabs, openTab, runTool, takeOver } from "./tabs";
 import { ask, tell } from "./ui";
 import { openHelp } from "./help";
+import { initTitlebar } from "./titlebar";
 import { applyAppearance, openSettings } from "./settings";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
@@ -538,6 +539,7 @@ $("new").onclick = () => edit(null);
 if (!detachedWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
 listen<string>("help", (e) => openHelp(e.payload));
+initTitlebar({ command: (c) => (!detachedWindow || c === "settings") && command(c), tool: runTool, help: openHelp });
 applyAppearance();
 $("open-settings").onclick = () => openSettings();
 // Befehle aus dem App-Menü und Tastenkürzel
