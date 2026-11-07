@@ -20,7 +20,7 @@ export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "
   if (!msg.includes("Anmeldung abgelehnt")) return msg;
   if (c.rdpTarget === "login") return "Der Anmeldebildschirm hat die Zugangsdaten abgelehnt (Zugang zum Anmeldebildschirm, vom Einrichtungs-Script gesetzt).";
   if (c.rdpTarget === "session") return `Die Freigabe von ${c.rdpSessionUser || "diesem Benutzer"} hat die Zugangsdaten abgelehnt (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe).`;
-  return "Benutzer oder Passwort falsch.";
+  return "Benutzer oder Passwort falsch. Bei Windows mit Microsoft-Konto: die E-Mail-Adresse und das Microsoft-Kennwort eingeben (nicht die Windows-Hello-PIN). Bei einem lokalen Konto: den Kontonamen, nicht den angezeigten vollen Namen.";
 }
 
 /** Assistent: Adresse und SSH-Login, Sesam liest die Ports und schlägt Einträge vor. */

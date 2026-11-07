@@ -3,6 +3,13 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openMenu, type MenuItem } from "./menu";
 import { topics } from "./help";
+import minusSvg from "@phosphor-icons/core/assets/regular/minus.svg?raw";
+import squareSvg from "@phosphor-icons/core/assets/regular/square.svg?raw";
+import restoreSvg from "@phosphor-icons/core/assets/regular/copy.svg?raw";
+import closeSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
+
+// Eigene Symbole statt der Windows-Symbolschrift (die nicht überall verfügbar ist und dann bunt ersetzt wird).
+const glyph = (svg: string) => svg.replace("<svg ", '<svg width="12" height="12" aria-hidden="true" ');
 import { invoke } from "@tauri-apps/api/core";
 
 export const isMac = navigator.userAgent.includes("Mac");
@@ -68,18 +75,18 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
       const b = document.createElement("button");
       b.type = "button";
       b.className = `win-btn ${cls}`;
-      b.textContent = glyph;
+      b.innerHTML = glyph;
       b.title = label;
       b.setAttribute("aria-label", label);
       b.onclick = onClick;
       return b;
     };
-    const max = mk("", "Maximieren", () => win.toggleMaximize());
-    ctl.append(mk("", "Minimieren", () => win.minimize()), max, mk("", "Schliessen", () => win.close(), "close"));
+    const max = mk(glyph(squareSvg), "Maximieren", () => win.toggleMaximize());
+    ctl.append(mk(glyph(minusSvg), "Minimieren", () => win.minimize()), max, mk(glyph(closeSvg), "Schliessen", () => win.close(), "close"));
     h.append(ctl);
     const sync = async () => {
       const on = await win.isMaximized();
-      max.textContent = on ? "" : "";
+      max.innerHTML = glyph(on ? restoreSvg : squareSvg);
       max.title = on ? "Wiederherstellen" : "Maximieren (Andocklayouts: Win+Z)";
       max.setAttribute("aria-label", max.title);
     };

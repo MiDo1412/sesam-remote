@@ -524,7 +524,8 @@ header.session-bar .app-menu { flex-shrink: 0; }
 .custom-titlebar header.toolbar, .custom-titlebar header.session-bar { padding-right: 0; }
 .win-controls { display: flex; align-self: stretch; margin-left: auto; }
 header.toolbar .win-controls { position: absolute; right: 0; top: 0; bottom: 0; }
-.win-btn { width: 46px; height: 100%; border: 0; border-radius: 0; background: transparent; color: inherit; font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets"; font-size: 10px; }
+.win-btn { width: 46px; height: 100%; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 0; background: transparent; color: inherit; }
+.win-btn svg { display: block; }
 .win-btn:hover { background: var(--hover); }
 .win-btn.close:hover { background: #c42b1c; color: #fff; }
 .session-bar .win-btn:hover { background: rgba(255, 255, 255, 0.1); }
@@ -547,3 +548,6 @@ body.mac { --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro"
 #rdp-cred-note { margin: 0; }
 #editor-delete[hidden] { display: inline-flex !important; visibility: hidden; }
 #title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* Titelleisten nicht als Text markierbar (Ziehen am Fenster soll nichts auswählen). */
+header.toolbar, header.session-bar, .session-head, .session-id, .tools { user-select: none; -webkit-user-select: none; }

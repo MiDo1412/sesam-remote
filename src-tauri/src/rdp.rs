@@ -1544,8 +1544,15 @@ mod probe {
         let Ok(addr) = std::env::var("SESAM_RDP_CHECK") else { return };
         let appdata = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("ch.sesam.remote");
         let creds = crate::creds::load(&appdata.join("credentials.json")).unwrap();
-        let c = creds.iter().find(|c| c.name == "Sesam Test RDP").expect("«Sesam Test RDP» fehlt");
-        let mut pw = crate::vault::get(&crate::creds::vault_id(&c.id), crate::vault::Kind::Password).unwrap().unwrap_or_default();
+        // Zugangsdaten aus SESAM_RDP_USER/SESAM_RDP_PASS (nur für diesen Lauf), sonst «Sesam Test RDP» aus dem Tresor.
+        let (user, mut pw) = match (std::env::var("SESAM_RDP_USER"), std::env::var("SESAM_RDP_PASS")) {
+            (Ok(u), Ok(p)) => (u, p),
+            _ => {
+                let c = creds.iter().find(|c| c.name == "Sesam Test RDP").expect("«Sesam Test RDP» fehlt");
+                (c.user.clone(), crate::vault::get(&crate::creds::vault_id(&c.id), crate::vault::Kind::Password).unwrap().unwrap_or_default())
+            }
+        };
+        let domain = std::env::var("SESAM_RDP_DOMAIN").ok();
         if std::env::var("SESAM_RDP_WRONG").is_ok() {
             pw = "absichtlich-falsch".into();
         }
@@ -1553,8 +1560,8 @@ mod probe {
             std::fs::read_to_string(appdata.join("known_certs.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let (host, port) = addr.rsplit_once(':').unwrap();
         let t = Target {
-            host: host.into(), port: port.parse().unwrap(), user: c.user.clone(), domain: None, password: pw,
-            expected_cert: pins.get(&addr).cloned(), skip_cert_check: false, width: 1024, height: 768,
+            host: host.into(), port: port.parse().unwrap(), user, domain, password: pw,
+            expected_cert: std::env::var("SESAM_RDP_TRUST").ok().or_else(|| pins.get(&addr).cloned()), skip_cert_check: false, width: 1024, height: 768,
             clipboard: None, audio: false, share: None, kdc: None, no_ntlm: false, gateway: None,
         };
         println!("Ergebnis: {:?}", check_login(t, Default::default()).await);
