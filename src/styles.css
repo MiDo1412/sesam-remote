@@ -328,6 +328,14 @@ label.option small { margin-top: 2px; }
 .tab[aria-selected=true] { background: var(--chrome-active); color: var(--chrome-text); }
 .tab:focus-visible { outline: 2px solid var(--chrome-accent); outline-offset: -2px; }
 .tab-label { overflow: hidden; text-overflow: ellipsis; }
+/* Farbe des Tabs (oder seiner Gruppe) als Streifen unten. */
+.tab { box-shadow: inset 0 -2px 0 var(--tab-color, transparent); }
+.tab.dragging { opacity: 0.5; }
+.tab.drop-target, .tab-group.drop-target { box-shadow: inset 2px 0 0 var(--chrome-accent), inset 0 -2px 0 var(--tab-color, transparent); }
+.tab-group { flex-shrink: 0; align-self: center; display: inline-flex; align-items: center; gap: 4px; height: 22px; max-width: 160px; margin: 0 2px; padding: 0 8px; border: 0; border-radius: 11px; background: color-mix(in srgb, var(--tab-color) 28%, var(--chrome-bg)); color: var(--chrome-text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tab-group:hover { background: color-mix(in srgb, var(--tab-color) 42%, var(--chrome-bg)); }
+.tab-group:focus-visible { outline: 2px solid var(--chrome-accent); outline-offset: 1px; }
+.tab-group-count { min-width: 16px; padding: 0 4px; border-radius: 8px; background: var(--tab-color); color: #fff; font-size: 11px; text-align: center; }
 .tab-close { height: 18px; width: 18px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: inherit; opacity: 0.6; }
 .tab-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.12); }
 .dot { width: 7px; height: 7px; border-radius: 4px; background: #8a8a8a; flex-shrink: 0; }

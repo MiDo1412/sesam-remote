@@ -25,8 +25,12 @@ export function groupDot(color: string) {
   return s;
 }
 
-const dotSvg = (css: string) =>
+export const dotSvg = (css: string) =>
   `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">${css ? `<circle cx="8" cy="8" r="5" fill="${css}"/>` : `<circle cx="8" cy="8" r="4.5" fill="none" stroke="currentColor" stroke-opacity=".5"/>`}</svg>`;
+
+/** Farbauswahl mit den Vorgaben; liefert den Schlüssel oder null. */
+export const colorMenu = (anchor: HTMLElement, current: string) =>
+  openMenu(anchor, Object.entries(GROUP_COLORS).map(([value, c]) => ({ value, label: c.label, icon: dotSvg(c.css) })), { checked: current, listbox: true });
 
 async function attempt(f: () => Promise<unknown>, fail: string) {
   try {
@@ -89,11 +93,7 @@ export async function pickGroupColor(anchor: HTMLElement, name: string) {
   const list = await api.groupsList();
   const g = list.find((x) => x.name === name);
   if (!g) return false;
-  const v = await openMenu(
-    anchor,
-    Object.entries(GROUP_COLORS).map(([value, c]) => ({ value, label: c.label, icon: dotSvg(c.css) })),
-    { checked: g.color, listbox: true },
-  );
+  const v = await colorMenu(anchor, g.color);
   if (v === null || v === g.color) return false;
   g.color = v;
   return attempt(() => api.groupsSave(list), "Farbe nicht gesichert");
