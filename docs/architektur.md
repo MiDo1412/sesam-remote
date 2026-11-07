@@ -280,6 +280,10 @@ einfache Anführungszeichen gesetzt, Namen mit Zeilenumbruch abgelehnt, Namen vo
 noch `\` noch `..` enthalten. Mit SCP gibt es kein Umbenennen, Löschen und keine Rechte; Änderungsdatum
 fehlt in der Liste, die Gesamtgrösse von Ordnern beim Herunterladen wächst mit (SCP nennt sie nicht vorab).
 Die geteilte Zwischenablage (VNC) nutzt weiterhin nur SFTP.
+«Vergleichen» (`compare.ts`) markiert gleichnamige Einträge der beiden offenen Ordner nach Grösse und
+Änderungszeit (± 2 s), nicht rekursiv; «Inhalt prüfen» rechnet SHA-256 lokal und auf dem Server mit
+`sha256sum` (sonst `shasum -a 256`) über einen exec-Kanal derselben Verbindung. Ersetzen (`replace` bei
+`transfer_start`, nur einzelne Dateien) gibt es nur nach ausdrücklichem «Ersetzen»; sonst «Name (2).ext».
 
 **Schlüssel:** ed25519 und ECDSA, OpenSSH-Format oder PuTTY `.ppk` v2/v3 (über `ssh-key`, auch mit
 Passphrase; Passphrase = Passwort der Verbindung). RSA nicht, weil Windows Geheimnisse als UTF-16 mit

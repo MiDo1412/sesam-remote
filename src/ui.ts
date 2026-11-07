@@ -3,7 +3,7 @@ import { HOSTKEY_UNKNOWN } from "./api";
 const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /** Rückfrage mit drittem Knopf und Festbreiten-Detail; Ergebnis "ok", "alt" oder null. */
-export function choose(title: string, text: string, detail: string, ok: string, alt: string): Promise<"ok" | "alt" | null> {
+export function choose(title: string, text: string, detail: string, ok: string, alt: string, cancel = "Abbrechen"): Promise<"ok" | "alt" | null> {
   const d = byId("ask-detail");
   const a = byId("ask-alt");
   d.hidden = false;
@@ -11,11 +11,23 @@ export function choose(title: string, text: string, detail: string, ok: string, 
   a.hidden = false;
   a.textContent = alt;
   const dlg = byId<HTMLDialogElement>("ask");
-  const done = ask(title, text, ok).then(() => (dlg.returnValue === "ok" ? "ok" : dlg.returnValue === "alt" ? "alt" : null));
+  const done = ask(title, text, ok, cancel).then(() => (dlg.returnValue === "ok" ? "ok" : dlg.returnValue === "alt" ? "alt" : null));
   return done.finally(() => {
     d.hidden = true;
     a.hidden = true;
   });
+}
+
+/** Wie `choose`, mit Kästchen (z. B. «Für alle übernehmen»); `all` = angekreuzt. */
+export async function chooseAll(title: string, text: string, detail: string, ok: string, alt: string, cancel: string, check: string) {
+  const box = byId("ask-check");
+  const input = box.querySelector("input")!;
+  box.hidden = false;
+  input.checked = false;
+  box.querySelector("span")!.textContent = check;
+  const v = await choose(title, text, detail, ok, alt, cancel);
+  box.hidden = true;
+  return { v, all: input.checked };
 }
 
 /** Eigener Dialog statt alert/confirm: die nativen fehlen in WKWebView (macOS/iPad). */

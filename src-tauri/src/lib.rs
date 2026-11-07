@@ -573,6 +573,20 @@ async fn sftp_touch(files: State<'_, Files>, sid: String, dir: String, name: Str
     }
 }
 
+/// Prüfsumme einer Datei auf dem Server (für «Inhalt prüfen» im Vergleich).
+#[tauri::command]
+async fn sftp_sha256(files: State<'_, Files>, sid: String, path: String) -> Result<String, String> {
+    match files_get(&files, &sid)? {
+        FileSession::Sftp(s) => s.sha256(&path).await,
+        FileSession::Scp(s) => s.sha256(&path).await,
+    }
+}
+
+#[tauri::command]
+async fn local_sha256(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || sftp::local_sha256(&path)).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 fn local_mkdir(dir: String, name: String) -> Result<String, String> {
     sftp::local_mkdir(&dir, &name)
@@ -788,6 +802,7 @@ fn transfer_start(
     upload: bool,
     src: String,
     dest_dir: String,
+    replace: Option<bool>,
     on_progress: Channel<sftp::Progress>,
 ) -> Result<String, String> {
     let s = files_get(&files, &sid)?;
@@ -801,11 +816,12 @@ fn transfer_start(
         };
         let (local, remote) = if upload { (&src, &dest_dir) } else { (&dest_dir, &src) };
         let local = std::path::Path::new(local);
+        let replace = replace.unwrap_or(false);
         let r = match (&s, upload) {
-            (FileSession::Sftp(s), true) => sftp::upload(s, local, remote, report).await,
-            (FileSession::Sftp(s), false) => sftp::download(s, remote, local, report).await,
-            (FileSession::Scp(s), true) => scp::upload(s, local, remote, report).await,
-            (FileSession::Scp(s), false) => scp::download(s, remote, local, report).await,
+            (FileSession::Sftp(s), true) => sftp::upload(s, local, remote, replace, report).await,
+            (FileSession::Sftp(s), false) => sftp::download(s, remote, local, replace, report).await,
+            (FileSession::Scp(s), true) => scp::upload(s, local, remote, replace, report).await,
+            (FileSession::Scp(s), false) => scp::download(s, remote, local, replace, report).await,
         };
         if let Err(error) = r {
             let _ = on_progress.send(sftp::Progress::Failed { error });
@@ -1354,6 +1370,8 @@ pub fn run() {
             open_detached,
             sftp_chmod,
             sftp_touch,
+            sftp_sha256,
+            local_sha256,
             local_mkdir,
             local_rename,
             local_list,

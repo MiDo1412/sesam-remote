@@ -149,7 +149,7 @@ impl ClipShare {
         let dir = Self::ablage(&s).await?;
         let mut out = Vec::new();
         for f in files {
-            out.push(sftp::upload(&s, f, &dir, |_| {}).await?);
+            out.push(sftp::upload(&s, f, &dir, false, |_| {}).await?);
         }
         Ok(out)
     }
@@ -160,7 +160,7 @@ impl ClipShare {
         let dir = Self::ablage(&s).await?;
         let tmp = std::env::temp_dir().join(format!("Bild {}.png", chrono::Local::now().format("%Y-%m-%d %H.%M.%S")));
         std::fs::write(&tmp, png).map_err(|e| e.to_string())?;
-        let r = sftp::upload(&s, &tmp, &dir, |_| {}).await;
+        let r = sftp::upload(&s, &tmp, &dir, false, |_| {}).await;
         let _ = std::fs::remove_file(&tmp);
         r
     }
@@ -172,7 +172,7 @@ impl ClipShare {
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let mut local = Vec::new();
         for r in remote {
-            local.push(PathBuf::from(sftp::download(&s, r, &dir, |_| {}).await?));
+            local.push(PathBuf::from(sftp::download(&s, r, &dir, false, |_| {}).await?));
         }
         write_local_files(&local)?;
         *self.last.lock().unwrap() = Last::Files(local.clone());

@@ -180,15 +180,18 @@ export const api = {
   sftpClose: (sid: string) => invoke<void>("sftp_close", { sid }),
   sftpChmod: (sid: string, path: string, mode: number) => invoke<void>("sftp_chmod", { sid, path, mode }),
   sftpTouch: (sid: string, dir: string, name: string) => invoke<string>("sftp_touch", { sid, dir, name }),
+  /** SHA-256 auf dem Server (sha256sum über SSH). */
+  sftpSha256: (sid: string, path: string) => invoke<string>("sftp_sha256", { sid, path }),
+  localSha256: (path: string) => invoke<string>("local_sha256", { path }),
   localMkdir: (dir: string, name: string) => invoke<string>("local_mkdir", { dir, name }),
   localRename: (path: string, name: string) => invoke<string>("local_rename", { path, name }),
   localList: (path: string) => invoke<Listing>("local_list", { path }),
   localHome: () => invoke<string>("local_home"),
-  /** upload: lokal → Server; sonst Server → lokal. Gibt die Übertragungs-ID zurück. */
-  transferStart: (sid: string, upload: boolean, src: string, destDir: string, onProgress: (p: Progress) => void) => {
+  /** upload: lokal → Server; sonst Server → lokal. `replace`: gleichnamige Datei ersetzen (nur nach Rückfrage). Gibt die Übertragungs-ID zurück. */
+  transferStart: (sid: string, upload: boolean, src: string, destDir: string, onProgress: (p: Progress) => void, replace = false) => {
     const ch = new Channel<Progress>();
     ch.onmessage = onProgress;
-    return invoke<string>("transfer_start", { sid, upload, src, destDir, onProgress: ch });
+    return invoke<string>("transfer_start", { sid, upload, src, destDir, replace, onProgress: ch });
   },
   transferCancel: (tid: string) => invoke<void>("transfer_cancel", { tid }),
 };
