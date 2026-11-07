@@ -342,6 +342,22 @@ struct Item {
     src: String,
     dst: String,
     dir: bool,
+    /// Änderungszeit der Quelle (Unix-Sekunden), wird am Ziel übernommen, damit ein Vergleich danach «gleich» zeigt.
+    mtime: Option<u32>,
+}
+
+fn unix_secs(t: std::io::Result<std::time::SystemTime>) -> Option<u32> {
+    t.ok()?.duration_since(std::time::UNIX_EPOCH).ok().and_then(|d| u32::try_from(d.as_secs()).ok())
+}
+
+/// Lokale Änderungszeit setzen (bestmöglich; ein Fehler bricht die Übertragung nicht ab).
+fn set_local_mtime(path: &str, mtime: Option<u32>) {
+    if let Some(t) = mtime {
+        let when = std::time::UNIX_EPOCH + Duration::from_secs(u64::from(t));
+        if let Ok(f) = std::fs::File::options().write(true).open(path) {
+            let _ = f.set_modified(when);
+        }
+    }
 }
 
 pub(crate) struct Meter<F: Fn(Progress)> {
@@ -392,13 +408,13 @@ pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, replace: b
     while let Some((src, dst)) = stack.pop() {
         let m = std::fs::metadata(&src).map_err(|e| format!("{}: {e}", src.display()))?;
         if m.is_dir() {
-            plan.push(Item { src: src.to_string_lossy().into(), dst: dst.clone(), dir: true });
+            plan.push(Item { src: src.to_string_lossy().into(), dst: dst.clone(), dir: true, mtime: None });
             for e in std::fs::read_dir(&src).map_err(err)?.flatten() {
                 stack.push((e.path(), rjoin(&dst, &e.file_name().to_string_lossy())));
             }
         } else {
             total += m.len();
-            plan.push(Item { src: src.to_string_lossy().into(), dst, dir: false });
+            plan.push(Item { src: src.to_string_lossy().into(), dst, dir: false, mtime: unix_secs(m.modified()) });
         }
     }
 
@@ -418,6 +434,13 @@ pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, replace: b
             }
             sftp.s.rename(&tmp, &it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
             guard.0 = None;
+            if let Some(t) = it.mtime {
+                // SFTP setzt Zugriffs- und Änderungszeit nur gemeinsam.
+                let mut a = russh_sftp::protocol::FileAttributes::empty();
+                a.atime = Some(t);
+                a.mtime = Some(t);
+                let _ = sftp.s.set_metadata(&it.dst, a).await;
+            }
         }
     }
     (m.report)(Progress::Done { target: root.clone() });
@@ -437,7 +460,7 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
     let mut stack = vec![(remote.to_string(), root.clone(), meta)];
     while let Some((src, dst, m)) = stack.pop() {
         if m.file_type().is_dir() {
-            plan.push(Item { src: src.clone(), dst: dst.to_string_lossy().into(), dir: true });
+            plan.push(Item { src: src.clone(), dst: dst.to_string_lossy().into(), dir: true, mtime: None });
             for e in sftp.s.read_dir(&src).await.map_err(err)? {
                 let n = e.file_name();
                 // Nur echte Dateien und Ordner; Verknüpfungen nicht verfolgen (keine Schleifen).
@@ -448,7 +471,7 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
             }
         } else {
             total += m.len();
-            plan.push(Item { src, dst: dst.to_string_lossy().into(), dir: false });
+            plan.push(Item { src, dst: dst.to_string_lossy().into(), dir: false, mtime: m.mtime });
         }
     }
 
@@ -464,6 +487,7 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
             pump(r, w, &mut m, &it.src).await?;
             tokio::fs::rename(&tmp, &it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
             guard.0 = None;
+            set_local_mtime(&it.dst, it.mtime);
         }
     }
     let root = root.to_string_lossy().into_owned();
@@ -474,6 +498,15 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mtime_bleibt_erhalten() {
+        let p = std::env::temp_dir().join(format!("sesam-mtime-{}", std::process::id()));
+        std::fs::write(&p, b"x").unwrap();
+        set_local_mtime(&p.to_string_lossy(), Some(1_600_000_000));
+        assert_eq!(unix_secs(std::fs::metadata(&p).unwrap().modified()), Some(1_600_000_000));
+        let _ = std::fs::remove_file(&p);
+    }
     use russh_sftp::protocol::{Attrs, Data, File, FileAttributes, Handle as H, Name, OpenFlags, Status, StatusCode, Version};
     use std::collections::{BTreeMap, HashSet};
     use std::sync::Mutex;

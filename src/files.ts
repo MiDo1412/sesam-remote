@@ -1,7 +1,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
-import { ask, askHostKey, askText, choose, chooseAll, tell } from "./ui";
-import { compareDirs, MARK_LABEL, type Mark } from "./compare";
+import { ask, askHostKey, askText, choose, tell } from "./ui";
+import { compareDirs, type Mark } from "./compare";
 import { openMenu, type MenuItem } from "./menu";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
@@ -111,7 +111,8 @@ export function filesTab(ctx: TabCtx): TabHandle {
 
   // Vergleich der beiden offenen Ordner (gleiche Namen).
   let comparing = false;
-  let onlyDiff = false;
+  type CmpFilter = "all" | "diff" | "left" | "right";
+  let cmpFilter: CmpFilter = "all";
   /** Ergebnis von «Inhalt prüfen»: Schlüssel aus Pfaden, Grössen und Zeiten → gleicher Inhalt. */
   const hashes = new Map<string, boolean>();
   const bar = el("div", "compare-bar");
@@ -121,10 +122,11 @@ export function filesTab(ctx: TabCtx): TabHandle {
   const diffLabel = el("div", "segmented compare-filter");
   diffLabel.setAttribute("role", "radiogroup");
   diffLabel.setAttribute("aria-label", "Anzeigen");
-  const radios = (["Alle", "Unterschiede"] as const).map((t, i) => {
+  const FILTERS: [CmpFilter, string][] = [["all", "Alle"], ["diff", "Unterschiede"], ["left", "Nur links"], ["right", "Nur rechts"]];
+  const radios = FILTERS.map(([v, t], i) => {
     const l = el("label");
     const r = Object.assign(document.createElement("input"), { type: "radio", name: `cmpFilter-${Math.random().toString(36).slice(2)}`, checked: i === 0 });
-    r.onchange = () => ((onlyDiff = i === 1), renderAll());
+    r.onchange = () => ((cmpFilter = v), renderAll());
     l.append(r, document.createTextNode(t));
     return l;
   });
@@ -138,7 +140,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
   };
   const checkBtn = barButton("Inhalt prüfen", () => checkContent());
   checkBtn.title = "Gleichnamige Dateien per SHA-256 vergleichen (auf dem Server mit sha256sum)";
-  const syncBtn = barButton("Unterschiede übertragen …", () => syncDiffs(), "primary");
+  const syncBtn = barButton("Synchronisieren …", () => void syncDialog(), "primary");
   bar.append(summary, el("span", "grow"), diffLabel, checkBtn, syncBtn, barButton("Beenden", () => toggleCompare(), "plain"));
   host.append(bar, grid, transfers);
 
@@ -204,6 +206,12 @@ export function filesTab(ctx: TabCtx): TabHandle {
       return h;
     };
     tr.append(th("name", "Name", ""), th("size", "Grösse", "size"), th("date", "Geändert", "date"));
+    // Mittelspalte des Vergleichs (rechter Rand der linken Liste)
+    if (side === "local") {
+      const st = el("th", "st", "");
+      st.setAttribute("aria-label", "Vergleich");
+      tr.append(st);
+    }
     thead.append(tr);
     const body = el("tbody");
     table.append(thead, body);
@@ -234,8 +242,9 @@ export function filesTab(ctx: TabCtx): TabHandle {
       ev.preventDefault();
       act();
     };
-    filter.oninput = () => ((pane.filter = filter.value.toLowerCase()), render(pane));
-    hiddenBox.onchange = () => ((pane.hidden = hiddenBox.checked), render(pane));
+    const redraw = () => (comparing ? renderAll() : render(pane));
+    filter.oninput = () => ((pane.filter = filter.value.toLowerCase()), redraw());
+    hiddenBox.onchange = () => ((pane.hidden = hiddenBox.checked), redraw());
     marks.onclick = () => bookmarkMenu(pane, marks);
     pathEl.onclick = (ev) => ev.target === pathEl && editPath(pane);
     scroller.oncontextmenu = (ev) => {
@@ -260,6 +269,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
         from.pop();
         if (cur != null) to.push(cur);
       }
+      if (cur !== l.path) (expanded.clear(), subLists.clear());
       p.listing = l;
       p.selected.clear();
       if (comparing) renderAll();
@@ -323,23 +333,14 @@ export function filesTab(ctx: TabCtx): TabHandle {
     if (v === "del") localStorage.setItem(markKey(p), JSON.stringify(list.filter((m) => m !== here)));
   }
 
-  /** Sichtbare Einträge; beim Vergleich mit Platzhaltern (`ghost`) für Namen, die nur auf der anderen Seite liegen. */
-  function visible(p: Pane, diff: Map<string, Mark> | null): (Entry & { ghost?: true })[] {
-    const l = p.listing!;
-    // Beim Vergleich sortieren und filtern beide Seiten gleich (wie links), damit die Zeilen auf einer Höhe liegen.
-    const s = diff ? panes.local : p;
-    const dir = s.desc ? -1 : 1;
-    const other = diff ? panes[p.side === "local" ? "remote" : "local"].listing : null;
-    const here = new Set(l.entries.map((e) => e.name));
-    const ghosts = other ? other.entries.filter((e) => !here.has(e.name)).map((e) => ({ ...e, ghost: true as const })) : [];
-    // «Unterschiede»: gleiche Dateien ausblenden, Ordner auf beiden Seiten bleiben zum Hineingehen.
-    const shown = (e: Entry & { ghost?: true }) => !diff || !onlyDiff || e.ghost || (diff.has(e.name) ? diff.get(e.name) !== "same" : e.dir);
-    return [...l.entries, ...ghosts]
-      .filter((e) => (s.hidden || !e.name.startsWith(".")) && (!s.filter || e.name.toLowerCase().includes(s.filter)) && shown(e))
+  function visible(p: Pane) {
+    const dir = p.desc ? -1 : 1;
+    return p.listing!.entries
+      .filter((e) => (p.hidden || !e.name.startsWith(".")) && (!p.filter || e.name.toLowerCase().includes(p.filter)))
       .sort((a, b) => {
         if (a.dir !== b.dir) return a.dir ? -1 : 1;
-        const d = s.sort === "size" ? a.size - b.size : s.sort === "date" ? (a.modified ?? 0) - (b.modified ?? 0) : a.name.localeCompare(b.name, "de-CH", { numeric: true });
-        return d * dir || a.name.localeCompare(b.name);
+        const d = p.sort === "size" ? a.size - b.size : p.sort === "date" ? (a.modified ?? 0) - (b.modified ?? 0) : a.name.localeCompare(b.name, "de-CH", { numeric: true });
+        return d * dir;
       });
   }
 
@@ -353,62 +354,47 @@ export function filesTab(ctx: TabCtx): TabHandle {
     p.nav.back.disabled = !p.back.length;
     p.nav.fwd.disabled = !p.fwd.length;
     p.nav.up.disabled = l.parent == null;
-    const diff = diffOf(p);
-    p.body.replaceChildren(
-      ...visible(p, diff).map((e) => {
-        if (e.ghost) {
-          // Platzhalter: hält die Zeile frei, damit links und rechts dieselbe Datei auf gleicher Höhe steht.
-          const g = el("tr", "ghost");
-          g.title = `${e.name}: nur auf der anderen Seite`;
-          // Gleicher Aufbau wie eine echte Zeile (unsichtbar), damit die Höhe exakt stimmt.
-          const name = el("td", "name");
-          name.append(el("span", `icon ${fileKind(e.name, e.dir)}`), el("span", "fname", e.name), el("span", "cmp", "nur dort"));
-          g.append(name, el("td", "size", "—"), el("td", "date", formatDate(e.modified)));
-          return g;
-        }
-        const tr = el("tr");
-        tr.tabIndex = -1;
-        tr.dataset.name = e.name;
-        tr.setAttribute("aria-selected", String(p.selected.has(e.name)));
-        const name = el("td", "name");
-        name.append(el("span", `icon ${fileKind(e.name, e.dir)}`), el("span", "fname", e.name));
-        const m = diff?.get(e.name);
-        if (m) {
-          tr.classList.add("cmp-row", `cmp-row-${m}`);
-          const badge = el("span", `cmp cmp-${m}`, MARK_LABEL[m]);
-          badge.title = MARK_TITLE[m];
-          name.append(badge);
-        }
-        tr.append(name, el("td", "size", e.dir ? "—" : formatSize(e.size)), el("td", "date", formatDate(e.modified)));
-        tr.onclick = (ev) => select(p, e.name, ev.ctrlKey || ev.metaKey);
-        tr.ondblclick = () => activate(p, e);
-        tr.onkeydown = (ev) => {
-          if (ev.key === "Enter") activate(p, e);
-          if (ev.key === "F2") p.side === "remote" ? renameRemote() : renameLocal();
-          if (p.side === "remote" && ev.key === "Delete") deleteRemote();
-        };
-        tr.onpointerdown = (ev) => startDrag(p, e.name, ev);
-        tr.oncontextmenu = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          if (!p.selected.has(e.name)) select(p, e.name, false);
-          contextMenu(p, tr, e);
-        };
-        if (e.perm != null) tr.title = `${e.name}\nRechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
-        return tr;
-      }),
-    );
-    if (!p.body.children.length) {
-      const tr = el("tr");
-      const why = !l.entries.length ? "Leerer Ordner"
-        : p.filter ? "Keine Treffer"
-        : diff && onlyDiff ? "Keine Unterschiede"
-        : "Nur versteckte Dateien – «Versteckte Dateien» einschalten";
-      const td = el("td", "empty", why);
-      td.colSpan = 3;
-      tr.append(td);
-      p.body.append(tr);
-    }
+    if (cmpOn()) return renderCompare(p, cmpRows(cmpFilter));
+    p.body.replaceChildren(...visible(p).map((e) => entryRow(p, e, e.name)));
+    if (!p.body.children.length) emptyRow(p, !p.listing!.entries.length ? "Leerer Ordner" : p.filter ? "Keine Treffer" : "Nur versteckte Dateien – «Versteckte Dateien» einschalten");
+  }
+
+  function emptyRow(p: Pane, why: string) {
+    const tr = el("tr");
+    const td = el("td", "empty", why);
+    td.colSpan = 4;
+    tr.append(td);
+    p.body.append(tr);
+  }
+
+  /** Zeile eines vorhandenen Eintrags; `name` ist der Pfad relativ zum offenen Ordner (im Vergleich auch in Unterordnern). */
+  function entryRow(p: Pane, e: Entry, name: string, lead?: HTMLElement) {
+    const tr = el("tr");
+    tr.tabIndex = -1;
+    tr.dataset.name = name;
+    tr.setAttribute("aria-selected", String(p.selected.has(name)));
+    const td = el("td", "name");
+    if (lead) td.append(lead);
+    td.append(el("span", `icon ${fileKind(e.name, e.dir)}`), el("span", "fname", e.name));
+    tr.append(td, el("td", "size", e.dir ? "—" : formatSize(e.size)), el("td", "date", formatDate(e.modified)));
+    const at = { ...e, name };
+    tr.onclick = (ev) => select(p, name, ev.ctrlKey || ev.metaKey);
+    tr.ondblclick = () => activate(p, at);
+    tr.onkeydown = (ev) => {
+      if (ev.key === "Enter") activate(p, at);
+      if (ev.key === "F2") p.side === "remote" ? renameRemote() : renameLocal();
+      if (p.side === "remote" && ev.key === "Delete") deleteRemote();
+    };
+    tr.onpointerdown = (ev) => startDrag(p, name, ev);
+    tr.oncontextmenu = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!p.selected.has(name)) select(p, name, false);
+      contextMenu(p, tr, at);
+    };
+    if (e.perm != null) tr.title = `${e.name}
+Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
+    return tr;
   }
 
   function select(p: Pane, name: string, toggle: boolean) {
@@ -424,68 +410,241 @@ export function filesTab(ctx: TabCtx): TabHandle {
   }
 
   // ---------- Vergleichen ----------
-  const MARK_TITLE: Record<Mark, string> = {
-    only: "Nur auf dieser Seite",
-    newer: "Hier neuer als auf der anderen Seite",
-    older: "Auf der anderen Seite neuer",
-    same: "Gleiche Grösse und Änderungszeit (± 2 s) oder gleicher Inhalt",
-    differ: "Verschieden ohne klare Richtung: gleiche Zeit, aber andere Grösse oder anderer Inhalt, oder Datei gegen Ordner",
-  };
-  /** Markierungen der Seite `p`, solange verglichen wird (nicht in der Laufwerksliste). */
-  function diffOf(p: Pane) {
-    const [L, R] = [panes.local.listing, panes.remote.listing];
-    if (!comparing || !L?.path || !R) return null;
-    const lmap = new Map(L.entries.map((e) => [e.name, e]));
-    const rmap = new Map(R.entries.map((e) => [e.name, e]));
-    const content = (n: string) => {
-      const [a, b] = [lmap.get(n), rmap.get(n)];
-      return a && b ? hashes.get(hashKey(a, b)) : undefined;
-    };
-    return p.side === "local" ? compareDirs(L.entries, R.entries, 2, content) : compareDirs(R.entries, L.entries, 2, content);
+  /** Eine Zeile des Vergleichs: derselbe relative Pfad links und rechts (rel mit «/»). */
+  /** `lv`/`rv`: auf dieser Seite angezeigt (Filter und «Versteckte Dateien» gelten je Seite). */
+  interface Row { rel: string; depth: number; l?: Entry; r?: Entry; mark?: Mark; lv?: boolean; rv?: boolean }
+  /** Richtung aus Sicht der Mittelspalte. */
+  type State = "toRight" | "toLeft" | "same" | "differ" | "unknown";
+  /** Aufgeklappte Ordner (auf beiden Seiten vorhanden) und ihre Inhalte links/rechts. */
+  const expanded = new Set<string>();
+  const subLists = new Map<string, { l: Entry[]; r: Entry[] }>();
+  const cmpOn = () => comparing && !!panes.local.listing?.path && !!panes.remote.listing;
+  const sidePath = (p: Pane, rel: string) => join(p, rel.split("/").join(p.sep));
+  const bothDirs = (r: Row) => !!(r.l?.dir && r.r?.dir);
+  const hashKey = (rel: string, a: Entry, b: Entry) => [panes.local.listing!.path, panes.remote.listing!.path, rel, a.size, a.modified, b.size, b.modified].join("\n");
+
+  function rowState(r: Row): State {
+    if (r.l && !r.r) return "toRight";
+    if (r.r && !r.l) return "toLeft";
+    if (r.mark === "newer") return "toRight";
+    if (r.mark === "older") return "toLeft";
+    if (r.mark === "same") return "same";
+    if (r.mark === "differ") return "differ";
+    return "unknown"; // Ordner auf beiden Seiten, noch nicht aufgeklappt
   }
-  const hashKey = (a: Entry, b: Entry) => [panes.local.listing!.path, panes.remote.listing!.path, a.name, a.size, a.modified, b.size, b.modified].join("\n");
+
+  /** Zeilen beider Seiten in gemeinsamer Reihenfolge (Sortierung der linken Seite); aufgeklappte Ordner rekursiv. */
+  function cmpRows(filter: CmpFilter): Row[] {
+    const [L, R] = [panes.local.listing!, panes.remote.listing!];
+    const s = panes.local;
+    const dir = s.desc ? -1 : 1;
+    const key = (e: Entry) => (s.sort === "size" ? e.size : s.sort === "date" ? (e.modified ?? 0) : 0);
+    const pass = (p: Pane, e: Entry | undefined, depth: number) =>
+      !!e && (p.hidden || !e.name.startsWith(".")) && (depth > 0 || !p.filter || e.name.toLowerCase().includes(p.filter));
+    const level = (le: Entry[], re: Entry[], prefix: string, depth: number): { rows: Row[]; agg: Mark | undefined } => {
+      const marks = compareDirs(le, re, 2, (n) => {
+        const [a, b] = [le.find((e) => e.name === n), re.find((e) => e.name === n)];
+        return a && b ? hashes.get(hashKey(prefix + n, a, b)) : undefined;
+      });
+      const lm = new Map(le.map((e) => [e.name, e]));
+      const rm = new Map(re.map((e) => [e.name, e]));
+      const items: Row[] = [...new Set([...lm.keys(), ...rm.keys()])].map((n) => ({ rel: prefix + n, depth, l: lm.get(n), r: rm.get(n), mark: marks.get(n) }));
+      items.sort((a, b) => {
+        const [x, y] = [(a.l ?? a.r)!, (b.l ?? b.r)!];
+        if (x.dir !== y.dir) return x.dir ? -1 : 1;
+        const d = s.sort === "name" ? x.name.localeCompare(y.name, "de-CH", { numeric: true }) : key(x) - key(y);
+        return d * dir || x.name.localeCompare(y.name);
+      });
+      const rows: Row[] = [];
+      let agg: Mark | undefined = "same";
+      for (const it of items) {
+        let kids: Row[] = [];
+        const sub = bothDirs(it) ? subLists.get(it.rel) : undefined;
+        if (sub) {
+          const k = level(sub.l, sub.r, it.rel + "/", depth + 1);
+          it.mark = k.agg;
+          if (expanded.has(it.rel)) kids = k.rows;
+        }
+        const st = rowState(it);
+        // Versteckte Dateien zählen nur mit, wenn sie auf ihrer Seite angezeigt werden.
+        it.lv = pass(panes.local, it.l, depth);
+        it.rv = pass(panes.remote, it.r, depth);
+        if (!it.lv && !it.rv) continue;
+        if (st === "unknown") agg = agg === "differ" ? "differ" : undefined;
+        else if (st !== "same") agg = "differ";
+        const keep =
+          filter === "all" ||
+          (filter === "diff" && st !== "same") ||
+          (filter === "left" && (st === "toRight" && !it.r)) ||
+          (filter === "right" && (st === "toLeft" && !it.l)) ||
+          (bothDirs(it) && expanded.has(it.rel) && kids.length > 0);
+        if (keep) rows.push(it, ...kids);
+      }
+      return { rows, agg };
+    };
+    return level(L.entries, R.entries, "", 0).rows;
+  }
+
+  const SYMBOL: Record<State, string> = { toRight: "→", toLeft: "←", same: "=", differ: "≠", unknown: "" };
+  /** Färbung aus Sicht einer Seite (gleiche Klassen wie die Markierungen). */
+  function tint(r: Row, left: boolean): Mark | null {
+    const st = rowState(r);
+    if (st === "same") return "same";
+    if (st === "differ") return "differ";
+    if (st === "unknown") return null;
+    if (left ? !r.r : !r.l) return "only";
+    return (st === "toRight") === left ? "newer" : "older";
+  }
+
+  function renderCompare(p: Pane, rows: Row[]) {
+    const left = p.side === "local";
+    p.body.replaceChildren(
+      ...rows.map((row) => {
+        const e = left ? (row.lv ? row.l : undefined) : row.rv ? row.r : undefined;
+        const twisty = el("button", "twisty", bothDirs(row) ? (expanded.has(row.rel) ? "▾" : "▸") : "") as HTMLButtonElement;
+        twisty.type = "button";
+        twisty.tabIndex = -1;
+        if (bothDirs(row)) {
+          twisty.title = expanded.has(row.rel) ? "Zuklappen" : "Aufklappen und vergleichen";
+          twisty.setAttribute("aria-expanded", String(expanded.has(row.rel)));
+          twisty.onclick = (ev) => (ev.stopPropagation(), void toggleExpand(row.rel));
+          twisty.onpointerdown = (ev) => ev.stopPropagation();
+        } else twisty.disabled = true;
+        twisty.style.marginLeft = `${row.depth * 16}px`;
+        let tr: HTMLElement;
+        if (e) {
+          tr = entryRow(p, e, row.rel.split("/").join(p.sep), twisty);
+          const t = tint(row, left);
+          if (t) tr.classList.add("cmp-row", `cmp-row-${t}`);
+        } else {
+          // Platzhalter mit gleichem Aufbau (unsichtbar), damit beide Seiten auf gleicher Höhe bleiben.
+          const o = (row.l ?? row.r)!;
+          tr = el("tr", "ghost");
+          tr.title = (left ? row.l : row.r) ? `${o.name}: auf dieser Seite ausgeblendet (Filter oder versteckte Datei)` : `${o.name}: nur auf der anderen Seite`;
+          const name = el("td", "name");
+          name.append(twisty, el("span", `icon ${fileKind(o.name, o.dir)}`), el("span", "fname", o.name));
+          tr.append(name, el("td", "size", "—"), el("td", "date", formatDate(o.modified)));
+        }
+        if (left) tr.append(statusCell(row));
+        return tr;
+      }),
+    );
+    if (!rows.length) emptyRow(p, cmpFilter === "all" ? "Keine Einträge" : "Keine passenden Einträge");
+  }
+
+  function statusCell(row: Row) {
+    const td = el("td", "st");
+    const st = rowState(row);
+    const name = (row.l ?? row.r)!.name;
+    if (st === "toRight" || st === "toLeft") {
+      const b = el("button", `st-btn st-${st}`, SYMBOL[st]) as HTMLButtonElement;
+      b.type = "button";
+      const where = st === "toRight" ? `nach ${c.name}` : "auf diesen Computer";
+      b.title = `«${name}» ${where} kopieren`;
+      b.setAttribute("aria-label", b.title);
+      b.onclick = (ev) => (ev.stopPropagation(), void copyRow(row, st === "toRight"));
+      b.onpointerdown = (ev) => ev.stopPropagation();
+      td.append(b);
+    } else {
+      const sp = el("span", `st-sym st-${st}`, SYMBOL[st]);
+      sp.title = st === "same" ? "Gleich" : st === "differ" ? (bothDirs(row) ? "Inhalt verschieden – aufklappen" : "Verschieden ohne klare Richtung (gleiche Zeit, andere Grösse oder anderer Inhalt) – zum Kopieren in die gewünschte Richtung ziehen") : "Ordner – aufklappen zum Vergleichen";
+      td.append(sp);
+    }
+    return td;
+  }
+
+  const info = (e?: Entry) => (e ? (e.dir ? "Ordner" : `${formatSize(e.size)}, ${formatDate(e.modified)}`) : "");
+  const parentOf = (rel: string) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
+  const destDir = (to: Pane, rel: string) => (parentOf(rel) ? sidePath(to, parentOf(rel)) : to.listing!.path);
+
+  /** Eine Zeile in Pfeilrichtung kopieren; ersetzt nur nach Bestätigung. */
+  async function copyRow(row: Row, toRight: boolean) {
+    const [from, to] = toRight ? [panes.local, panes.remote] : [panes.remote, panes.local];
+    const [src, dst] = toRight ? [row.l, row.r] : [row.r, row.l];
+    if (!sid || !src || !from.listing || !to.listing) return;
+    if (dst) {
+      const ok = await ask(
+        `«${src.name}» ersetzen?`,
+        `${toRight ? `Auf ${c.name}` : "Auf diesem Computer"} gibt es «${src.name}» schon.\n\nVorhanden: ${info(dst)}\nErsetzen durch: ${info(src)}`,
+        "Ersetzen",
+      );
+      if (!ok) return;
+    }
+    start(toRight, sidePath(from, row.rel), destDir(to, row.rel), src.name, !!dst);
+  }
+
+  async function loadSub(rel: string) {
+    const [l, r] = await Promise.all([api.localList(sidePath(panes.local, rel)), api.sftpList(sid!, sidePath(panes.remote, rel))]);
+    subLists.set(rel, { l: l.entries, r: r.entries });
+  }
+
+  async function toggleExpand(rel: string) {
+    if (expanded.delete(rel)) return renderAll();
+    try {
+      if (!subLists.has(rel)) await loadSub(rel);
+      expanded.add(rel);
+    } catch (e) {
+      status.textContent = String(e);
+    }
+    renderAll();
+  }
+
+  /** Nach Übertragungen beide Seiten und aufgeklappte Ordner neu einlesen (gebündelt). */
+  let refreshTimer = 0;
+  function refreshCompareSoon() {
+    clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(async () => {
+      try {
+        for (const p of Object.values(panes)) if (p.listing) p.listing = p.side === "local" ? await api.localList(p.listing.path) : await api.sftpList(sid!, p.listing.path);
+        for (const rel of [...subLists.keys()]) await loadSub(rel).catch(() => (subLists.delete(rel), expanded.delete(rel)));
+      } catch (e) {
+        status.textContent = String(e);
+      }
+      renderAll();
+    }, 500);
+  }
 
   function renderAll() {
+    host.classList.toggle("comparing", cmpOn());
     for (const p of Object.values(panes)) if (p.listing) render(p);
     bar.hidden = !comparing;
     compareBtn.classList.toggle("on", comparing);
     compareBtn.setAttribute("aria-pressed", String(comparing));
     if (!comparing) return;
-    const [lm, rm] = [diffOf(panes.local), diffOf(panes.remote)];
-    checkBtn.disabled = syncBtn.disabled = !lm;
-    if (!lm || !rm) return void (summary.textContent = "Zum Vergleichen links einen Ordner öffnen.");
-    const n = (m: Map<string, Mark>, k: Mark) => [...m.values()].filter((v) => v === k).length;
+    checkBtn.disabled = syncBtn.disabled = !cmpOn();
+    if (!cmpOn()) return void (summary.textContent = "Zum Vergleichen links einen Ordner öffnen.");
+    const rows = cmpRows("all");
+    const n = (f: (r: Row) => boolean) => rows.filter(f).length;
     const parts = [
-      [n(lm, "only"), "nur auf diesem Computer"],
-      [n(rm, "only"), `nur auf ${c.name}`],
-      [n(lm, "newer"), "hier neuer"],
-      [n(lm, "older"), `auf ${c.name} neuer`],
-      [n(lm, "differ"), "verschieden"],
-      [n(lm, "same"), "gleich"],
+      [n((r) => !!r.l && !r.r), "nur auf diesem Computer"],
+      [n((r) => !!r.r && !r.l), `nur auf ${c.name}`],
+      [n((r) => r.mark === "newer"), "hier neuer"],
+      [n((r) => r.mark === "older"), `auf ${c.name} neuer`],
+      [n((r) => r.mark === "differ" && !bothDirs(r)), "verschieden"],
+      [n((r) => r.mark === "same" && !bothDirs(r)), "gleich"],
     ].filter(([k]) => k) as [number, string][];
     summary.textContent = parts.length ? parts.map(([k, t]) => `${k} ${t}`).join(" · ") : "Keine Dateien zum Vergleichen";
   }
 
   function toggleCompare() {
     comparing = !comparing;
+    if (!comparing) (expanded.clear(), subLists.clear());
     renderAll();
   }
 
-  /** SHA-256 hier und auf dem Server für alle gleichnamigen Dateien. */
+  /** SHA-256 hier und auf dem Server für alle gleichnamigen Dateien (auch in aufgeklappten Ordnern). */
   async function checkContent() {
-    const [L, R] = [panes.local.listing, panes.remote.listing];
-    if (!sid || !L?.path || !R) return;
-    const rmap = new Map(R.entries.filter((e) => !e.dir).map((e) => [e.name, e]));
-    const pairs = L.entries.filter((e) => !e.dir && rmap.has(e.name)).map((a) => [a, rmap.get(a.name)!] as const);
+    if (!sid || !cmpOn()) return;
+    const pairs = cmpRows("all").filter((r) => r.l && r.r && !r.l.dir && !r.r.dir);
     if (!pairs.length) return tell("Nichts zu prüfen", "In beiden Ordnern gibt es keine gleichnamigen Dateien.");
     const s = sid;
     checkBtn.disabled = true;
     try {
-      for (const [i, [a, b]] of pairs.entries()) {
-        const key = hashKey(a, b);
+      for (const [i, r] of pairs.entries()) {
+        const key = hashKey(r.rel, r.l!, r.r!);
         if (hashes.has(key)) continue;
-        summary.textContent = `Prüfe Inhalt ${i + 1} von ${pairs.length}: ${a.name}`;
-        const [x, y] = await Promise.all([api.localSha256(join(panes.local, a.name)), api.sftpSha256(s, join(panes.remote, b.name))]);
+        summary.textContent = `Prüfe Inhalt ${i + 1} von ${pairs.length}: ${r.rel}`;
+        const [x, y] = await Promise.all([api.localSha256(sidePath(panes.local, r.rel)), api.sftpSha256(s, sidePath(panes.remote, r.rel))]);
         hashes.set(key, x === y);
       }
     } catch (e) {
@@ -496,49 +655,64 @@ export function filesTab(ctx: TabCtx): TabHandle {
     }
   }
 
-  /** Was fehlt oder neuer ist, auf die andere Seite kopieren. Ersetzt nur nach Rückfrage. */
-  async function syncDiffs() {
-    const [lm, rm] = [diffOf(panes.local), diffOf(panes.remote)];
-    if (!sid || !lm || !rm) return;
-    const pick = (m: Map<string, Mark>) => [...m].filter(([, k]) => k === "only" || k === "newer").map(([n]) => n);
-    const jobs = [...pick(lm).map((n) => ({ upload: true, name: n, exists: lm.get(n) === "newer" })), ...pick(rm).map((n) => ({ upload: false, name: n, exists: rm.get(n) === "newer" }))];
-    const unclear = [...lm.values()].filter((k) => k === "differ").length;
-    const skipped = unclear ? `${unclear} Element(e) unterscheiden sich ohne klare Richtung und werden nicht übertragen.` : "";
-    if (!jobs.length) return tell("Nichts zu übertragen", skipped || "Die Dateien in beiden Ordnern stimmen überein.");
-    const lines = jobs.map((j) => `${j.upload ? "↑" : "↓"} ${j.name}${j.exists ? " (dort älter)" : ""}`);
-    const shown = lines.slice(0, 12).join("\n") + (lines.length > 12 ? `\n… und ${lines.length - 12} weitere` : "");
-    const ok = await ask(
-      `${jobs.length} Element(e) übertragen?`,
-      `↑ nach ${c.name} hochladen, ↓ auf diesen Computer herunterladen:\n\n${shown}\n\n${skipped ? `${skipped}\n` : ""}Gibt es eine Datei dort schon (älter), wird nachgefragt.`,
-      "Übertragen",
-    );
-    if (!ok) return;
-    let all: "replace" | "keep" | "skip" | null = null;
-    for (const j of jobs) {
-      const from = j.upload ? panes.local : panes.remote;
-      const to = other(from);
-      if (!sid || !from.listing || !to.listing) return;
-      let replace = false;
-      if (j.exists) {
-        let v: "replace" | "keep" | "skip" | null = all;
-        if (!v) {
-          const info = (e?: Entry) => (e ? `${formatSize(e.size)}, ${formatDate(e.modified)}` : "");
-          const r = await chooseAll(
-            `«${j.name}» ersetzen?`,
-            `${j.upload ? `Auf ${c.name}` : "Auf diesem Computer"} gibt es «${j.name}» schon, in einer älteren Fassung.`,
-            `Neu:       ${info(from.listing.entries.find((e) => e.name === j.name))}\nVorhanden: ${info(to.listing.entries.find((e) => e.name === j.name))}`,
-            "Beide behalten",
-            "Ersetzen",
-            "Überspringen",
-            "Für alle weiteren übernehmen",
-          );
-          v = r.v === "alt" ? "replace" : r.v === "ok" ? "keep" : "skip";
-          if (r.all) all = v;
-        }
-        if (v === "skip") continue;
-        replace = v === "replace";
-      }
-      start(j.upload, join(from, j.name), to.listing.path, j.name, replace);
+  /** «Synchronisieren …»: Richtung wählen, Vorschau sehen, dann übertragen. */
+  async function syncDialog() {
+    if (!sid || !cmpOn()) return;
+    const rows = cmpRows("all").filter((r) => !bothDirs(r));
+    const unclear = rows.filter((r) => rowState(r) === "differ").length;
+    type Dir = "right" | "left" | "both";
+    const jobs = (d: Dir) => rows.filter((r) => { const st = rowState(r); return (d !== "left" && st === "toRight") || (d !== "right" && st === "toLeft"); });
+    const dlg = document.createElement("dialog");
+    dlg.className = "sync-dlg";
+    dlg.setAttribute("aria-labelledby", "sync-title");
+    dlg.innerHTML = `
+      <form class="sheet" method="dialog">
+        <h2 id="sync-title">Synchronisieren</h2>
+        <div class="segmented sync-dir" role="radiogroup" aria-label="Richtung">
+          <label><input type="radio" name="dir" value="right" checked />→ nach <span class="to-name"></span></label>
+          <label><input type="radio" name="dir" value="left" />← auf diesen Computer</label>
+          <label><input type="radio" name="dir" value="both" />⇄ beide Richtungen</label>
+        </div>
+        <p class="note sync-count"></p>
+        <ul class="sync-list"></ul>
+        <p class="note sync-unclear"></p>
+        <div class="row actions"><span></span><button type="button" value="cancel" class="sync-cancel">Abbrechen</button><button type="submit" class="primary sync-go">Übertragen</button></div>
+      </form>`;
+    dlg.querySelector(".to-name")!.textContent = c.name;
+    document.body.append(dlg);
+    const list = dlg.querySelector<HTMLElement>(".sync-list")!;
+    const count = dlg.querySelector<HTMLElement>(".sync-count")!;
+    const go = dlg.querySelector<HTMLButtonElement>(".sync-go")!;
+    dlg.querySelector<HTMLElement>(".sync-unclear")!.textContent = unclear ? `${unclear} Datei(en) unterscheiden sich ohne klare Richtung und sind nicht dabei; einzeln in die gewünschte Richtung ziehen.` : "";
+    let dir: Dir = "right";
+    const show = () => {
+      const js = jobs(dir);
+      const replaced = js.filter((r) => r.l && r.r).length;
+      count.textContent = js.length ? `${js.length} Element(e)${replaced ? `, davon ${replaced} ersetzt (ältere Fassung)` : ""}:` : "Nichts zu übertragen – in dieser Richtung ist alles aktuell.";
+      list.replaceChildren(
+        ...js.slice(0, 200).map((r) => {
+          const li = el("li", "", `${rowState(r) === "toRight" ? "→" : "←"} ${r.rel}${r.l?.dir || r.r?.dir ? "/" : ""}${r.l && r.r ? " (ersetzt)" : ""}`);
+          return li;
+        }),
+        ...(js.length > 200 ? [el("li", "more", `… und ${js.length - 200} weitere`)] : []),
+      );
+      go.disabled = !js.length;
+      go.textContent = js.length ? `${js.length} übertragen` : "Übertragen";
+    };
+    for (const r of dlg.querySelectorAll<HTMLInputElement>("input[name=dir]")) r.onchange = () => ((dir = r.value as Dir), show());
+    show();
+    const chosen = await new Promise<boolean>((resolve) => {
+      dlg.querySelector<HTMLButtonElement>(".sync-cancel")!.onclick = () => dlg.close();
+      dlg.querySelector("form")!.onsubmit = (ev) => (ev.preventDefault(), resolve(true), dlg.close());
+      dlg.onclose = () => resolve(false);
+      dlg.showModal();
+    });
+    dlg.remove();
+    if (!chosen || !sid) return;
+    for (const r of jobs(dir)) {
+      const toRight = rowState(r) === "toRight";
+      const [from, to] = toRight ? [panes.local, panes.remote] : [panes.remote, panes.local];
+      start(toRight, sidePath(from, r.rel), destDir(to, r.rel), (toRight ? r.l : r.r)!.name, !!(r.l && r.r));
     }
   }
 
@@ -590,7 +764,8 @@ export function filesTab(ctx: TabCtx): TabHandle {
           bar.value = 1;
           finish("Fertig");
           const to = upload ? panes.remote : panes.local;
-          if (to.listing?.path === destDir) load(to, destDir);
+          if (comparing) refreshCompareSoon();
+          else if (to.listing?.path === destDir) load(to, destDir);
         } else finish(`Fehler: ${p.error}`);
       }, replace)
       .then((id) => {
