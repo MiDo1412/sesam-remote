@@ -8,7 +8,7 @@ import { ICON } from "./icons";
 import { openMenu } from "./menu";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { createKeyboard, isTouch, termSequence } from "./osk";
-import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings } from "./termthemes";
+import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings, themeFont } from "./termthemes";
 
 const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
 
@@ -52,7 +52,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     const t = termSettings();
     term.options.theme = resolveTheme(t.theme);
     term.options.fontSize = t.fontSize;
-    term.options.fontFamily = t.fontFamily || FONT;
+    term.options.fontFamily = t.fontFamily || (themeFont(t.theme) ? `${themeFont(t.theme)}, ${FONT}` : FONT);
     // Ganze Fläche (Rand, Statuszeile, Bildlaufleiste) in der Farbe des Schemas, kein Schwarz.
     const bg = term.options.theme?.background ?? "";
     host.style.background = ctx.pane.style.background = bg;
