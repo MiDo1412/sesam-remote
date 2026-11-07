@@ -629,11 +629,57 @@ fn license_flag(pdu: &[u8]) -> Option<bool> {
     (d.len() >= 2).then(|| u16::from_le_bytes([d[0], d[1]]) & 0x0080 != 0)
 }
 
+/// Auto-Detect beim Verbindungsaufbau ([MS-RDPBCGR] 2.2.14), wie es gnome-remote-desktop nach RDSTLS
+/// ohne ausgehandelten Nachrichtenkanal schickt (IronRDP wartet darauf nur mit Nachrichtenkanal).
+/// `None` = kein Auto-Detect-Paket; sonst die nötige Antwort (RTT, Bandbreiten-Ergebnis) oder nichts.
+/// Ohne das Ergebnis der Bandbreitenmessung wartet ein FreeRDP-Server (GNOME) endlos.
+fn connect_time_autodetect(pdu: &[u8], user_channel_id: u16, bw: &mut Option<(std::time::Instant, u32)>) -> Option<Option<Vec<u8>>> {
+    use ironrdp_pdu::rdp::autodetect::{AutoDetectReqPdu, AutoDetectRequest as Q, AutoDetectResponse as A, AutoDetectRspPdu, BW_RESULTS_CONNECT_TIME, BW_START_CONNECT_TIME, BW_STOP_CONNECT_TIME};
+    let ctx = ironrdp_pdu::mcs::decode_send_data_indication(pdu).ok()?;
+    let d = ctx.user_data;
+    if d.len() < 2 || u16::from_le_bytes([d[0], d[1]]) & 0x1000 == 0 {
+        return None; // kein SEC_AUTODETECT_REQ
+    }
+    let req = ironrdp_pdu::decode::<AutoDetectReqPdu>(d).ok()?.request;
+    tracing::debug!(?req, channel = ctx.channel_id, "Auto-Detect beim Verbindungsaufbau");
+    // Gezählt wie in IronRDP/FreeRDP: Nutzlast plus 8 Byte Kopf.
+    let counted = |p: &[u8]| u32::try_from(p.len()).unwrap_or(u32::MAX).saturating_add(8);
+    let rsp = match req {
+        Q::RttRequest { sequence_number, .. } => Some(A::RttResponse { sequence_number }),
+        Q::BandwidthMeasureStart { request_type, .. } if request_type == BW_START_CONNECT_TIME => {
+            *bw = Some((std::time::Instant::now(), 0));
+            None
+        }
+        Q::BandwidthMeasurePayload { payload, .. } => {
+            if let Some((_, n)) = bw.as_mut() {
+                *n = n.saturating_add(counted(&payload));
+            }
+            None
+        }
+        Q::BandwidthMeasureStop { sequence_number, request_type, payload } if request_type == BW_STOP_CONNECT_TIME => {
+            let last = payload.as_deref().map_or(0, counted);
+            let (time_delta_ms, byte_count) = match bw.take() {
+                Some((t, n)) => (u32::try_from(t.elapsed().as_millis()).unwrap_or(u32::MAX).max(1), n.saturating_add(last)),
+                None => (1, last),
+            };
+            Some(A::BandwidthMeasureResults { sequence_number, response_type: BW_RESULTS_CONNECT_TIME, time_delta_ms, byte_count })
+        }
+        _ => None,
+    };
+    Some(rsp.and_then(|r| {
+        // Antwort auf dem Kanal der Anfrage (bei GNOME ohne Nachrichtenkanal: 0).
+        let mut w = ironrdp_pdu::WriteBuf::new();
+        ironrdp_pdu::mcs::encode_send_data_request(user_channel_id, ctx.channel_id, &AutoDetectRspPdu::new(r), &mut w).ok()?;
+        Some(w.filled().to_vec())
+    }))
+}
+
 /// Wie `connect_finalize` (ohne CredSSP), aber nachsichtig: Überspringt der Server die Lizenzierung
 /// (gnome-remote-desktop nach RDSTLS), geht es direkt mit dem Capabilities-Austausch weiter.
 async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) -> Result<ConnectionOutcome, String> {
     use ironrdp_connector::{ClientConnectorState, MultitransportResult, State as _};
     let mut buf = ironrdp_pdu::WriteBuf::new();
+    let mut bw = None;
     loop {
         if connector.should_perform_multitransport() {
             ironrdp_tokio::complete_multitransport(
@@ -649,6 +695,14 @@ async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) 
         let written = match connector.next_pdu_hint() {
             Some(hint) => {
                 let pdu = framed.read_by_hint(hint).await.map_err(|e| format!("Verbindungsaufbau: Verbindung beendet: {e}"))?;
+                if let ClientConnectorState::LicensingExchange { user_channel_id, .. } | ClientConnectorState::MultitransportBootstrapping { user_channel_id, .. } = &connector.state {
+                    if let Some(reply) = connect_time_autodetect(&pdu, *user_channel_id, &mut bw) {
+                        if let Some(r) = reply {
+                            framed.write_all(&r).await.map_err(|e| format!("Verbindungsaufbau: {e}"))?;
+                        }
+                        continue;
+                    }
+                }
                 if let ClientConnectorState::LicensingExchange { io_channel_id, user_channel_id, .. } = &connector.state {
                     if license_flag(&pdu) == Some(false) {
                         let head: String = pdu.iter().take(32).map(|b| format!("{b:02x}")).collect();
@@ -1109,6 +1163,31 @@ async fn write_all<W: FramedWrite>(w: &mut W, outs: &[ActiveStageOutput]) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gnome_connect_time_autodetect() {
+        let hex = |h: &str| -> Vec<u8> { (0..h.len() / 2).map(|i| u8::from_str_radix(&h[i * 2..i * 2 + 2], 16).unwrap()).collect() };
+        // Aus Mikes Log (GNOME 3389 nach RDSTLS): Bandwidth Measure Start auf Kanal 0.
+        let start = hex("0300001902f080680006000070800a00100000060000001410");
+        let mut bw = None;
+        assert_eq!(connect_time_autodetect(&start, 1007, &mut bw), Some(None), "erkannt, keine Antwort");
+        assert!(bw.is_some(), "Messung gestartet");
+        assert_eq!(license_flag(&start), Some(false), "früher fälschlich als «Lizenz übersprungen» gewertet");
+
+        // RTT-Anfrage (Sequenz 7, Typ 0x1001) wird beantwortet, auf demselben Kanal.
+        let rtt = hex("0300001902f080680006000070800a00100000060007000110");
+        let reply = connect_time_autodetect(&rtt, 1007, &mut bw).unwrap().unwrap();
+        let ironrdp_pdu::mcs::McsMessage::SendDataRequest(req) = ironrdp_pdu::decode::<ironrdp_pdu::x224::X224<ironrdp_pdu::mcs::McsMessage<'_>>>(&reply).unwrap().0 else {
+            panic!("keine Send Data Request")
+        };
+        assert_eq!((req.initiator_id, req.channel_id), (1007, 0));
+        use ironrdp_pdu::rdp::autodetect::{AutoDetectResponse, AutoDetectRspPdu};
+        assert_eq!(ironrdp_pdu::decode::<AutoDetectRspPdu>(&req.user_data).unwrap().response, AutoDetectResponse::RttResponse { sequence_number: 7 });
+
+        // Ein Lizenzpaket (SEC_LICENSE_PKT) ist kein Auto-Detect.
+        let lic = hex("0300001302f08068000603eb70800480000000");
+        assert_eq!(connect_time_autodetect(&lic, 1007, &mut bw), None);
+    }
 
     #[test]
     fn share_names_are_plain() {
