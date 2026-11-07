@@ -25,10 +25,11 @@ Remote Login einschalten:
 sudo grdctl --system rdp enable
 ```
 
-Zugangsdaten für die Verbindung setzen (frei wählbar, nicht das Passwort eines Kontos):
+Zugangsdaten für die Verbindung setzen. grdctl fragt Benutzername und Passwort selbst ab; nicht als
+Argumente angeben, sonst landet das Passwort im Systemprotokoll:
 
 ```
-sudo grdctl --system rdp set-credentials <benutzer> <passwort>
+sudo grdctl --system rdp set-credentials
 ```
 
 TLS-Zertifikat und Schlüssel setzen:
@@ -76,7 +77,7 @@ grdctl rdp enable
 ```
 
 ```
-grdctl rdp set-credentials <benutzer> <passwort>
+grdctl rdp set-credentials
 ```
 
 **In Sesam:** RDP aktiv, Port wie in den Einstellungen angezeigt, Benutzer und RDP-Passwort aus der
