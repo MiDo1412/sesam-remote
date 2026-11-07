@@ -1,10 +1,7 @@
 #!/bin/bash
-# Sesam Remote: RDP-Fernzugriff auf Ubuntu mit GNOME (ab GNOME 46) einrichten.
+# Sesam Remote: RDP-Fernzugriff auf Ubuntu mit GNOME (ab GNOME 46 / Ubuntu 24.04) einrichten.
 # Aufruf:  sudo bash sesam-rdp-setup.sh
-# Kann beliebig oft laufen. Jeder Schritt fragt vorher nach.
-#
-#   Port 3389       Anmeldebildschirm: als beliebiger Benutzer anmelden, eigener Desktop im Hintergrund
-#   feste Ports     Bildschirmfreigabe: die Sitzung übernehmen, die am Bildschirm läuft (pro Benutzer ein Port)
+# Kann beliebig oft laufen. Jeder Schritt zeigt den aktuellen Stand; Enter lässt alles, wie es ist.
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "Bitte mit sudo starten: sudo bash $0"; exit 1; }
 command -v grdctl >/dev/null || { echo "GNOME Remote Desktop fehlt: sudo apt install gnome-remote-desktop"; exit 1; }
@@ -14,13 +11,26 @@ USER_SCRIPT=/usr/local/bin/sesam-rdp-user
 UNIT=/etc/systemd/user/sesam-rdp-user.service
 mkdir -p /etc/sesam-rdp; touch "$CONF"
 
-ja() { local a; read -rp "$1 [j/N] " a; [[ $a =~ ^[jJyY] ]]; }
+# --- Darstellung ---------------------------------------------------------------------------------
+if [ -t 1 ]; then B=$'\e[1m' D=$'\e[2m' G=$'\e[32m' Y=$'\e[33m' C=$'\e[36m' N=$'\e[0m'; else B= D= G= Y= C= N=; fi
+STEPS=5
+titel()  { echo; echo "${B}${C}── Schritt $1/$STEPS · $2 ${N}${C}$(printf '─%.0s' $(seq 1 $((60 - ${#2}))))${N}"; echo "${D}$3${N}"; }
+stand()  { printf '  %-22s %s\n' "$1" "$2"; }
+ok()     { echo "  ${G}✓${N} $*"; }
+hinweis(){ echo "  ${Y}!${N} $*"; }
+gut()    { echo "${G}$*${N}"; }
+warn()   { echo "${Y}$*${N}"; }
+# frage "Frage" "was j bewirkt" "was Enter bewirkt" -> 0 bei j
+frage()  { local a; read -rp "  ${B}$1${N}  ${D}[j] $2 · [Enter] $3:${N} " a; [[ $a =~ ^[jJyY] ]]; }
+
+# --- Helfer --------------------------------------------------------------------------------------
 human_users() { getent passwd | awk -F: '$3>=1000 && $3<60000 && $7 !~ /(nologin|false)$/ {print $1}'; }
 port_of() { awk -v u="$1" '$1==u {print $2}' "$CONF"; }
 autologin_user() { awk -F= '/^AutomaticLoginEnable *= *[Tt]rue/{e=1} /^AutomaticLogin *=/{u=$2} END{if(e) print u}' /etc/gdm3/custom.conf 2>/dev/null | tr -d ' '; }
+home_of() { getent passwd "$1" | cut -d: -f6; }
 as_user() { # $1 Benutzer, Rest: Befehl in dessen laufender Sitzung
   local u=$1 uid; uid=$(id -u "$u"); shift
-  runuser -u "$u" -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" XDG_RUNTIME_DIR="/run/user/$uid" HOME="$(getent passwd "$u" | cut -d: -f6)" "$@"
+  runuser -u "$u" -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" XDG_RUNTIME_DIR="/run/user/$uid" HOME="$(home_of "$u")" "$@"
 }
 logged_in() { # hat der Benutzer eine grafische Sitzung (nicht nur SSH)?
   local s
@@ -30,8 +40,35 @@ logged_in() { # hat der Benutzer eine grafische Sitzung (nicht nur SSH)?
   return 1
 }
 fingerprint() { openssl x509 -in "$1" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2; }
+# grdctl-Status lesen: "an"/"aus" und "gesetzt"/"fehlen"
+grd_on()    { grep -qE '^\s*Status: enabled' <<<"$1" && echo an || echo aus; }
+grd_creds() { grep -qE '^\s*Username: \(hidden\)|^\s*Username: [^(]' <<<"$1" && echo gesetzt || echo fehlen; }
+sys_status() { grdctl --system status 2>/dev/null || true; }
+user_status() { as_user "$1" grdctl status 2>/dev/null || true; }
+vm_state() {
+  local f=/etc/default/grub.d/99-sesam-virtual-monitor.cfg old=/etc/default/grub.d/99-virtual-monitor.cfg out
+  out=$(grep -o 'drm.edid_firmware=[^:]*' /proc/cmdline | cut -d= -f2 || true)
+  if [ -n "$out" ]; then echo "aktiv ($out)"
+  elif [ -e "$f" ] || [ -e "$old" ]; then echo "eingerichtet, wirkt nach dem nächsten Neustart"
+  else echo "nicht eingerichtet"; fi
+}
+SYS_CERT="$(home_of gnome-remote-desktop)/.local/share/gnome-remote-desktop/certificates/rdp-tls.crt"
+user_cert() { echo "$(home_of "$1")/.local/share/gnome-remote-desktop/certificates/rdp-tls.crt"; }
+AUTO=$(autologin_user)
 
-# --- 1. Bildschirmfreigabe für alle Benutzer (läuft bei jeder Anmeldung) -------------------------
+# --- Kopf ----------------------------------------------------------------------------------------
+clear 2>/dev/null || true
+echo "${B}Sesam Remote · Fernzugriff einrichten${N}   $(hostname) · $(hostname -I | awk '{print $1}')"
+echo
+echo "Es gibt zwei Arten, diesen PC aus Sesam zu erreichen:"
+echo "  ${B}Anmeldebildschirm${N}    Port 3389          Als beliebiger Benutzer anmelden, eigener Desktop im Hintergrund."
+echo "  ${B}Sitzung übernehmen${N}   ein Port je Benutzer  Sehen und steuern, was gerade am Bildschirm läuft."
+echo
+echo "Bedienung: Jeder Schritt zeigt zuerst den aktuellen Stand."
+echo "  ${B}j${N} = einschalten oder ändern   ${B}Enter${N} = so lassen. ${B}Es wird nie etwas ausgeschaltet.${N}"
+
+# --- 1. Grundlage: Sitzung übernehmen für alle Benutzer ------------------------------------------
+titel 1 "Grundlage" "Bereitet \"Sitzung übernehmen\" für alle Benutzer vor (eigenes Zertifikat, fester Port). Läuft automatisch, keine Frage."
 cat > "$USER_SCRIPT" <<'EOF'
 #!/bin/sh
 # Sesam Remote: RDP-Bildschirmfreigabe für die eigene Sitzung einschalten (eigenes Zertifikat, fester Port aus /etc/sesam-rdp/ports).
@@ -67,74 +104,80 @@ ExecStart=$USER_SCRIPT
 [Install]
 WantedBy=graphical-session.target
 EOF
-# frühere Version dieses Skripts ablösen
-if [ -e /etc/systemd/user/grd-user-setup.service ]; then
+if [ -e /etc/systemd/user/grd-user-setup.service ]; then   # frühere Version ablösen
   systemctl --global disable grd-user-setup.service >/dev/null 2>&1 || true
   rm -f /etc/systemd/user/grd-user-setup.service /usr/local/bin/grd-user-setup
 fi
 systemctl --global enable sesam-rdp-user.service gnome-remote-desktop.service >/dev/null 2>&1
-echo "✓ Bildschirmfreigabe ist für alle Benutzer eingeschaltet (greift bei der Anmeldung)."
+ok "Erledigt. Greift bei jeder Anmeldung eines Benutzers."
 
 # --- 2. Anmeldebildschirm (Port 3389) ------------------------------------------------------------
-echo
-if ja "Anmeldebildschirm per RDP einschalten (Port 3389, für alle Benutzer)?"; then
-  GRDHOME=$(getent passwd gnome-remote-desktop | cut -d: -f6)
-  C="$GRDHOME/.local/share/gnome-remote-desktop/certificates"
-  if [ ! -s "$C/rdp-tls.crt" ]; then
-    runuser -u gnome-remote-desktop -- sh -c "mkdir -p '$C' && openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
-      -subj '/CN=$(hostname)' -keyout '$C/rdp-tls.key' -out '$C/rdp-tls.crt' 2>/dev/null && chmod 600 '$C/rdp-tls.key'"
+titel 2 "Anmeldebildschirm (Port 3389)" "In Sesam zuerst diese RDP-Zugangsdaten, danach der normale Ubuntu-Anmeldebildschirm. Tipp: Benutzer und Passwort eines Ubuntu-Benutzers nehmen, dann ist es wie bei Windows."
+S=$(sys_status); ON=$(grd_on "$S"); CR=$(grd_creds "$S")
+stand "Stand:" "$( [ "$ON" = an ] && gut eingeschaltet || warn ausgeschaltet ) · Zugangsdaten $( [ "$CR" = gesetzt ] && gut gesetzt || warn fehlen )"
+set_sys_creds() {
+  # ohne Argumente: grdctl fragt selbst; als Argument landete das Passwort über pkexec im Systemprotokoll
+  echo "  Benutzername und Passwort für Port 3389 eingeben:"
+  grdctl --system rdp set-credentials && ok "Zugangsdaten gespeichert."
+}
+if [ "$ON" = aus ]; then
+  if frage "Anmeldebildschirm einschalten?" "einschalten" "aus lassen"; then
+    GRDDIR=$(dirname "$SYS_CERT")
+    if [ ! -s "$SYS_CERT" ]; then
+      runuser -u gnome-remote-desktop -- sh -c "mkdir -p '$GRDDIR' && openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
+        -subj '/CN=$(hostname)' -keyout '$GRDDIR/rdp-tls.key' -out '$SYS_CERT' 2>/dev/null && chmod 600 '$GRDDIR/rdp-tls.key'"
+    fi
+    grdctl --system rdp set-tls-cert "$SYS_CERT" 2>/dev/null
+    grdctl --system rdp set-tls-key "$GRDDIR/rdp-tls.key" 2>/dev/null
+    [ "$CR" = gesetzt ] || set_sys_creds
+    grdctl --system rdp enable 2>/dev/null
+    systemctl enable --now gnome-remote-desktop.service >/dev/null 2>&1
+    ok "Anmeldebildschirm ist eingeschaltet."
   fi
-  grdctl --system rdp set-tls-cert "$C/rdp-tls.crt" 2>/dev/null
-  grdctl --system rdp set-tls-key "$C/rdp-tls.key" 2>/dev/null
-  echo "Diese Zugangsdaten gibst du in Sesam ein, danach folgt der normale Ubuntu-Anmeldebildschirm."
-  echo "Tipp: Benutzername und Passwort eines Ubuntu-Benutzers verwenden, dann ist es wie bei Windows."
-  if ja "Zugangsdaten für Port 3389 setzen oder ändern?"; then
-    # ohne Argumente: grdctl fragt selbst; als Argument landete das Passwort über pkexec im Systemprotokoll
-    echo "Benutzername und Passwort für den Anmeldebildschirm (3389) eingeben:"
-    grdctl --system rdp set-credentials
-  fi
-  grdctl --system rdp enable 2>/dev/null
-  systemctl enable --now gnome-remote-desktop.service >/dev/null 2>&1
-  echo "✓ Anmeldebildschirm auf Port 3389 ist eingeschaltet."
+elif [ "$CR" = fehlen ]; then
+  frage "Zugangsdaten jetzt setzen? Ohne geht keine Verbindung." "setzen" "später" && set_sys_creds
+else
+  frage "Zugangsdaten ändern?" "neue eingeben" "behalten" && set_sys_creds
 fi
 
-# --- 3. Feste Ports für die Bildschirmfreigabe ---------------------------------------------------
-echo
-AUTO=$(autologin_user)
-if [ ! -s "$CONF" ]; then
-  next=3390; suggestion=""
-  for u in $AUTO $(human_users | grep -vx "${AUTO:-#}"); do suggestion+="$u $next"$'\n'; next=$((next+1)); done
-  echo "Vorschlag für feste Ports:"; printf '%s' "$suggestion" | sed 's/^/  /'
-  if ja "Vorschlag übernehmen?"; then printf '%s' "$suggestion" > "$CONF"; fi
+# --- 3. Feste Ports für "Sitzung übernehmen" -----------------------------------------------------
+titel 3 "Ports für \"Sitzung übernehmen\"" "Jeder Benutzer bekommt einen festen Port. Port 3389 ist für den Anmeldebildschirm reserviert."
+if [ ! -s "$CONF" ]; then   # erster Lauf: Vorschlag, automatisch angemeldeter Benutzer zuerst
+  next=3390
+  for u in $AUTO $(human_users | grep -vx "${AUTO:-#}"); do echo "$u $next" >> "$CONF"; next=$((next+1)); done
+  ok "Ports vorgeschlagen und gespeichert, unten änderbar."
 fi
-echo "Feste Ports (Bildschirmfreigabe):"
-for u in $(human_users); do p=$(port_of "$u"); printf '  %-16s %s\n' "$u" "${p:-automatisch}"; done
-echo "Weitere Benutzer oder Ports ändern: Benutzer eingeben, leer lassen = fertig."
-while read -rp "Benutzer: " u && [ -n "$u" ]; do
-  id "$u" >/dev/null 2>&1 || { echo "  Benutzer $u gibt es nicht."; continue; }
-  read -rp "Port für $u (1024–65535, leer = automatisch): " p
-  sed -i "/^$u /d" "$CONF"
-  if [ -z "$p" ]; then echo "  $u: automatisch"; continue; fi
-  if ! [[ $p =~ ^[0-9]+$ ]] || (( p < 1024 || p > 65535 )) || (( p == 3389 )); then
-    echo "  Ungültig (3389 ist für den Anmeldebildschirm reserviert)."; continue
-  fi
-  if awk -v p="$p" '$2==p {f=1} END{exit !f}' "$CONF"; then echo "  Port $p ist schon vergeben."; continue; fi
-  echo "$u $p" >> "$CONF"; echo "  $u: Port $p"
+show_ports() { for u in $(human_users); do p=$(port_of "$u"); stand "$u" "${p:-${Y}kein fester Port${N}}"; done; }
+show_ports
+while :; do
+  read -rp "  ${B}Port setzen oder ändern?${N}  ${D}Benutzername eingeben · [Enter] weiter:${N} " u || break
+  [ -n "$u" ] || break
+  id "$u" >/dev/null 2>&1 || { hinweis "Benutzer \"$u\" gibt es nicht."; continue; }
+  read -rp "  Port für $u ${D}(1024–65535, [Enter] = keinen festen Port):${N} " p || p=
+  if [ -z "$p" ]; then sed -i "/^$u /d" "$CONF"; ok "$u: kein fester Port (GNOME wählt einen freien)."; continue; fi
+  if ! [[ $p =~ ^[0-9]+$ ]] || (( p < 1024 || p > 65535 || p == 3389 )); then hinweis "Ungültiger Port."; continue; fi
+  if awk -v p="$p" -v u="$u" '$2==p && $1!=u {f=1} END{exit !f}' "$CONF"; then hinweis "Port $p hat schon ein anderer Benutzer."; continue; fi
+  sed -i "/^$u /d" "$CONF"; echo "$u $p" >> "$CONF"; ok "$u: Port $p"
 done
 
-# --- 4. Zugangsdaten der Bildschirmfreigabe für angemeldete Benutzer -----------------------------
-echo
+# --- 4. Zugangsdaten für "Sitzung übernehmen" ----------------------------------------------------
+titel 4 "Zugangsdaten für \"Sitzung übernehmen\"" "Jeder Benutzer hat eigene. GNOME speichert sie in seinem Schlüsselbund, darum geht das nur, solange er am Bildschirm angemeldet ist."
+LATER=()
 for u in $(human_users); do
-  logged_in "$u" || { echo "$u ist nicht angemeldet: Zugangsdaten später in dessen Sitzung setzen (Einstellungen > System > Remotedesktop) oder dieses Skript erneut starten, während $u angemeldet ist."; continue; }
-  ja "Zugangsdaten für die Bildschirmfreigabe von $u setzen oder ändern?" || { as_user "$u" systemctl --user restart sesam-rdp-user.service gnome-remote-desktop.service || true; continue; }
+  if ! logged_in "$u"; then LATER+=("$u"); continue; fi
+  CR=$(grd_creds "$(user_status "$u")")
+  stand "$u" "angemeldet · Zugangsdaten $( [ "$CR" = gesetzt ] && gut gesetzt || warn fehlen )"
+  if [ "$CR" = gesetzt ]; then q="Zugangsdaten für $u ändern?"; a="neue eingeben"; e="behalten"
+  else q="Zugangsdaten für $u setzen?"; a="setzen"; e="später"; fi
+  if ! frage "$q" "$a" "$e"; then as_user "$u" systemctl --user restart sesam-rdp-user.service gnome-remote-desktop.service >/dev/null 2>&1 || true; continue; fi
   locked=$(as_user "$u" busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/login \
            org.freedesktop.Secret.Collection Locked 2>/dev/null || true)
   if [ "$locked" = "b true" ]; then
-    if [ "$u" != "$AUTO" ]; then echo "  Schlüsselbund von $u ist gesperrt – $u bitte einmal am Bildschirm anmelden, dann erneut starten."; continue; fi
-    echo "  $u meldet sich automatisch an, deshalb ist der Schlüsselbund gesperrt und die Freigabe kann die Zugangsdaten nicht lesen."
-    echo "  Lösung: Schlüsselbund ohne Passwort (gespeicherte Passwörter von $u liegen dann unverschlüsselt auf der Platte)."
-    ja "  Schlüsselbund von $u ohne Passwort speichern?" || continue
-    read -rsp "  Bisheriges Passwort des Schlüsselbunds (meist das Ubuntu-Passwort von $u vor einer Änderung): " KP; echo
+    if [ "$u" != "$AUTO" ]; then hinweis "Der Schlüsselbund von $u ist gesperrt. $u bitte einmal von Hand anmelden, dann erneut starten."; continue; fi
+    hinweis "$u meldet sich automatisch an. Dabei bleibt sein Schlüsselbund gesperrt, und GNOME kann die Zugangsdaten nicht lesen."
+    echo "    Abhilfe: Schlüsselbund ohne Passwort. Gespeicherte Passwörter von $u liegen dann unverschlüsselt auf der Platte."
+    frage "Schlüsselbund von $u ohne Passwort speichern?" "ja, nötig für den Fernzugriff" "abbrechen" || continue
+    read -rsp "    Bisheriges Schlüsselbund-Passwort (meist das Ubuntu-Passwort von $u, vor einer allfälligen Änderung): " KP; echo
     # Passwort über stdin, nie als Argument (sonst landet es im Protokoll)
     printf '%s\n' "$KP" | as_user "$u" python3 -c '
 import sys
@@ -151,25 +194,34 @@ try:
     call(I, "ChangeWithMasterPassword", GLib.Variant("(o(oayays)(oayays))", (col, sec(sys.stdin.readline().rstrip("\n")), sec(""))))
     call(I, "UnlockWithMasterPassword", GLib.Variant("(o(oayays))", (col, sec(""))))
 except GLib.Error as e:
-    sys.exit("  Schlüsselbund nicht geändert (Passwort falsch?): " + e.message)
-print("  ✓ Schlüsselbund ist jetzt ohne Passwort.")
+    sys.exit("    Schlüsselbund nicht geändert (Passwort falsch?): " + e.message)
 ' || continue
+    ok "Schlüsselbund von $u ist jetzt ohne Passwort."
   fi
-  echo "  Benutzername und Passwort für die Bildschirmfreigabe von $u eingeben (Tipp: Ubuntu-Benutzer und -Passwort von $u):"
+  echo "  Benutzername und Passwort für \"Sitzung von $u übernehmen\" eingeben (Tipp: Ubuntu-Benutzer und -Passwort von $u):"
   as_user "$u" grdctl rdp set-credentials
-  as_user "$u" systemctl --user restart sesam-rdp-user.service gnome-remote-desktop.service || true
-  echo "  ✓ Zugangsdaten für $u gesetzt."
+  as_user "$u" systemctl --user restart sesam-rdp-user.service gnome-remote-desktop.service >/dev/null 2>&1 || true
+  ok "Zugangsdaten für $u gespeichert."
 done
+if [ ${#LATER[@]} -gt 0 ]; then
+  stand "${LATER[*]}" "nicht angemeldet, darum hier übersprungen"
+  echo "  ${D}Später: Benutzer anmelden (am Bildschirm oder über Port 3389), dann dieses Skript erneut starten"
+  echo "  oder in seinen Einstellungen unter System > Remotedesktop > Desktopfreigabe setzen.${N}"
+fi
 
-# --- 5. Virtueller Monitor (Betrieb ohne Bildschirm) ---------------------------------------------
-echo
-if ja "Virtuellen Monitor einrichten (PC läuft auch mit ausgeschaltetem oder abgestecktem Bildschirm)?"; then
+# --- 5. Virtueller Monitor -----------------------------------------------------------------------
+titel 5 "Virtueller Monitor" "Damit der PC auch mit ausgeschaltetem oder abgestecktem Bildschirm ein Bild liefert. Nur nötig, wenn er ohne Bildschirm laufen soll."
+VM=$(vm_state)
+stand "Stand:" "$( [ "$VM" = "nicht eingerichtet" ] && warn "$VM" || gut "$VM" )"
+if [ "$VM" = "nicht eingerichtet" ]; then q="Virtuellen Monitor einrichten?"; a="einrichten"; e="nicht einrichten"
+else q="Neu einrichten (z. B. nach Monitorwechsel)?"; a="neu einrichten"; e="so lassen"; fi
+if frage "$q" "$a" "$e"; then
   mapfile -t CON < <(for c in /sys/class/drm/card*-*; do [ "$(cat "$c/status" 2>/dev/null)" = connected ] && basename "$c"; done)
   if [ ${#CON[@]} -eq 0 ]; then
-    echo "  Kein Bildschirm angeschlossen. Bitte einmal anschliessen und das Skript erneut starten."
+    hinweis "Kein Bildschirm erkannt. Bitte einmal anschliessen und das Skript erneut starten."
   else
     c=${CON[0]}
-    if [ ${#CON[@]} -gt 1 ]; then echo "  Angeschlossen: ${CON[*]}"; read -rp "  Welcher Ausgang? [${CON[0]}] " a; c=${a:-$c}; fi
+    if [ ${#CON[@]} -gt 1 ]; then read -rp "  Angeschlossen: ${CON[*]}. Welcher Ausgang? [${CON[0]}] " a; c=${a:-$c}; fi
     name=${c#card*-}
     edid=/usr/lib/firmware/edid/sesam-$name.bin
     install -D -m644 "/sys/class/drm/$c/edid" "$edid"
@@ -183,31 +235,41 @@ if ja "Virtuellen Monitor einrichten (PC läuft auch mit ausgeschaltetem oder ab
     fi
     echo "GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT drm.edid_firmware=$name:edid/sesam-$name.bin video=$name:e\"" \
       > /etc/default/grub.d/99-sesam-virtual-monitor.cfg
+    echo "  Bitte warten, Startdateien werden neu erstellt …"
     update-initramfs -u >/dev/null 2>&1
     update-grub >/dev/null 2>&1
-    echo "  ✓ Virtueller Monitor auf $name eingerichtet, wirkt nach dem nächsten Neustart."
+    ok "Virtueller Monitor auf $name eingerichtet. Wirkt nach dem nächsten Neustart."
   fi
 fi
 
-# --- 6. Firewall ---------------------------------------------------------------------------------
+# --- Firewall (nur wenn aktiv) -------------------------------------------------------------------
 if command -v ufw >/dev/null && ufw status | head -1 | grep -qE ': (aktiv|active)$'; then
   echo
-  if ja "Firewall ist aktiv. Port 3389 und die festen Ports freigeben?"; then
+  hinweis "Die Firewall ist aktiv."
+  if frage "Port 3389 und die festen Ports freigeben?" "freigeben" "so lassen"; then
     ufw allow 3389/tcp >/dev/null
     while read -r _ p; do [ -n "$p" ] && ufw allow "$p/tcp" >/dev/null; done < "$CONF"
-    echo "✓ Ports in der Firewall freigegeben."
+    ok "Ports freigegeben."
   fi
 fi
 
 # --- Übersicht -----------------------------------------------------------------------------------
-GRDHOME=$(getent passwd gnome-remote-desktop | cut -d: -f6)
 echo
-echo "================ Übersicht für Sesam ($(hostname), $(hostname -I | awk '{print $1}')) ================"
-printf '  %-6s %-40s %s\n' 3389 "Anmeldebildschirm, beliebiger Benutzer" "$(fingerprint "$GRDHOME/.local/share/gnome-remote-desktop/certificates/rdp-tls.crt")"
+echo "${B}${C}══ Übersicht für Sesam · $(hostname) · $(hostname -I | awk '{print $1}') ══${N}"
+S=$(sys_status)
+if [ "$(grd_on "$S")" = an ] && [ "$(grd_creds "$S")" = gesetzt ]; then st=$(gut bereit)
+elif [ "$(grd_on "$S")" = an ]; then st=$(warn "Zugangsdaten fehlen"); else st=$(warn ausgeschaltet); fi
+printf '  %s%-6s%s %-36s %s\n' "$B" 3389 "$N" "Anmeldebildschirm" "$st"
+echo "  ${D}       Fingerabdruck $(fingerprint "$SYS_CERT")${N}"
 while read -r u p; do
   [ -n "$u" ] || continue
-  printf '  %-6s %-40s %s\n' "$p" "Sitzung von $u übernehmen" \
-    "$(fingerprint "$(getent passwd "$u" | cut -d: -f6)/.local/share/gnome-remote-desktop/certificates/rdp-tls.crt")"
+  if ! logged_in "$u"; then st=$(warn "nur wenn $u angemeldet ist")
+  elif [ "$(grd_creds "$(user_status "$u")")" = gesetzt ]; then st=$(gut bereit)
+  else st=$(warn "Zugangsdaten fehlen"); fi
+  printf '  %s%-6s%s %-36s %s\n' "$B" "$p" "$N" "Sitzung von $u übernehmen" "$st"
+  fp=$(fingerprint "$(user_cert "$u")")
+  echo "  ${D}       Fingerabdruck ${fp:-entsteht bei der ersten Anmeldung von $u}${N}"
 done < "$CONF"
-echo "  Die letzte Spalte ist der Zertifikats-Fingerabdruck, den Sesam beim ersten Verbinden anzeigt."
-echo "  Die Bildschirmfreigabe eines Benutzers läuft nur, solange er am Bildschirm angemeldet ist."
+echo
+echo "  ${D}Den Fingerabdruck zeigt Sesam beim ersten Verbinden. Stimmt er überein, bestätigen.${N}"
+echo "  ${D}Virtueller Monitor: $(vm_state)${N}"
