@@ -53,7 +53,10 @@ export function shellTab(ctx: TabCtx): TabHandle {
     term.options.theme = resolveTheme(t.theme);
     term.options.fontSize = t.fontSize;
     term.options.fontFamily = t.fontFamily || FONT;
-    host.style.background = term.options.theme?.background ?? "";
+    // Ganze Fläche (Rand, Statuszeile, Bildlaufleiste) in der Farbe des Schemas, kein Schwarz.
+    const bg = term.options.theme?.background ?? "";
+    host.style.background = ctx.pane.style.background = bg;
+    ctx.pane.style.setProperty("--term-fg", term.options.theme?.foreground ?? "");
     refit();
   };
   applySettings();
