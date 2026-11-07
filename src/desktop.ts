@@ -10,6 +10,7 @@ import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from ".
 import { saveDesktopThumb } from "./thumbs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
+import { remoteSize } from "./desksize";
 
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
@@ -71,11 +72,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   };
 
   /** Gewünschte entfernte Auflösung: Fenstergrösse, bei Hochformat hochkant. */
-  const wanted = () => {
-    let w = wrap.clientWidth & ~1, h = wrap.clientHeight & ~1;
-    if (orientation === "portrait" && w > h) [w, h] = [h, w];
-    return [w, h];
-  };
+  const wanted = () => remoteSize(wrap.clientWidth, wrap.clientHeight, devicePixelRatio || 1, orientation);
 
   /** «An Fenster anpassen»: entfernte Auflösung folgt der Fenstergrösse. */
   let sizeTimer = 0;
@@ -83,8 +80,9 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     clearTimeout(sizeTimer);
     if (mode !== "fit" || !sid || !resizable) return;
     sizeTimer = window.setTimeout(async () => {
+      if (wrap.clientWidth < 100 || wrap.clientHeight < 100) return; // versteckter Tab
       const [w, h] = wanted();
-      if (w < 200 || h < 200 || (w === canvas.width && h === canvas.height)) return;
+      if (w === canvas.width && h === canvas.height) return;
       if (rdp) return void api.rdpSetSize(sid!, w, h).catch(() => {}); // Absage kommt als Hinweis
       resizable = await api.vncSetSize(sid!, w, h).catch(() => false);
       if (!resizable) status.textContent = "Der Server kann seine Auflösung nicht anpassen; die Anzeige wird skaliert.";
@@ -445,7 +443,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
       return at.sid;
     }
     if (!rdp) return api.vncOpen(c.id, trust, remember, onFrame);
-    const [w, h] = mode === "fit" ? wanted() : [1920, 1080];
+    const [w, h] = mode === "fit" && wrap.clientWidth >= 100 ? wanted() : orientation === "portrait" ? [1080, 1920] : [1920, 1080];
     return api.rdpOpen(c.id, trust, remember, Math.max(w, 640), Math.max(h, 480), onFrame);
   };
 
