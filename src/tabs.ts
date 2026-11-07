@@ -221,6 +221,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
     },
   };
   tabEl.onclick = () => activate(tab);
+  pane.addEventListener("pointerdown", () => active !== tab && !pane.hidden && activate(tab), true);
   tabEl.onkeydown = (e) => {
     if (e.target !== tabEl) return;
     if (e.key === "Enter" || e.key === " ") activate(tab);
@@ -252,6 +253,9 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
       ...(tab.group ? [{ value: "ungroup", label: "Aus Gruppe entfernen" }] : []),
       { value: "dup", label: `Weitere ${kindName(kind)}-Sitzung`, icon: ICON.plus, disabled: kind === "desktop", separator: true },
       ...(conn.id.startsWith("quick-") ? [{ value: "save", label: "Als Verbindung sichern …", icon: ICON.save }] : []),
+      // Geteilte Ansicht wie Windows Terminal: dieser Tab neben/unter dem aktiven.
+      ...(active && active !== tab ? [{ value: "split-right", label: "Neben aktivem Tab anzeigen", icon: ICON.splitRight, separator: true }, { value: "split-down", label: "Unter aktivem Tab anzeigen", icon: ICON.splitDown }] : []),
+      ...(split && (split.tab === tab || active === tab) ? [{ value: "unsplit", label: "Geteilte Ansicht beenden", separator: true }] : []),
       { value: "detach", label: detachedWindow ? "Ins Hauptfenster zurück" : "In eigenem Fenster öffnen", icon: ICON.detach, separator: true },
       { value: "min", label: "Minimieren", icon: ICON.minimize, disabled: detachedWindow },
       { value: "close", label: "Trennen", icon: ICON.disconnect },
@@ -266,6 +270,8 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
     if (v === "icon") pickTabIcon(tab);
     if (v === "group") addToGroup(tab);
     if (v === "ungroup") setGroup(tab, undefined);
+    if (v === "split-right" || v === "split-down") (split = { tab, dir: v === "split-right" ? "right" : "down" }), activate(active!);
+    if (v === "unsplit") (split = null), activate(active!);
   };
   // Gespeicherte Angaben dieser Verbindung und Art übernehmen (Werte aus dem localStorage prüfen).
   const s = saved.tabs[`${conn.id}|${kind}`];
@@ -348,6 +354,7 @@ export async function detachTab(tab: Tab) {
 
 /** Tab-Oberfläche entfernen (die Sitzung ist bereits geschlossen oder übergeben). */
 function removeTab(tab: Tab) {
+  if (split && (split.tab === tab || active === tab)) split = null;
   tab.ctx.pane.remove();
   tab.ctx.toolbar.remove();
   tab.tabEl.remove();
@@ -395,7 +402,12 @@ export function minimizeTab(tab: Tab) {
   renderActiveBar();
 }
 
+/** Zweiter sichtbarer Tab in der geteilten Ansicht (rechts bzw. unten). */
+let split: { tab: Tab; dir: "right" | "down" } | null = null;
+
 function activate(tab: Tab) {
+  // Klick in den zweiten Teil: Rollen tauschen, beide bleiben sichtbar.
+  if (split && tab === split.tab && active && active !== tab) split.tab = active;
   if (active && active !== tab) {
     active.ctx.pane.hidden = true;
     active.ctx.toolbar.hidden = true;
@@ -406,8 +418,14 @@ function activate(tab: Tab) {
   tab.minimized = false;
   if (tab.group?.collapsed) (tab.group.collapsed = false), remember();
   layoutTabs();
+  const second = split && split.tab !== tab && tabs.includes(split.tab) ? split.tab : null;
+  const panes = $("session-panes");
+  panes.classList.toggle("split-right", second !== null && split!.dir === "right");
+  panes.classList.toggle("split-down", second !== null && split!.dir === "down");
   for (const t of tabs) {
-    t.ctx.pane.hidden = t !== tab;
+    t.ctx.pane.classList.toggle("primary", second !== null && t === tab);
+    t.ctx.pane.classList.toggle("secondary", t === second);
+    t.ctx.pane.hidden = t !== tab && t !== second;
     t.ctx.toolbar.hidden = t !== tab;
     t.tabEl.setAttribute("aria-selected", String(t === tab));
   }

@@ -6,6 +6,7 @@ mod kdc;
 mod forward;
 mod ftp;
 mod library;
+mod localterm;
 mod profiles;
 mod rdp;
 mod relay;
@@ -463,17 +464,42 @@ async fn shell_open(
 
 #[tauri::command]
 async fn shell_write(shells: State<'_, ssh::Shells>, sid: String, data: Vec<u8>) -> Result<(), String> {
+    if let Some(t) = local_term(&sid) {
+        return t.write(&data);
+    }
     shells.0.lock().await.get(&sid).ok_or("Shell geschlossen")?.write(data).await
+}
+
+/// Lokales Terminal zu dieser Sitzungs-ID (die Shell-Befehle bedienen SSH und lokal gleich).
+fn local_term(sid: &str) -> Option<Arc<localterm::Term>> {
+    localterm::TERMS.lock().unwrap().get(sid).cloned()
+}
+
+/// Lokales Terminal mit einem Profil starten (PowerShell, cmd, WSL, zsh, Python …).
+#[tauri::command]
+fn term_open(profile: localterm::Spec, cols: u16, rows: u16, on_event: Channel<ssh::ShellEvent>) -> Result<String, String> {
+    let relay = relay::Relay::new(on_event);
+    let term = localterm::open(&profile, cols, rows, relay.clone())?;
+    let sid = new_sid("local");
+    localterm::TERMS.lock().unwrap().insert(sid.clone(), term);
+    relay::SHELLS.lock().unwrap().insert(sid.clone(), relay);
+    Ok(sid)
 }
 
 #[tauri::command]
 async fn shell_resize(shells: State<'_, ssh::Shells>, sid: String, cols: u32, rows: u32) -> Result<(), String> {
+    if let Some(t) = local_term(&sid) {
+        return t.resize(cols.min(u16::MAX as u32) as u16, rows.min(u16::MAX as u32) as u16);
+    }
     shells.0.lock().await.get(&sid).ok_or("Shell geschlossen")?.resize(cols, rows).await
 }
 
 #[tauri::command]
 async fn shell_close(shells: State<'_, ssh::Shells>, sid: String) -> Result<(), String> {
     relay::SHELLS.lock().unwrap().remove(&sid);
+    if let Some(t) = localterm::TERMS.lock().unwrap().remove(&sid) {
+        t.close();
+    }
     if let Some(s) = shells.0.lock().await.remove(&sid) {
         s.close().await;
     }
@@ -1419,6 +1445,7 @@ pub fn run() {
             sftp_close,
             app_exit,
             term_profiles,
+            term_open,
             rdp_check,
             rdp_ports,
             desktop_attach,

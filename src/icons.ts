@@ -8,6 +8,8 @@ import house from "@phosphor-icons/core/assets/regular/house.svg?raw";
 import arrowSquareOut from "@phosphor-icons/core/assets/regular/arrow-square-out.svg?raw";
 import question from "@phosphor-icons/core/assets/regular/question.svg?raw";
 import screencast from "@phosphor-icons/core/assets/regular/screencast.svg?raw";
+import splitH from "@phosphor-icons/core/assets/regular/square-split-horizontal.svg?raw";
+import splitV from "@phosphor-icons/core/assets/regular/square-split-vertical.svg?raw";
 import minus from "@phosphor-icons/core/assets/regular/minus.svg?raw";
 import arrowsOut from "@phosphor-icons/core/assets/regular/arrows-out.svg?raw";
 import camera from "@phosphor-icons/core/assets/regular/camera.svg?raw";
@@ -81,6 +83,8 @@ export const ICON = {
   upload: sized(uploadSimple),
   close: sized(x, 12),
   minimize: sized(minus, 12),
+  splitRight: sized(splitH),
+  splitDown: sized(splitV),
   screencast: sized(screencast),
   question: sized(question, 14),
   viewGrid: sized(squaresFour),

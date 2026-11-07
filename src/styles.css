@@ -566,3 +566,12 @@ header.toolbar, header.session-bar, .session-head, .session-id, .tools { user-se
 .split-btn > button:last-child { border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 6px; margin-left: -1px; }
 .term-btns .tool { font-size: 15px; min-width: 28px; }
 .profile-row .cmd { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+/* ---------- Geteilte Ansicht (zwei Tabs gleichzeitig) ---------- */
+#session-panes.split-right .tab-pane.primary { right: calc(50% + 2px); }
+#session-panes.split-right .tab-pane.secondary { left: calc(50% + 2px); }
+#session-panes.split-down .tab-pane.primary { bottom: calc(50% + 2px); }
+#session-panes.split-down .tab-pane.secondary { top: calc(50% + 2px); }
+#session-panes.split-right, #session-panes.split-down { background: var(--chrome-line); }
+#session-panes .tab-pane.secondary { opacity: 0.92; }
+#session-panes .tab-pane.secondary:hover { opacity: 1; }

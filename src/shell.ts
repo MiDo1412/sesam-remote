@@ -1,6 +1,10 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import "@xterm/xterm/css/xterm.css";
 import { api, HOSTKEY_UNKNOWN } from "./api";
 import { askHostKey, askText } from "./ui";
@@ -36,6 +40,10 @@ export function shellTab(ctx: TabCtx): TabHandle {
   const search = new SearchAddon();
   term.loadAddon(fit);
   term.loadAddon(search);
+  // Emoji und breite Zeichen richtig breit (Unicode 11), Links mit Strg+Klick im Browser öffnen.
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = "11";
+  term.loadAddon(new WebLinksAddon((ev, uri) => (ev.ctrlKey || ev.metaKey) && /^https?:\/\//.test(uri) && void openUrl(uri)));
   term.open(host);
 
   let sid: string | null = null;
@@ -69,6 +77,14 @@ export function shellTab(ctx: TabCtx): TabHandle {
   addEventListener("sesam:terminal-settings", applySettings);
   const scheme = matchMedia("(prefers-color-scheme: dark)");
   scheme.addEventListener("change", applySettings);
+
+  // Ordner/Dateien aus Explorer/Finder aufs Terminal ziehen: Pfad einfügen (wie Windows Terminal).
+  const quote = (p: string) => (/[\s'"&()]/.test(p) ? (local?.command.toLowerCase().includes("cmd") ? `"${p}"` : `'${p.replace(/'/g, "'\\''")}'`) : p);
+  const unlistenDrop = getCurrentWebview().onDragDropEvent((ev) => {
+    if (ev.payload.type !== "drop" || !ctx.isActive() || !sid) return;
+    send(ev.payload.paths.map(quote).join(" "));
+    term.focus();
+  });
 
   // ---------- Werkzeugleiste ----------
   const copy = () => {
@@ -192,6 +208,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
       ro.disconnect();
       kb.dispose();
       removeEventListener("sesam:terminal-settings", applySettings);
+      unlistenDrop.then((u) => u());
       scheme.removeEventListener("change", applySettings);
       if (sid && !handedOff) api.shellClose(sid);
       sid = null;
