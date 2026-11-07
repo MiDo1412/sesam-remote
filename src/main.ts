@@ -363,7 +363,7 @@ $("conn-rows").onkeydown = (e) => {
   render();
 };
 for (const r of document.querySelectorAll<HTMLInputElement>("[name=libView]")) r.onchange = () => ((prefs.view = r.value as typeof prefs.view), savePrefs(), render());
-for (const s of document.querySelectorAll<HTMLElement>(".view-switch .seg-icon")) s.innerHTML = ICON[s.dataset.icon as keyof typeof ICON];
+for (const s of document.querySelectorAll<HTMLElement>(".view-switch .seg-icon, .sidebar-settings .seg-icon")) s.innerHTML = ICON[s.dataset.icon as keyof typeof ICON];
 
 /** Kontextmenü der Seitenleiste (Gruppe oder «Neue Gruppe»). */
 async function groupAction(anchor: HTMLElement, g: Group | null) {
@@ -413,7 +413,7 @@ function renderDetails() {
       fact("Desktop", desktopProtocol(c) === "rdp" ? `RDP · ${c.rdpPort}` : c.vncPort ? `VNC · ${c.vncPort}` : "aus"),
       fact("Shell", c.sshPort ? `SSH · ${c.sshPort}` : "aus"),
       fact("Dateien", filesProtocol(c) === "ftp" ? `${ftpLabel(c)} · ${c.ftpPort}` : c.sshPort ? `SFTP · ${c.sshPort}` : "aus"),
-      fact("Anmeldung", c.hasPassword || c.hasKey || c.hasVncPassword || c.hasRdpPassword ? "Im Tresor" : "Keine gespeichert"),
+      fact("Anmeldung", c.hasPassword || c.hasKey || c.hasVncPassword || c.hasRdpPassword || c.credentialId || c.rdpCredentialId || c.vncCredentialId ? "Im Tresor" : "Keine gespeichert"),
       fact("Schlüssel", c.hasKey ? "Im Tresor" : "–"),
     ),
     btn("Desktop öffnen", "primary", () => open(c, "desktop"), !desktopProtocol(c)),

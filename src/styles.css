@@ -122,6 +122,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .search input { width: 360px; }
 .body { flex: 1; display: flex; min-height: 0; }
 nav { width: 240px; flex-shrink: 0; padding: 4px 8px; display: flex; flex-direction: column; gap: 4px; overflow: auto; }
+.sidebar { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; }
+.sidebar > nav { flex: 1; min-height: 0; }
+.sidebar-settings { display: flex; align-items: center; gap: 8px; margin: 4px 8px 8px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: left; }
+.sidebar-settings:hover { background: var(--hover); }
+.sidebar-settings .seg-icon { display: inline-flex; color: var(--muted); }
 .nav-item {
   position: relative; display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px;
   border: 0; background: transparent; border-radius: 4px; text-align: left;
@@ -252,6 +257,17 @@ label.option small { margin-top: 2px; }
 .cmp-older { --c: var(--warn); }
 .cmp-differ { --c: var(--danger); }
 .pane tr[aria-selected=true] .cmp { --c: currentColor; }
+/* Vergleich: Zeilen dezent einfärben, Platzhalter halten die Höhe für Dateien der anderen Seite */
+.pane tr.cmp-row { --c: var(--muted); background: color-mix(in srgb, var(--c) 7%, transparent); }
+.pane tr.cmp-row-only { --c: var(--info); }
+.pane tr.cmp-row-newer { --c: var(--accent); }
+.pane tr.cmp-row-older { --c: var(--warn); }
+.pane tr.cmp-row-differ { --c: var(--danger); }
+.pane tr.cmp-row-same { background: transparent; }
+.pane tr.ghost td > * { visibility: hidden; }
+.pane tr.ghost td { color: transparent; }
+.pane tr.ghost td { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--muted) 10%, transparent) 6px 7px); }
+.compare-filter { height: 30px; }
 #ask-check { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; }
 .pane-list { flex: 1; min-height: 0; overflow: auto; }
 .pane table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }

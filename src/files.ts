@@ -97,6 +97,17 @@ export function filesTab(ctx: TabCtx): TabHandle {
   transfers.append(transferHead, transferList);
   const grid = el("div", "panes");
   grid.append(panes.local.root, panes.remote.root);
+  // Beim Vergleich scrollen beide Listen gemeinsam.
+  const lists = [panes.local.root, panes.remote.root].map((r) => r.querySelector<HTMLElement>(".pane-list")!);
+  let syncing = false;
+  lists.forEach((l, i) =>
+    l.addEventListener("scroll", () => {
+      if (!comparing || syncing) return;
+      syncing = true;
+      lists[1 - i].scrollTop = l.scrollTop;
+      requestAnimationFrame(() => (syncing = false));
+    }),
+  );
 
   // Vergleich der beiden offenen Ordner (gleiche Namen).
   let comparing = false;
@@ -107,9 +118,18 @@ export function filesTab(ctx: TabCtx): TabHandle {
   bar.hidden = true;
   const summary = el("span", "compare-summary");
   summary.setAttribute("aria-live", "polite");
-  const diffLabel = el("label", "pane-hidden");
-  const diffBox = Object.assign(document.createElement("input"), { type: "checkbox" });
-  diffLabel.append(diffBox, document.createTextNode(" Nur Unterschiede"));
+  const diffLabel = el("div", "segmented compare-filter");
+  diffLabel.setAttribute("role", "radiogroup");
+  diffLabel.setAttribute("aria-label", "Anzeigen");
+  const radios = (["Alle", "Unterschiede"] as const).map((t, i) => {
+    const l = el("label");
+    const r = Object.assign(document.createElement("input"), { type: "radio", name: `cmpFilter-${Math.random().toString(36).slice(2)}`, checked: i === 0 });
+    r.onchange = () => ((onlyDiff = i === 1), renderAll());
+    l.append(r, document.createTextNode(t));
+    return l;
+  });
+  for (const r of radios) r.querySelector("input")!.name = radios[0].querySelector("input")!.name;
+  diffLabel.append(...radios);
   const barButton = (label: string, onClick: () => void, cls = "") => {
     const b = el("button", cls, label) as HTMLButtonElement;
     b.type = "button";
@@ -120,7 +140,6 @@ export function filesTab(ctx: TabCtx): TabHandle {
   checkBtn.title = "Gleichnamige Dateien per SHA-256 vergleichen (auf dem Server mit sha256sum)";
   const syncBtn = barButton("Unterschiede übertragen …", () => syncDiffs(), "primary");
   bar.append(summary, el("span", "grow"), diffLabel, checkBtn, syncBtn, barButton("Beenden", () => toggleCompare(), "plain"));
-  diffBox.onchange = () => ((onlyDiff = diffBox.checked), renderAll());
   host.append(bar, grid, transfers);
 
   let sid: string | null = null;
@@ -173,9 +192,12 @@ export function filesTab(ctx: TabCtx): TabHandle {
       const b = el("button", "sort", label) as HTMLButtonElement;
       b.type = "button";
       b.onclick = () => {
-        pane.desc = pane.sort === key ? !pane.desc : false;
-        pane.sort = key;
-        render(pane);
+        // Beim Vergleich gilt die Sortierung für beide Seiten (Zeilen auf gleicher Höhe).
+        const t = comparing ? panes.local : pane;
+        t.desc = t.sort === key ? !t.desc : false;
+        t.sort = key;
+        if (comparing) renderAll();
+        else render(pane);
       };
       h.dataset.key = key;
       h.append(b);
@@ -301,17 +323,23 @@ export function filesTab(ctx: TabCtx): TabHandle {
     if (v === "del") localStorage.setItem(markKey(p), JSON.stringify(list.filter((m) => m !== here)));
   }
 
-  function visible(p: Pane, diff: Map<string, Mark> | null) {
+  /** Sichtbare Einträge; beim Vergleich mit Platzhaltern (`ghost`) für Namen, die nur auf der anderen Seite liegen. */
+  function visible(p: Pane, diff: Map<string, Mark> | null): (Entry & { ghost?: true })[] {
     const l = p.listing!;
-    const dir = p.desc ? -1 : 1;
-    // «Nur Unterschiede»: gleiche Dateien ausblenden, Ordner auf beiden Seiten bleiben zum Hineingehen.
-    const shown = (e: Entry) => !diff || !onlyDiff || (diff.has(e.name) ? diff.get(e.name) !== "same" : e.dir);
-    return l.entries
-      .filter((e) => (p.hidden || !e.name.startsWith(".")) && (!p.filter || e.name.toLowerCase().includes(p.filter)) && shown(e))
+    // Beim Vergleich sortieren und filtern beide Seiten gleich (wie links), damit die Zeilen auf einer Höhe liegen.
+    const s = diff ? panes.local : p;
+    const dir = s.desc ? -1 : 1;
+    const other = diff ? panes[p.side === "local" ? "remote" : "local"].listing : null;
+    const here = new Set(l.entries.map((e) => e.name));
+    const ghosts = other ? other.entries.filter((e) => !here.has(e.name)).map((e) => ({ ...e, ghost: true as const })) : [];
+    // «Unterschiede»: gleiche Dateien ausblenden, Ordner auf beiden Seiten bleiben zum Hineingehen.
+    const shown = (e: Entry & { ghost?: true }) => !diff || !onlyDiff || e.ghost || (diff.has(e.name) ? diff.get(e.name) !== "same" : e.dir);
+    return [...l.entries, ...ghosts]
+      .filter((e) => (s.hidden || !e.name.startsWith(".")) && (!s.filter || e.name.toLowerCase().includes(s.filter)) && shown(e))
       .sort((a, b) => {
         if (a.dir !== b.dir) return a.dir ? -1 : 1;
-        const d = p.sort === "size" ? a.size - b.size : p.sort === "date" ? (a.modified ?? 0) - (b.modified ?? 0) : a.name.localeCompare(b.name, "de-CH", { numeric: true });
-        return d * dir;
+        const d = s.sort === "size" ? a.size - b.size : s.sort === "date" ? (a.modified ?? 0) - (b.modified ?? 0) : a.name.localeCompare(b.name, "de-CH", { numeric: true });
+        return d * dir || a.name.localeCompare(b.name);
       });
   }
 
@@ -319,7 +347,8 @@ export function filesTab(ctx: TabCtx): TabHandle {
     const l = p.listing!;
     renderCrumbs(p);
     for (const h of p.root.querySelectorAll<HTMLElement>("th[data-key]")) {
-      h.setAttribute("aria-sort", h.dataset.key === p.sort ? (p.desc ? "descending" : "ascending") : "none");
+      const s = comparing ? panes.local : p;
+      h.setAttribute("aria-sort", h.dataset.key === s.sort ? (s.desc ? "descending" : "ascending") : "none");
     }
     p.nav.back.disabled = !p.back.length;
     p.nav.fwd.disabled = !p.fwd.length;
@@ -327,6 +356,16 @@ export function filesTab(ctx: TabCtx): TabHandle {
     const diff = diffOf(p);
     p.body.replaceChildren(
       ...visible(p, diff).map((e) => {
+        if (e.ghost) {
+          // Platzhalter: hält die Zeile frei, damit links und rechts dieselbe Datei auf gleicher Höhe steht.
+          const g = el("tr", "ghost");
+          g.title = `${e.name}: nur auf der anderen Seite`;
+          // Gleicher Aufbau wie eine echte Zeile (unsichtbar), damit die Höhe exakt stimmt.
+          const name = el("td", "name");
+          name.append(el("span", `icon ${fileKind(e.name, e.dir)}`), el("span", "fname", e.name), el("span", "cmp", "nur dort"));
+          g.append(name, el("td", "size", "—"), el("td", "date", formatDate(e.modified)));
+          return g;
+        }
         const tr = el("tr");
         tr.tabIndex = -1;
         tr.dataset.name = e.name;
@@ -335,6 +374,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
         name.append(el("span", `icon ${fileKind(e.name, e.dir)}`), el("span", "fname", e.name));
         const m = diff?.get(e.name);
         if (m) {
+          tr.classList.add("cmp-row", `cmp-row-${m}`);
           const badge = el("span", `cmp cmp-${m}`, MARK_LABEL[m]);
           badge.title = MARK_TITLE[m];
           name.append(badge);

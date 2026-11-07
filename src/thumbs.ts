@@ -18,7 +18,7 @@ const cache = new Map<string, string | null>();
 /** Füllt das Vorschau-Element (Hintergrundbild oder Symbol). */
 export async function renderThumb(el: HTMLElement, c: Connection) {
   const os = OS[c.os ?? ""] ?? OS[""];
-  el.style.background = os.color;
+  el.style.backgroundColor = os.color; // nicht `background`: das würde background-size: cover überschreiben
   const icon = document.createElement("span");
   icon.className = "thumb-os";
   icon.innerHTML = os.icon;
@@ -47,9 +47,29 @@ export async function saveDesktopThumb(c: Connection, canvas: HTMLCanvasElement)
   const w = 480;
   const h = Math.round((canvas.height / canvas.width) * w);
   const small = Object.assign(document.createElement("canvas"), { width: w, height: h });
-  small.getContext("2d")!.drawImage(canvas, 0, 0, w, h);
+  const g = small.getContext("2d")!;
+  g.drawImage(canvas, 0, 0, w, h);
+  if (isBlank(g.getImageData(0, 0, w, h).data)) return; // schwarzes/leeres Bild (kein Bild empfangen) nicht als Vorschau merken
   const blob = await new Promise<Blob | null>((r) => small.toBlob(r, "image/jpeg", 0.75));
   if (!blob) return;
   await invoke("thumb_save", { id: c.id, data: Array.from(new Uint8Array(await blob.arrayBuffer())) }).catch(() => {});
   forgetThumb(c.id);
+}
+
+/** Fast einfarbig (z. B. schwarz, weil noch kein Bild kam)? Prüft jeden 97. Bildpunkt. */
+export function isBlank(px: Uint8ClampedArray) {
+  let lo = 255, hi = 0;
+  for (let i = 0; i < px.length; i += 4 * 97) {
+    const v = (px[i] + px[i + 1] + px[i + 2]) / 3;
+    lo = Math.min(lo, v);
+    hi = Math.max(hi, v);
+  }
+  return hi - lo < 12;
+}
+
+// Selbstprüfung im Entwicklungsbuild
+if (import.meta.env?.DEV) {
+  const flat = new Uint8ClampedArray(4 * 1000).fill(0);
+  const pic = flat.map((_, i) => (i * 37) % 256);
+  console.assert(isBlank(flat) && !isBlank(pic), "isBlank");
 }

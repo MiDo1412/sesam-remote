@@ -19,7 +19,10 @@
         </label>
       </header>
       <div class="body">
-        <nav id="nav" aria-label="Bibliothek"></nav>
+        <div class="sidebar">
+          <nav id="nav" aria-label="Bibliothek"></nav>
+          <button id="open-settings" type="button" class="sidebar-settings" title="Einstellungen (Strg+,)"><span class="seg-icon" data-icon="settings"></span>Einstellungen</button>
+        </div>
         <main>
           <section aria-labelledby="title" class="list">
             <div class="list-head">
@@ -28,7 +31,6 @@
                 <label title="Kacheln"><input type="radio" name="libView" value="grid" aria-label="Kacheln" /><span class="seg-icon" data-icon="viewGrid"></span></label>
                 <label title="Liste"><input type="radio" name="libView" value="list" aria-label="Liste" /><span class="seg-icon" data-icon="viewList"></span></label>
               </div>
-              <button id="open-settings" type="button" class="plain" title="Einstellungen (Strg+,)">Einstellungen</button>
               <span class="split-btn lib-term"><button id="lib-term-new" type="button" title="Neues Terminal (Strg+T)">Terminal</button><button id="lib-term-pick" type="button" title="Terminal-Profil wählen" aria-label="Terminal-Profil wählen">▾</button></span>
               <button id="quick" type="button" class="quick-btn" title="Schnelle Verbindung (Strg+K)"><span class="quick-icon"></span><span class="quick-text">Schnelle Verbindung</span></button>
               <button id="new" type="button" class="primary">＋ Neue Verbindung</button>
