@@ -1480,6 +1480,11 @@ mod probe {
             Ok(s) => s,
             Err(e) => return println!("Verbindung fehlgeschlagen: {e}"),
         };
+        // Wie die App: Grösse sofort nach dem Verbinden nachschieben (SESAM_RDP_RESIZE_NOW=WxH).
+        if let Some((w, h)) = std::env::var("SESAM_RDP_RESIZE_NOW").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))) {
+            tokio::time::sleep(std::time::Duration::from_millis(std::env::var("SESAM_RDP_RESIZE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1500))).await;
+            session.send(Input::Resize { width: w, height: h });
+        }
         for _ in 0..30 {
             if rects.load(Ordering::Relaxed) > 0 {
                 break;

@@ -123,6 +123,21 @@ export const filesProtocol = (c: Connection): "ssh" | "ftp" | null =>
 /** Kurzname des FTP-Dienstes für Anzeigen. */
 export const ftpLabel = (c: Connection) => (c.ftpSecurity === "none" ? "FTP (unverschlüsselt)" : "FTPS");
 
+/** Kanal-Nachrichten mit Bilddaten: kleine kommen als ArrayBuffer, grosse (über den IPC-Abruf) teils als
+ *  Bytefeld (Uint8Array oder number[]). Ohne Umwandlung warf `new DataView` und kein Bild erschien. */
+export function asArrayBuffer(m: unknown): ArrayBuffer {
+  if (m instanceof ArrayBuffer) return m;
+  if (ArrayBuffer.isView(m)) return m.buffer.slice(m.byteOffset, m.byteOffset + m.byteLength) as ArrayBuffer;
+  if (Array.isArray(m)) return new Uint8Array(m).buffer;
+  throw new Error(`Unerwartete Bilddaten: ${Object.prototype.toString.call(m)}`);
+}
+
+// Selbstprüfung im Entwicklungsbuild.
+if (import.meta.env.DEV) {
+  const v = new Uint8Array([9, 1, 2, 3]).subarray(1);
+  console.assert(new Uint8Array(asArrayBuffer(v))[0] === 1 && asArrayBuffer([0, 5]).byteLength === 2 && asArrayBuffer(new ArrayBuffer(3)).byteLength === 3, "asArrayBuffer");
+}
+
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
   /** Geheimnisse: undefined = unverändert, "" = löschen */
@@ -154,7 +169,7 @@ export const api = {
   },
   desktopAttach: (sid: string, onFrame: (buf: ArrayBuffer) => void) => {
     const ch = new Channel<ArrayBuffer>();
-    ch.onmessage = onFrame;
+    ch.onmessage = (m) => onFrame(asArrayBuffer(m));
     return invoke<void>("desktop_attach", { sid, onEvent: ch });
   },
   /** Lokales Terminal (PTY) mit einem Profil starten; Schreiben/Grösse/Schliessen wie bei der SSH-Shell. */
@@ -170,7 +185,7 @@ export const api = {
   /** remember: bestätigten Fingerabdruck speichern (sonst nur diese Verbindung). */
   vncOpen: (id: string, trust: string | null, remember: boolean, onFrame: (buf: ArrayBuffer) => void) => {
     const ch = new Channel<ArrayBuffer>();
-    ch.onmessage = onFrame;
+    ch.onmessage = (m) => onFrame(asArrayBuffer(m));
     return invoke<string>("vnc_open", { id, trust, remember, onEvent: ch });
   },
   vncPointer: (sid: string, mask: number, x: number, y: number) => invoke<void>("vnc_pointer", { sid, mask, x, y }),
@@ -180,7 +195,7 @@ export const api = {
   vncClose: (sid: string) => invoke<void>("vnc_close", { sid }),
   rdpOpen: (id: string, trust: string | null, remember: boolean, width: number, height: number, onFrame: (buf: ArrayBuffer) => void) => {
     const ch = new Channel<ArrayBuffer>();
-    ch.onmessage = onFrame;
+    ch.onmessage = (m) => onFrame(asArrayBuffer(m));
     return invoke<string>("rdp_open", { id, trust, remember, width, height, onEvent: ch });
   },
   rdpPointer: (sid: string, x: number, y: number, buttons: number) => invoke<void>("rdp_pointer", { sid, x, y, buttons }),
