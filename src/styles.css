@@ -546,3 +546,4 @@ body.mac { --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro"
 .check-row { display: flex; align-items: center; gap: 12px; }
 #rdp-cred-note { margin: 0; }
 #editor-delete[hidden] { display: inline-flex !important; visibility: hidden; }
+#title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

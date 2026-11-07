@@ -60,6 +60,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
     refit();
   };
   applySettings();
+  // Gebündelte Monospace-Schrift lädt erst bei Bedarf: danach Zeichenbreite neu messen.
+  void document.fonts.load("13px 'JetBrains Mono Variable'").then(applySettings);
   addEventListener("sesam:terminal-settings", applySettings);
   const scheme = matchMedia("(prefers-color-scheme: dark)");
   scheme.addEventListener("change", applySettings);
