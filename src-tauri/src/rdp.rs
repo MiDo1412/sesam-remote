@@ -1397,6 +1397,11 @@ mod probe {
             no_ntlm: false,
             gateway: None,
         };
+        // Grösse wie die App sie anfragt, z. B. SESAM_RDP_SIZE=720x1280 (Hochformat).
+        let mut t = t;
+        if let Some((w, h)) = std::env::var("SESAM_RDP_SIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))) {
+            (t.width, t.height) = (w, h);
+        }
         println!("Zertifikat gepinnt: {}", t.expected_cert.is_some());
         // Bild mitschreiben wie die Anzeige.
         let fb = std::sync::Arc::new(std::sync::Mutex::new((0u16, 0u16, Vec::<u8>::new())));
