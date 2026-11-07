@@ -4,6 +4,7 @@ mod diag;
 mod h264;
 mod kdc;
 mod forward;
+mod ftp;
 mod library;
 mod rdp;
 mod relay;
@@ -346,12 +347,13 @@ async fn shell_close(shells: State<'_, ssh::Shells>, sid: String) -> Result<(), 
     Ok(())
 }
 
-// ---------- Dateien (SFTP, sonst SCP) ----------
+// ---------- Dateien (SFTP, sonst SCP; oder FTP) ----------
 
 #[derive(Clone)]
 enum FileSession {
     Sftp(Arc<sftp::Sftp>),
     Scp(Arc<scp::Scp>),
+    Ftp(Arc<ftp::Ftp>),
 }
 
 #[derive(Default)]
@@ -371,9 +373,42 @@ struct FilesOpened {
     scp: bool,
 }
 
+/// FTP-Sitzung öffnen; `trust` = bestätigter Zertifikat-Fingerabdruck, gemerkt unter "host:port" wie bei RDP/VNC.
+async fn ftp_open(path: &LibraryPath, c: &Connection, trust: Option<String>, remember: bool) -> Result<ftp::Ftp, String> {
+    let port = c.ftp_port.ok_or("FTP ist für diese Verbindung ausgeschaltet")?;
+    let pins_path = path.0.with_file_name("known_certs.json");
+    let mut pins = load_pins(&pins_path);
+    let pin_key = format!("{}:{port}", c.address);
+    let password = login_secret(c, Kind::Password)?.unwrap_or_default();
+    diag::add_secret(&password);
+    let t = ftp::Target {
+        host: c.address.clone(),
+        port,
+        user: c.user.clone(),
+        password,
+        security: ftp::Security::parse(&c.ftp_security)?,
+        active: c.ftp_active,
+        cert: trust.clone().or_else(|| pins.get(&pin_key).cloned()),
+        skip_cert_check: c.skip_cert_check,
+    };
+    let (s, seen) = ftp::Ftp::open(t).await?;
+    if let Some(fp) = trust.filter(|fp| remember && seen.as_ref() == Some(fp)) {
+        pins.insert(pin_key, fp);
+        let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+    }
+    Ok(s)
+}
+
+/// `trust`: bei SSH der Host-Schlüssel, bei FTPS das Zertifikat (`remember` = merken).
 #[tauri::command]
-async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: String, trust: Option<String>) -> Result<FilesOpened, String> {
+async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: String, trust: Option<String>, remember: Option<bool>) -> Result<FilesOpened, String> {
     let c = find(&path, &id)?;
+    if c.files_over_ftp() {
+        let s = ftp_open(&path, &c, trust, remember.unwrap_or(true)).await?;
+        let sid = new_sid(&c.id);
+        files.0.lock().unwrap().insert(sid.clone(), FileSession::Ftp(Arc::new(s)));
+        return Ok(FilesOpened { sid, scp: false });
+    }
     let h = ssh::connect(&ssh_target(&c, trust)?).await?;
     let session = match c.file_transfer.as_str() {
         "scp" => FileSession::Scp(Arc::new(scp::Scp::new(h))),
@@ -397,6 +432,7 @@ async fn sftp_list(files: State<'_, Files>, sid: String, path: String) -> Result
     match files_get(&files, &sid)? {
         FileSession::Sftp(s) => s.list(&path).await,
         FileSession::Scp(s) => s.list(&path).await,
+        FileSession::Ftp(s) => s.list(&path).await,
     }
 }
 
@@ -405,6 +441,7 @@ async fn sftp_mkdir(files: State<'_, Files>, sid: String, dir: String, name: Str
     match files_get(&files, &sid)? {
         FileSession::Sftp(s) => s.mkdir(&dir, &name).await,
         FileSession::Scp(s) => s.mkdir(&dir, &name).await,
+        FileSession::Ftp(s) => s.mkdir(&dir, &name).await,
     }
 }
 
@@ -412,6 +449,7 @@ async fn sftp_mkdir(files: State<'_, Files>, sid: String, dir: String, name: Str
 async fn sftp_rename(files: State<'_, Files>, sid: String, path: String, name: String) -> Result<String, String> {
     match files_get(&files, &sid)? {
         FileSession::Sftp(s) => s.rename(&path, &name).await,
+        FileSession::Ftp(s) => s.rename(&path, &name).await,
         FileSession::Scp(_) => Err(scp::LIMITED.into()),
     }
 }
@@ -420,6 +458,7 @@ async fn sftp_rename(files: State<'_, Files>, sid: String, path: String, name: S
 async fn sftp_remove(files: State<'_, Files>, sid: String, path: String) -> Result<(), String> {
     match files_get(&files, &sid)? {
         FileSession::Sftp(s) => s.remove(&path).await,
+        FileSession::Ftp(s) => s.remove(&path).await,
         FileSession::Scp(_) => Err(scp::LIMITED.into()),
     }
 }
@@ -428,6 +467,7 @@ async fn sftp_remove(files: State<'_, Files>, sid: String, path: String) -> Resu
 async fn sftp_chmod(files: State<'_, Files>, sid: String, path: String, mode: u32) -> Result<(), String> {
     match files_get(&files, &sid)? {
         FileSession::Sftp(s) => s.chmod(&path, mode).await,
+        FileSession::Ftp(s) => s.chmod(&path, mode).await,
         FileSession::Scp(_) => Err(scp::LIMITED.into()),
     }
 }
@@ -436,6 +476,7 @@ async fn sftp_chmod(files: State<'_, Files>, sid: String, path: String, mode: u3
 async fn sftp_touch(files: State<'_, Files>, sid: String, dir: String, name: String) -> Result<String, String> {
     match files_get(&files, &sid)? {
         FileSession::Sftp(s) => s.touch(&dir, &name).await,
+        FileSession::Ftp(s) => s.touch(&dir, &name).await,
         FileSession::Scp(_) => Err(scp::LIMITED.into()),
     }
 }
@@ -667,6 +708,8 @@ fn transfer_start(
             (FileSession::Sftp(s), false) => sftp::download(s, remote, local, report).await,
             (FileSession::Scp(s), true) => scp::upload(s, local, remote, report).await,
             (FileSession::Scp(s), false) => scp::download(s, remote, local, report).await,
+            (FileSession::Ftp(s), true) => ftp::upload(s, local, remote, report).await,
+            (FileSession::Ftp(s), false) => ftp::download(s, remote, local, report).await,
         };
         if let Err(error) = r {
             let _ = on_progress.send(sftp::Progress::Failed { error });
@@ -1130,6 +1173,7 @@ pub fn run() {
                 .text("help:wayvnc", "wayvnc (wlroots)")
                 .text("help:macos", "macOS-Bildschirmfreigabe")
                 .text("help:ssh", "SSH und SFTP")
+                .text("help:ftp", "FTP und FTPS")
                 .build()?;
             // macOS braucht das Standardmenü (Bearbeiten: Kopieren/Einfügen); Windows nur «Hilfe».
             // macOS: native Menüleiste oben am Bildschirm. Windows/Linux: eigene Titelleiste mit Menüknopf (src/titlebar.ts).
