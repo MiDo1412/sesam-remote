@@ -23,12 +23,28 @@
           <section aria-labelledby="title" class="list">
             <div class="list-head">
               <h1 id="title">Alle Verbindungen</h1>
+              <div class="segmented view-switch" role="radiogroup" aria-label="Darstellung">
+                <label title="Kacheln"><input type="radio" name="libView" value="grid" aria-label="Kacheln" /><span class="seg-icon" data-icon="viewGrid"></span></label>
+                <label title="Liste"><input type="radio" name="libView" value="list" aria-label="Liste" /><span class="seg-icon" data-icon="viewList"></span></label>
+              </div>
               <button id="open-settings" type="button" class="plain" title="Einstellungen (Strg+,)">Einstellungen</button>
               <button id="quick" type="button" class="quick-btn" title="Schnelle Verbindung (Strg+K)"><span class="quick-icon"></span><span class="quick-text">Schnelle Verbindung</span></button>
               <button id="new" type="button" class="primary">＋ Neue Verbindung</button>
             </div>
             <div id="active-sessions" class="active-sessions" hidden></div>
             <div id="grid" class="grid"></div>
+            <table id="conn-table" class="conn-table" role="grid" aria-labelledby="title" aria-readonly="true" hidden>
+              <thead>
+                <tr>
+                  <th data-key="name"><button type="button" class="sort">Name</button></th>
+                  <th data-key="address"><button type="button" class="sort">Adresse</button></th>
+                  <th data-key="services" class="svc-col"><button type="button" class="sort">Dienste</button></th>
+                  <th data-key="group"><button type="button" class="sort">Gruppe</button></th>
+                  <th data-key="lastUsed" class="date-col"><button type="button" class="sort">Zuletzt verbunden</button></th>
+                </tr>
+              </thead>
+              <tbody id="conn-rows"></tbody>
+            </table>
             <div id="empty" class="empty" hidden>
               <img class="empty-logo" src="/sesam-icon.svg" alt="" width="64" height="64" />
               <p>Noch keine Verbindungen.</p>
@@ -287,6 +303,7 @@
           <button type="button" role="tab" data-pane="shell">Shell</button>
           <button type="button" role="tab" data-pane="security">Sicherheit</button>
           <button type="button" role="tab" data-pane="creds">Zugangsdaten</button>
+          <button type="button" role="tab" data-pane="groups">Gruppen</button>
           <button type="button" role="tab" data-pane="about">Über Sesam</button>
         </nav>
         <section class="settings-pane" id="settings-general">
@@ -322,6 +339,12 @@
           <p class="note">Benutzername mit Passwort und/oder SSH-Schlüssel, einmal angelegt und mehreren Verbindungen zugewiesen. Die Geheimnisse liegen verschlüsselt im Schlüsselbund des Betriebssystems.</p>
           <div id="settings-cred-list" class="certs"></div>
           <div><button type="button" id="cred-new">Neue Zugangsdaten …</button></div>
+        </section>
+        <section class="settings-pane" id="settings-groups" hidden>
+          <h2>Gruppen</h2>
+          <p class="note">Reihenfolge und Farbe der Gruppen in der Seitenleiste. Beim Löschen einer Gruppe kommen ihre Verbindungen nach «Ohne Gruppe». Die Reihenfolge änderst du auch durch Ziehen in der Seitenleiste.</p>
+          <div id="settings-group-list" class="certs"></div>
+          <div><button type="button" id="group-new">Neue Gruppe …</button></div>
         </section>
         <section class="settings-pane about" id="settings-about" hidden>
           <img src="/sesam-icon.svg" alt="" width="72" height="72" />

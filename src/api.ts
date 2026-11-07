@@ -67,6 +67,13 @@ export interface Cred {
   hasKey: boolean;
 }
 
+/** Gruppe der Seitenleiste (Reihenfolge, Farbe); Mitglieder über `Connection.group`. */
+export interface Group {
+  name: string;
+  /** "" oder eine Vorgabe aus GROUP_COLORS (groups.ts) */
+  color: string;
+}
+
 export type ShellEvent = { kind: "data"; data: number[] } | { kind: "closed"; reason: string };
 
 /** Präfix eines Fehlers bei unbekanntem Host: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>` */
@@ -105,6 +112,10 @@ export const api = {
   save: (connection: Connection, secrets: { password?: string; vncPassword?: string; rdpPassword?: string; gatewayPassword?: string; sshKey?: string }) =>
     invoke<Connection>("library_save", { connection, ...secrets }),
   remove: (id: string) => invoke<void>("library_delete", { id }),
+  groupsList: () => invoke<Group[]>("groups_list"),
+  groupsSave: (groups: Group[]) => invoke<void>("groups_save", { groups }),
+  groupRename: (from: string, to: string) => invoke<void>("group_rename", { from, to }),
+  groupDelete: (name: string) => invoke<void>("group_delete", { name }),
   credsList: () => invoke<[Cred, number][]>("creds_list"),
   credSave: (cred: Cred, password?: string, sshKey?: string) => invoke<Cred>("cred_save", { cred, password, sshKey }),
   credDelete: (id: string) => invoke<void>("cred_delete", { id }),

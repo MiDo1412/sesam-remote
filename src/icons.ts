@@ -32,6 +32,8 @@ import textAa from "@phosphor-icons/core/assets/regular/text-aa.svg?raw";
 import trash from "@phosphor-icons/core/assets/regular/trash.svg?raw";
 import uploadSimple from "@phosphor-icons/core/assets/regular/upload-simple.svg?raw";
 import x from "@phosphor-icons/core/assets/regular/x.svg?raw";
+import squaresFour from "@phosphor-icons/core/assets/regular/squares-four.svg?raw";
+import list from "@phosphor-icons/core/assets/regular/list.svg?raw";
 
 const sized = (s: string, n = 16) => s.replace("<svg ", `<svg width="${n}" height="${n}" aria-hidden="true" focusable="false" `);
 
@@ -69,4 +71,6 @@ export const ICON = {
   minimize: sized(minus, 12),
   screencast: sized(screencast),
   question: sized(question, 14),
+  viewGrid: sized(squaresFour),
+  viewList: sized(list),
 };

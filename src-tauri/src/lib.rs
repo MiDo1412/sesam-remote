@@ -96,6 +96,57 @@ fn library_delete(path: State<LibraryPath>, id: String) -> Result<(), String> {
     Ok(())
 }
 
+fn groups_path(path: &LibraryPath) -> PathBuf {
+    path.0.with_file_name("groups.json")
+}
+
+/// Gruppen in der Reihenfolge der Seitenleiste (auch leere), mit Farbe.
+#[tauri::command]
+fn groups_list(path: State<LibraryPath>) -> Result<Vec<library::Group>, String> {
+    Ok(library::merged_groups(library::load_groups(&groups_path(&path))?, &library::load(&path.0)?))
+}
+
+/// Reihenfolge und Farben sichern; neue Namen = leere Gruppen.
+#[tauri::command]
+fn groups_save(path: State<LibraryPath>, groups: Vec<library::Group>) -> Result<(), String> {
+    library::validate_groups(&groups)?;
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    library::save(&groups_path(&path), &groups)
+}
+
+/// Gruppe umbenennen bzw. löschen (`to` = None): ändert auch die Verbindungen.
+fn group_change(path: &LibraryPath, from: &str, to: Option<&str>) -> Result<(), String> {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let mut items = library::load(&path.0)?;
+    let mut groups = library::merged_groups(library::load_groups(&groups_path(path))?, &items);
+    match to {
+        Some(to) => library::rename_group(&mut items, &mut groups, from, to)?,
+        None => library::delete_group(&mut items, &mut groups, from),
+    }
+    library::save(&path.0, &items)?;
+    library::save(&groups_path(path), &groups)
+}
+
+#[tauri::command]
+fn group_rename(path: State<LibraryPath>, from: String, to: String) -> Result<(), String> {
+    group_change(&path, &from, Some(to.trim()))
+}
+
+#[tauri::command]
+fn group_delete(path: State<LibraryPath>, name: String) -> Result<(), String> {
+    group_change(&path, &name, None)
+}
+
+/// «Zuletzt verbunden» setzen (nach erfolgreichem Verbinden; Fehler sind egal).
+fn touch(path: &LibraryPath, id: &str) {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let Ok(mut items) = library::load(&path.0) else { return };
+    if let Some(c) = items.iter_mut().find(|c| c.id == id) {
+        c.last_used = Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+        let _ = library::save(&path.0, &items);
+    }
+}
+
 fn new_sid(id: &str) -> String {
     format!("{id}-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())
 }
@@ -322,6 +373,7 @@ async fn shell_open(
     let relay = relay::Relay::new(on_event);
     let shell = ssh::open(t, cols, rows, relay.clone()).await?;
     let sid = new_sid(&c.id);
+    touch(&path, &c.id);
     shells.0.lock().await.insert(sid.clone(), shell);
     relay::SHELLS.lock().unwrap().insert(sid.clone(), relay);
     Ok(sid)
@@ -387,6 +439,7 @@ async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: St
         },
     };
     let sid = new_sid(&c.id);
+    touch(&path, &c.id);
     let scp = matches!(session, FileSession::Scp(_));
     files.0.lock().unwrap().insert(sid.clone(), session);
     Ok(FilesOpened { sid, scp })
@@ -785,6 +838,7 @@ async fn vnc_open(
         on_event.send(f).is_ok()
     });
     let sid = new_sid(&c.id);
+    touch(&path, &c.id);
     relay::DESKTOPS.lock().unwrap().insert(sid.clone(), events.clone());
     desktops.0.lock().unwrap().insert(sid.clone(), Desktop { session: Arc::new(session), share, events });
     Ok(sid)
@@ -1008,6 +1062,7 @@ async fn rdp_open(
         gateway,
     };
     let sid = new_sid(&c.id);
+    touch(&path, &c.id);
     let (tx, rx) = rdp::channel();
     let mut target = target;
     if c.shared_clipboard {
@@ -1175,6 +1230,10 @@ pub fn run() {
             library_list,
             library_save,
             library_delete,
+            groups_list,
+            groups_save,
+            group_rename,
+            group_delete,
             shell_open,
             shell_write,
             shell_resize,
