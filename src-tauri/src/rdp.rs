@@ -86,6 +86,8 @@ pub enum Input {
     /// Mehrere Monitore: Position relativ zum Hauptmonitor, Grösse in Pixeln.
     Monitors(Vec<Monitor>),
     ReleaseAll,
+    /// Sauber trennen (Disconnect Provider Ultimatum), damit der Server die Sitzung freigibt.
+    Disconnect,
     /// Vom Zwischenablage-Backend.
     Clipboard(ClipboardMessage),
 }
@@ -126,8 +128,15 @@ impl Session {
     pub fn send(&self, i: Input) {
         let _ = self.tx.send(i);
     }
+    /// Trennen wie FreeRDP: MCS «Disconnect Provider Ultimatum» (vom Benutzer gewünscht), dann TCP zu.
+    /// Hart abgebrochen wird erst, wenn das nach 2 s nicht geklappt hat.
     pub fn close(&self) {
-        self.task.abort();
+        let _ = self.tx.send(Input::Disconnect);
+        let h = self.task.abort_handle();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            h.abort();
+        });
     }
 }
 
@@ -736,6 +745,12 @@ async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) 
     }
 }
 
+/// MCS Disconnect Provider Ultimatum mit Grund «vom Benutzer gewünscht» ([MS-RDPBCGR] 1.3.1.4.1).
+fn disconnect_frame() -> Vec<u8> {
+    use ironrdp_pdu::mcs::{DisconnectProviderUltimatum, DisconnectReason};
+    ironrdp_pdu::encode_vec(&ironrdp_pdu::x224::X224(DisconnectProviderUltimatum { reason: DisconnectReason::UserRequested })).unwrap_or_default()
+}
+
 /// X.224-Aushandlung mit PROTOCOL_RDSTLS und Routing-Token; der Server muss RDSTLS wählen.
 async fn rdstls_negotiate(framed: &mut TokioFramed<Stream>, hop: &Hop) -> Result<Vec<u8>, String> {
     use ironrdp_pdu::nego::{ConnectionConfirm, ConnectionRequest, ConnectionRequestWithOpaqueRoutingToken, OpaqueRoutingToken, RequestFlags, SecurityProtocol};
@@ -996,7 +1011,10 @@ async fn active(
                 }
             }
             msg = rx.recv() => {
-                let Some(msg) = msg else { return Ok(Flow::Closed("Fenster geschlossen".into())) };
+                let Some(msg) = msg.filter(|m| !matches!(m, Input::Disconnect)) else {
+                    let _ = writer.write_all(&disconnect_frame()).await;
+                    return Ok(Flow::Closed("Getrennt".into()));
+                };
                 let ops: Vec<Operation> = match msg {
                     Input::Pointer { x, y, buttons } => {
                         let mut ops = vec![Operation::MouseMove(MousePosition { x, y })];
@@ -1035,6 +1053,7 @@ async fn active(
                         }
                         continue;
                     }
+                    Input::Disconnect => continue, // oben behandelt
                     Input::ReleaseAll => {
                         let events = input.release_all();
                         let out = stage.process_fastpath_input(&mut image, &events).map_err(err)?;
@@ -1166,6 +1185,15 @@ async fn write_all<W: FramedWrite>(w: &mut W, outs: &[ActiveStageOutput]) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disconnect_sends_user_requested_ultimatum() {
+        use ironrdp_pdu::mcs::{DisconnectProviderUltimatum, DisconnectReason};
+        let f = disconnect_frame();
+        assert!(!f.is_empty());
+        let d = ironrdp_pdu::decode::<ironrdp_pdu::x224::X224<DisconnectProviderUltimatum>>(&f).unwrap().0;
+        assert_eq!(d.reason, DisconnectReason::UserRequested);
+    }
 
     #[test]
     fn gnome_connect_time_autodetect() {
@@ -1446,7 +1474,8 @@ mod probe {
             wait(3).await;
             snap("3-passwortfeld");
             if std::env::var("SESAM_RDP_STOP").is_ok() {
-                return session.close(); // nur bis zum Passwortfeld, zum Prüfen des richtigen Kontos
+                session.close(); // nur bis zum Passwortfeld, zum Prüfen des richtigen Kontos
+                return wait(1).await;
             }
             typ(&os_pw);
             enter();
@@ -1456,6 +1485,7 @@ mod probe {
             snap(&format!("4-danach-{:02}", i * 3));
         }
         session.close();
+        wait(1).await; // Disconnect noch senden lassen
     }
 
     #[tokio::test(flavor = "multi_thread")]
