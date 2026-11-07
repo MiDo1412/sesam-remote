@@ -43,6 +43,13 @@ export interface Connection {
   hasKey: boolean;
   /** Dateiübertragung: SFTP, sonst SCP ("auto") oder fest. */
   fileTransfer: "auto" | "sftp" | "scp";
+  /** null = FTP aus */
+  ftpPort: number | null;
+  /** FTPS explizit (AUTH TLS), implizit oder unverschlüsselt */
+  ftpSecurity: "explicit" | "implicit" | "none";
+  ftpActive: boolean;
+  /** Bei SSH und FTP: womit «Dateien» verbindet */
+  filesVia: "ssh" | "ftp";
   /** Veraltete SSH-Algorithmen (SHA-1, CBC, 3DES, ssh-rsa) zusätzlich anbieten. */
   sshLegacy: boolean;
   /** Sekunden, 0 = aus */
@@ -98,6 +105,13 @@ export type Progress =
 /** Womit «Desktop» verbindet: RDP, wenn nur RDP an ist oder bei beiden RDP gewählt ist. */
 export const desktopProtocol = (c: Connection): "vnc" | "rdp" | null =>
   c.rdpPort && (!c.vncPort || c.desktopProtocol === "rdp") ? "rdp" : c.vncPort ? "vnc" : null;
+
+/** Womit «Dateien» verbindet; wie `Connection::files_over_ftp` in library.rs. */
+export const filesProtocol = (c: Connection): "ssh" | "ftp" | null =>
+  c.ftpPort && (!c.sshPort || c.filesVia === "ftp") ? "ftp" : c.sshPort ? "ssh" : null;
+
+/** Kurzname des FTP-Dienstes für Anzeigen. */
+export const ftpLabel = (c: Connection) => (c.ftpSecurity === "none" ? "FTP (unverschlüsselt)" : "FTPS");
 
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
@@ -155,7 +169,8 @@ export const api = {
   rdpSetSize: (sid: string, width: number, height: number) => invoke<void>("rdp_set_size", { sid, width, height }),
   rdpClose: (sid: string) => invoke<void>("rdp_close", { sid }),
   /** scp: Server ohne SFTP, Übertragung über SCP (eingeschränkt). */
-  sftpOpen: (id: string, trust: string | null) => invoke<{ sid: string; scp: boolean }>("sftp_open", { id, trust }),
+  /** trust: SSH-Host-Schlüssel oder (FTPS) Zertifikat; remember: Zertifikat merken. */
+  sftpOpen: (id: string, trust: string | null, remember = true) => invoke<{ sid: string; scp: boolean }>("sftp_open", { id, trust, remember }),
   sftpList: (sid: string, path: string) => invoke<Listing>("sftp_list", { sid, path }),
   sftpMkdir: (sid: string, dir: string, name: string) => invoke<string>("sftp_mkdir", { sid, dir, name }),
   sftpRename: (sid: string, path: string, name: string) => invoke<string>("sftp_rename", { sid, path, name }),

@@ -5,11 +5,11 @@ import { openTab, type Kind } from "./tabs";
 import { enhanceSelect } from "./menu";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 
-type QuickKind = "rdp" | "vnc" | "shell" | "files";
+type QuickKind = "rdp" | "vnc" | "shell" | "files" | "ftp";
 interface Recent { kind: QuickKind; address: string; port: number; user: string }
 
-const PORT: Record<QuickKind, number> = { rdp: 3389, vnc: 5900, shell: 22, files: 22 };
-const LABEL: Record<QuickKind, string> = { rdp: "RDP", vnc: "VNC", shell: "SSH", files: "SFTP" };
+const PORT: Record<QuickKind, number> = { rdp: 3389, vnc: 5900, shell: 22, files: 22, ftp: 21 };
+const LABEL: Record<QuickKind, string> = { rdp: "RDP", vnc: "VNC", shell: "SSH", files: "SFTP", ftp: "FTP" };
 const KEY = "sesam.quick";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -17,10 +17,10 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 export function parseTarget(text: string): Partial<Recent> {
   let t = text.trim();
   const out: Partial<Recent> = {};
-  const scheme = /^(ssh|sftp|rdp|vnc)(:\/\/|\s+)/i.exec(t);
+  const scheme = /^(ssh|sftp|ftps?|rdp|vnc)(:\/\/|\s+)/i.exec(t);
   if (scheme) {
     const s = scheme[1].toLowerCase();
-    out.kind = s === "ssh" ? "shell" : s === "sftp" ? "files" : (s as QuickKind);
+    out.kind = s === "ssh" ? "shell" : s === "sftp" ? "files" : s === "ftps" ? "ftp" : (s as QuickKind);
     t = t.slice(scheme[0].length);
   }
   const at = t.lastIndexOf("@");
@@ -158,8 +158,8 @@ export function initQuick(onSaveAsConnection: (c: Connection) => void) {
       id: "quick", name: `${address} (schnell)`, group: "", address,
       vncPort: k === "vnc" ? port : null, sshPort: k === "shell" || k === "files" ? port : null, rdpPort: k === "rdp" ? port : null,
       rdpDomain: "", rdpUser: "", desktopProtocol: k === "vnc" ? "vnc" : "rdp", user,
-      defaultView: k === "shell" ? "shell" : k === "files" ? "files" : "desktop", orientation: "landscape",
-      sharedClipboard: true, fitToWindow: true, playAudio: true, sharedFolder: "", skipCertCheck: false, os: "", customThumb: false, credentialId: null, rdpCredentialId: null, vncCredentialId: null, gatewayCredentialId: null, rdpNoNtlm: false, rdpKdc: "", rdpGateway: "", rdpGatewayUser: "", hasGatewayPassword: false, fileTransfer: "auto", sshLegacy: false, sshKeepalive: 0, sshCompression: false, forwards: [], jumpHost: "", sshAgent: false, agentForward: false,
+      defaultView: k === "shell" ? "shell" : k === "files" || k === "ftp" ? "files" : "desktop", orientation: "landscape",
+      sharedClipboard: true, fitToWindow: true, playAudio: true, sharedFolder: "", skipCertCheck: false, os: "", customThumb: false, credentialId: null, rdpCredentialId: null, vncCredentialId: null, gatewayCredentialId: null, rdpNoNtlm: false, rdpKdc: "", rdpGateway: "", rdpGatewayUser: "", hasGatewayPassword: false, fileTransfer: "auto", ftpPort: k === "ftp" ? port : null, ftpSecurity: k === "ftp" && port === 990 ? "implicit" : "explicit", ftpActive: false, filesVia: "ftp", sshLegacy: false, sshKeepalive: 0, sshCompression: false, forwards: [], jumpHost: "", sshAgent: false, agentForward: false,
       hasPassword: false, hasVncPassword: false, hasRdpPassword: false, hasKey: false, lastUsed: null,
     };
     try {

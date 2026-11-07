@@ -1,6 +1,6 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { api, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
-import { ask, askHostKey, askText, tell } from "./ui";
+import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
+import { ask, askHostKey, askText, choose, tell } from "./ui";
 import { openMenu, type MenuItem } from "./menu";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
@@ -72,7 +72,8 @@ function permText(m: number, dir: boolean) {
 
 export function filesTab(ctx: TabCtx): TabHandle {
   const c = ctx.conn;
-  ctx.setSub(`SFTP über SSH · ${c.user}@${c.address}`);
+  const ftp = filesProtocol(c) === "ftp";
+  ctx.setSub(ftp ? `${ftpLabel(c)} · ${c.user || "anonymous"}@${c.address}:${c.ftpPort}` : `SFTP über SSH · ${c.user}@${c.address}`);
   const status = ctx.status;
   status.textContent = "Verbinde …";
 
@@ -548,11 +549,12 @@ export function filesTab(ctx: TabCtx): TabHandle {
   void (async () => {
   load(panes.local, await api.localHome());
   let trust: string | null = null;
+  let remember = true;
   for (;;) {
     try {
       const at = ctx.extra?.attach;
       const st = at?.state as { scp: boolean; remote: string; local: string } | undefined;
-      const opened = at ? { sid: at.sid, scp: !!st?.scp } : await api.sftpOpen(c.id, trust);
+      const opened = at ? { sid: at.sid, scp: !!st?.scp } : await api.sftpOpen(c.id, trust, remember);
       if (at) {
         handoffDone(at.token);
         if (st?.local) load(panes.local, st.local);
@@ -569,7 +571,26 @@ export function filesTab(ctx: TabCtx): TabHandle {
       await load(panes.remote, st?.remote ?? "");
     } catch (e) {
       const msg = String(e);
-      if (trust === null && msg.startsWith(HOSTKEY_UNKNOWN)) {
+      const changed = msg.startsWith(CERT_CHANGED);
+      if (trust === null && (changed || msg.startsWith(CERT_UNKNOWN))) {
+        // FTPS: Zertifikat bestätigen wie bei RDP/VNC
+        const fp = msg.slice((changed ? CERT_CHANGED : CERT_UNKNOWN).length);
+        const choice = await choose(
+          changed ? "Zertifikat hat sich geändert" : "Unbekanntes Zertifikat",
+          changed
+            ? `Das Zertifikat von ${c.address}:${c.ftpPort} ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein, oder der Anbieter hat es erneuert (bei Let's Encrypt alle paar Wochen).`
+            : `${c.address}:${c.ftpPort} zeigt dieses Zertifikat. Vergleiche den Fingerabdruck mit den Angaben des Anbieters, bevor du ihm vertraust.`,
+          `SHA-256\n${fp.replace(/^SHA256:/, "").toLowerCase()}`,
+          changed ? "Neuem Zertifikat vertrauen" : "Vertrauen und verbinden",
+          "Nur dieses Mal verbinden",
+        );
+        if (choice) {
+          trust = fp;
+          remember = choice === "ok";
+          continue;
+        }
+        status.textContent = "Verbindung abgebrochen: Zertifikat nicht bestätigt.";
+      } else if (trust === null && msg.startsWith(HOSTKEY_UNKNOWN)) {
         trust = await askHostKey(c.address, msg);
         if (trust) continue;
         status.textContent = "Verbindung abgebrochen: Server nicht bestätigt.";

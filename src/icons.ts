@@ -13,6 +13,7 @@ import folder from "@phosphor-icons/core/assets/regular/folder.svg?raw";
 import folderPlus from "@phosphor-icons/core/assets/regular/folder-plus.svg?raw";
 import handTap from "@phosphor-icons/core/assets/regular/hand-tap.svg?raw";
 import frameCorners from "@phosphor-icons/core/assets/regular/frame-corners.svg?raw";
+import globe from "@phosphor-icons/core/assets/regular/globe.svg?raw";
 import keyboard from "@phosphor-icons/core/assets/regular/keyboard.svg?raw";
 import linuxLogo from "@phosphor-icons/core/assets/regular/linux-logo.svg?raw";
 import appleLogo from "@phosphor-icons/core/assets/regular/apple-logo.svg?raw";
@@ -46,6 +47,7 @@ export const ICON = {
   folder: sized(folder),
   newFolder: sized(folderPlus),
   fullscreen: sized(frameCorners),
+  globe: sized(globe),
   handTap: sized(handTap),
   keyboard: sized(keyboard),
   osLinux: sized(linuxLogo, 40),

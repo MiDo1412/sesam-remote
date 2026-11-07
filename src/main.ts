@@ -1,4 +1,4 @@
-import { api, desktopProtocol, type Connection } from "./api";
+import { api, desktopProtocol, filesProtocol, ftpLabel, type Connection } from "./api";
 import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
@@ -85,6 +85,8 @@ const svcPickers = (["rdpCredentialId", "vncCredentialId", "gatewayCredentialId"
 });
 const keyModeMenu = enhanceSelect(formEls.namedItem("keyMode") as HTMLSelectElement);
 const fileTransferMenu = enhanceSelect(formEls.namedItem("fileTransfer") as HTMLSelectElement);
+const ftpSecurity = formEls.namedItem("ftpSecurity") as HTMLSelectElement;
+const ftpSecurityMenu = enhanceSelect(ftpSecurity);
 const jumpHost = formEls.namedItem("jumpHost") as HTMLSelectElement;
 const jumpHostMenu = enhanceSelect(jumpHost);
 const osMenu = enhanceSelect(formEls.namedItem("os") as HTMLSelectElement);
@@ -143,7 +145,7 @@ function render() {
   $("grid").replaceChildren(
     ...visible.map((c) => {
       const proto = desktopProtocol(c);
-      const kind = proto ? proto.toUpperCase() : c.sshPort ? "Shell" : "–";
+      const kind = proto ? proto.toUpperCase() : c.sshPort ? "Shell" : c.ftpPort ? "FTP" : "–";
       const card = el(
         "button",
         { type: "button", class: "card", "aria-pressed": String(c.id === selected) },
@@ -184,6 +186,7 @@ function renderDetails() {
       fact("Benutzer", c.user || "–"),
       fact("Desktop", desktopProtocol(c) === "rdp" ? `RDP · ${c.rdpPort}` : c.vncPort ? `VNC · ${c.vncPort}` : "aus"),
       fact("Shell", c.sshPort ? `SSH · ${c.sshPort}` : "aus"),
+      fact("Dateien", filesProtocol(c) === "ftp" ? `${ftpLabel(c)} · ${c.ftpPort}` : c.sshPort ? `SFTP · ${c.sshPort}` : "aus"),
       fact("Anmeldung", c.hasPassword || c.hasKey || c.hasVncPassword || c.hasRdpPassword ? "Im Tresor" : "Keine gespeichert"),
       fact("Schlüssel", c.hasKey ? "Im Tresor" : "–"),
     ),
@@ -192,7 +195,7 @@ function renderDetails() {
       "div",
       { class: "pair" },
       btn("Shell", "", () => open(c, "shell"), !c.sshPort),
-      btn("Dateien", "", () => open(c, "files"), !c.sshPort),
+      btn("Dateien", "", () => open(c, "files"), !filesProtocol(c)),
     ),
     btn("Bearbeiten …", "plain", () => edit(c)),
     ...(c.sshPort ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
@@ -247,11 +250,11 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
   const v = await openMenu(anchor, [
     { value: "open:desktop", label: "Desktop öffnen", disabled: !desktopProtocol(c) },
     { value: "open:shell", label: "Shell öffnen", disabled: !c.sshPort },
-    { value: "open:files", label: "Dateien öffnen", disabled: !c.sshPort },
+    { value: "open:files", label: "Dateien öffnen", disabled: !filesProtocol(c) },
     { value: "edit", label: "Bearbeiten …", separator: true },
     { value: "lnk:desktop", label: "Desktop", section: "Verknüpfung auf Schreibtisch", disabled: !desktopProtocol(c) },
     { value: "lnk:shell", label: "Shell", disabled: !c.sshPort },
-    { value: "lnk:files", label: "Dateien", disabled: !c.sshPort },
+    { value: "lnk:files", label: "Dateien", disabled: !filesProtocol(c) },
   ]);
   if (!v) return;
   const [cmd, arg] = v.split(":");
@@ -356,6 +359,10 @@ const blank = (): Connection => ({
   hasGatewayPassword: false,
   hasKey: false,
   fileTransfer: "auto",
+  ftpPort: null,
+  ftpSecurity: "explicit",
+  ftpActive: false,
+  filesVia: "ssh",
   sshLegacy: false,
   sshKeepalive: 0,
   sshCompression: false,
@@ -386,6 +393,12 @@ function edit(c: Connection | null, asNew = false) {
   form.querySelector<HTMLInputElement>(`[name=desktopProtocol][value=${editing.desktopProtocol}]`)!.checked = true;
   f.sshOn.checked = editing.sshPort !== null;
   f.sshPort.value = String(editing.sshPort ?? 22);
+  f.ftpOn.checked = editing.ftpPort !== null;
+  f.ftpPort.value = String(editing.ftpPort ?? 21);
+  f.ftpSecurity.value = editing.ftpSecurity ?? "explicit";
+  ftpSecurityMenu.sync();
+  form.querySelector<HTMLInputElement>(`[name=ftpMode][value=${editing.ftpActive ? "active" : "passive"}]`)!.checked = true;
+  form.querySelector<HTMLInputElement>(`[name=filesVia][value=${editing.filesVia ?? "ssh"}]`)!.checked = true;
   f.user.value = editing.user;
   f.keyMode.value = editing.hasKey ? "keep" : "none";
   keyModeMenu.sync();
@@ -457,12 +470,19 @@ function showPwHint(prefix: "pw" | "vnc-pw" | "rdp-pw" | "gw-pw", stored: boolea
   };
 }
 
-/** «Desktop über» nur zeigen, wenn VNC und RDP beide an sind. */
+/** «Desktop über» nur zeigen, wenn VNC und RDP beide an sind; «Dateien über» bei SSH und FTP. */
 function syncDesktopRow() {
   const on = (n: string) => (form.elements.namedItem(n) as HTMLInputElement).checked;
   $("desktop-protocol-row").hidden = !(on("vncOn") && on("rdpOn"));
+  $("files-via-row").hidden = !(on("sshOn") && on("ftpOn"));
 }
-for (const n of ["vncOn", "rdpOn"]) (form.elements.namedItem(n) as HTMLInputElement).addEventListener("change", syncDesktopRow);
+for (const n of ["vncOn", "rdpOn", "sshOn", "ftpOn"]) (form.elements.namedItem(n) as HTMLInputElement).addEventListener("change", syncDesktopRow);
+// Implizites FTPS läuft meist auf 990, die anderen auf 21.
+ftpSecurity.addEventListener("change", () => {
+  const p = formEls.namedItem("ftpPort") as HTMLInputElement;
+  if (ftpSecurity.value === "implicit" && p.value === "21") p.value = "990";
+  else if (ftpSecurity.value !== "implicit" && p.value === "990") p.value = "21";
+});
 
 let pendingThumb: string | null = null;
 let clearThumb = false;
@@ -537,6 +557,10 @@ form.onsubmit = async (ev) => {
     rdpGateway: s("rdpGateway"),
     rdpGatewayUser: s("rdpGatewayUser"),
     fileTransfer: (s("fileTransfer") || "auto") as Connection["fileTransfer"],
+    ftpPort: port("ftpOn", "ftpPort"),
+    ftpSecurity: (s("ftpSecurity") || "explicit") as Connection["ftpSecurity"],
+    ftpActive: s("ftpMode") === "active",
+    filesVia: (s("filesVia") || "ssh") as Connection["filesVia"],
     sshKeepalive: Math.max(0, Math.min(3600, Math.round(Number(s("sshKeepalive")) || 0))),
     sshCompression: fd.get("sshCompression") !== null,
     sshLegacy: fd.get("sshLegacy") !== null,

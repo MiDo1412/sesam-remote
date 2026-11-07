@@ -281,6 +281,17 @@ noch `\` noch `..` enthalten. Mit SCP gibt es kein Umbenennen, Löschen und kein
 fehlt in der Liste, die Gesamtgrösse von Ordnern beim Herunterladen wächst mit (SCP nennt sie nicht vorab).
 Die geteilte Zwischenablage (VNC) nutzt weiterhin nur SFTP.
 
+**FTP/FTPS** (`ftp.rs`, `suppaftp` 12 mit `tokio-rustls-ring`, MIT/Apache-2.0): eigener Dienst für
+Webserver ohne SSH (`ftpPort`, `ftpSecurity` explicit/implicit/none, `ftpActive`; bei SSH *und* FTP
+entscheidet `filesVia`). Dieselben `sftp_*`-Befehle über `FileSession::Ftp`. TLS-Prüfung wie VNC/RDP
+mit `vnc::tls::Pinned` (`CERT_UNKNOWN:`/`CERT_CHANGED:`, `known_certs.json` unter `host:port`,
+«Zertifikat nicht prüfen» gilt). Passiv mit NAT-Workaround (Daten zur Adresse der Steuerverbindung).
+Auflisten MLSD, sonst `LIST -a`, sonst `LIST` (gemerkt je Sitzung). Jede Übertragung öffnet eine eigene
+Verbindung; die Steuerverbindung prüft nach 20 s Pause mit NOOP und verbindet neu. Pfade mit CR/LF/NUL
+werden abgelehnt (keine eingeschleusten Befehle). Rechte über `SITE CHMOD`. Grenzen: freie Namen
+werden aus der Liste bestimmt; ein Server, der Punktdateien nicht auflistet, kann eine gleichnamige
+Punktdatei beim Umbenennen der Teildatei überschreiben.
+
 **Schlüssel:** ed25519 und ECDSA, OpenSSH-Format oder PuTTY `.ppk` v2/v3 (über `ssh-key`, auch mit
 Passphrase; Passphrase = Passwort der Verbindung). RSA nicht, weil Windows Geheimnisse als UTF-16 mit
 höchstens 2560 Byte speichert (1280 Zeichen; RSA-2048 im OpenSSH-Format hat rund 1800).
