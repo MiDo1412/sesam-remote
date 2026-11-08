@@ -548,6 +548,8 @@ body.detached #library, body.detached #session-back { display: none !important; 
 .terminal .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
 .terminal .xterm-viewport::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--term-fg, #888) 30%, transparent); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
 .tab-pane.tab-shell .status { background: transparent; color: var(--term-fg, inherit); }
+/* Desktop: Status schwebt über dem Bild statt Platz zu nehmen, sonst verbindet Sesam mit einer zu kleinen Fläche und muss gleich danach die Auflösung ändern. */
+.tab-pane.tab-desktop .status { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); max-width: calc(100% - 48px); padding: 6px 12px; border-radius: 8px; background: rgba(20, 20, 20, 0.78); color: #f2f2f2; text-align: center; pointer-events: none; z-index: 5; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); }
 
 /* ---------- Verbindungs-Formular: breiter, Reiter, Knöpfe immer sichtbar ---------- */
 #editor-form { width: min(800px, calc(100vw - 48px)); column-gap: 24px; }

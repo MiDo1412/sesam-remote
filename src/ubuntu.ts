@@ -17,6 +17,16 @@ export async function fetchPorts(host: string, port: number, user: string, passw
 
 /** «Anmeldung abgelehnt» je nach Ziel klar benennen. */
 export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "rdpSessionUser" | "os">) {
+  // Server bricht schon die Aushandlung ab (Windows 10054/10053, Unix ECONNRESET): er lehnt ab, bevor ein Passwort geprüft wird.
+  if (/os error (10054|10053|104)|connection reset|vom Remotehost geschlossen/i.test(msg)) {
+    const linux = c.rdpTarget === "session" || c.os === "ubuntu" || c.os === "linux" || c.os === "raspberry";
+    const why = linux
+      ? "Bei der GNOME-Bildschirmfreigabe heisst das meist: Für diesen Benutzer sind keine Zugangsdaten gesetzt, oder sein Schlüsselbund ist gesperrt, weil er sich automatisch anmeldet (dann kann GNOME die Zugangsdaten nicht lesen). Abhilfe: Zugangsdaten unter Einstellungen › System › Remote-Desktop › Desktopfreigabe setzen und bei automatischer Anmeldung den Schlüsselbund ohne Passwort speichern (Setup-Script Schritt 4 oder «Passwörter und Schlüssel»)."
+      : c.os === "windows"
+        ? "Bei Windows oft: Remotedesktop ist aus, die Firewall blockiert, oder der Server verlangt eine andere Sicherheitsstufe."
+        : "Häufige Gründe: Der Dienst ist nicht eingerichtet (keine Zugangsdaten), eine Firewall blockiert, oder der Server verlangt eine andere Sicherheitsstufe.";
+    return `Der Server hat die Verbindung sofort beendet, noch vor der Anmeldung. ${why}`;
+  }
   if (!msg.includes("Anmeldung abgelehnt")) return msg;
   if (c.rdpTarget === "login") return "Der Anmeldebildschirm hat die Zugangsdaten abgelehnt. Gefragt sind die Zugangsdaten der Systemfreigabe von GNOME Remote Desktop (Sesam-Setup-Script oder «sudo grdctl --system»), nicht unbedingt die des Ubuntu-Kontos.";
   if (c.rdpTarget === "session") return `Die Freigabe von ${c.rdpSessionUser || "diesem Benutzer"} hat die Zugangsdaten abgelehnt (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe).`;

@@ -539,9 +539,13 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     let redirected = hop.session_id != 0 || hop.routing_token.is_some();
     let user_log = if redirected { "***" } else { t.user.as_str() };
     tracing::info!(%host, port = t.port, user = %user_log, redirected, "RDP: Verbindung");
+    // Zeit je Phase ins Protokoll (ms seit Beginn dieses Versuchs), um langsame Schritte zu finden.
+    let t0 = std::time::Instant::now();
+    let ms = || t0.elapsed().as_millis() as u64;
     // ring als Standard: mit aws-lc-rs (über sspi/ironrdp-mstsgu) im Baum wählt rustls sonst nicht selbst.
     let _ = rustls::crypto::ring::default_provider().install_default();
     let (tcp, client_addr) = transport(t, &host).await?;
+    tracing::info!(ms = ms(), "RDP: TCP verbunden");
 
     let mut drdynvc = ironrdp_dvc::DrdynvcClient::new()
         .with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())))
@@ -574,7 +578,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     }
 
     let mut framed = TokioFramed::new(tcp);
-    tracing::info!(rdstls = hop.rdstls.is_some(), "RDP: Aushandlung (X.224)");
+    tracing::info!(rdstls = hop.rdstls.is_some(), ms = ms(), "RDP: Aushandlung (X.224)");
     let should_upgrade = if hop.rdstls.is_some() {
         // IronRDP fordert RDSTLS nicht an: Aushandlung selbst, Connector dann direkt beim TLS-Upgrade weiter.
         let confirm = rdstls_negotiate(&mut framed, hop).await?;
@@ -603,7 +607,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
         *seen2.lock().unwrap() = Some(fp);
         ok
     });
-    tracing::info!("RDP: TLS");
+    tracing::info!(ms = ms(), "RDP: TLS");
     let (tls, cert) = ironrdp_tls::upgrade_with_certificate_validation_callback(tcp, &t.host, callback).await.map_err(|e| {
         let seen = seen.lock().unwrap().clone();
         tracing::warn!(error = %e, seen = ?seen, expected = ?t.expected_cert, "RDP: TLS gescheitert");
@@ -614,6 +618,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
         }
     })?;
     let mut tls = tls;
+    tracing::info!(ms = ms(), "RDP: TLS fertig");
     if let Some(creds) = &hop.rdstls {
         tracing::info!("RDP: RDSTLS-Anmeldung");
         crate::rdstls::handshake(&mut tls, creds).await?;
@@ -624,13 +629,14 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     if hop.rdstls.is_some() {
         tracing::info!("RDP: Verbindungsaufbau nach RDSTLS (ohne CredSSP)");
         let outcome = finalize_tolerant(connector, &mut framed).await?;
-        tracing::info!(redirected = matches!(outcome, ConnectionOutcome::Redirected(_)), "RDP: verbunden");
+        tracing::info!(redirected = matches!(outcome, ConnectionOutcome::Redirected(_)), ms = ms(), "RDP: verbunden");
         return Ok((outcome, framed));
     }
     tracing::info!("RDP: Anmeldung (NLA/CredSSP) und Verbindungsaufbau");
     let check = CHECK_ONLY.try_with(|v| *v).unwrap_or(false);
     if connector.should_perform_credssp() {
         credssp(t, &host, &mut connector, &mut framed, key.clone()).await?;
+        tracing::info!(ms = ms(), "RDP: CredSSP fertig");
     } else if check {
         return Err("Dieser Server prüft die Zugangsdaten erst am Bildschirm, nicht vorab.".into());
     }
@@ -650,7 +656,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     )
     .await
     .map_err(login_err)?;
-    tracing::info!(redirected = matches!(outcome, ConnectionOutcome::Redirected(_)), "RDP: verbunden");
+    tracing::info!(redirected = matches!(outcome, ConnectionOutcome::Redirected(_)), ms = ms(), "RDP: verbunden");
     Ok((outcome, framed))
 }
 
@@ -923,7 +929,7 @@ async fn run(
     mut redirects: u32,
 ) {
     loop {
-        let flow = active(result, framed, &mut rx, &emit).await;
+        let flow = active(result, framed, &mut rx, &emit, t.scale).await;
         let why = match flow {
             Ok(Flow::Closed(why)) => why,
             Err(e) => e,
@@ -995,6 +1001,7 @@ async fn active(
     framed: Framed,
     rx: &mut UnboundedReceiver<Input>,
     emit: &(impl Fn(Event) -> bool + Send + Sync),
+    scale: u32,
 ) -> Result<Flow, String> {
     let (mut reader, mut writer) = split_tokio_framed(framed);
     let size = result.desktop_size;
@@ -1022,6 +1029,8 @@ async fn active(
     let mut pending_resize: Option<(u32, u32, u32)> = None;
     let mut resize_hint = false;
     let started = std::time::Instant::now();
+    let mut first_image = false;
+    let mut shown_scale = scale;
 
     loop {
         let outputs = tokio::select! {
@@ -1111,9 +1120,16 @@ async fn active(
                         }
                         continue;
                     }
-                    Input::Resize { width, height, scale } => {
+                    Input::Resize { width, height, scale: s } => {
                         let (w, h) = MonitorLayoutEntry::adjust_display_size(u32::from(width), u32::from(height));
-                        pending_resize = Some((w, h, scale));
+                        tracing::debug!(w, h, s, shown = ?shown, shown_scale, "RDP: Grössenwunsch");
+                        // Gleiche Grösse und Skalierung: nichts senden. Windows setzt sonst die Grafik neu auf (schwarz, ~0,5 s).
+                        if (w, h) == (u32::from(shown.0), u32::from(shown.1)) && s == shown_scale {
+                            pending_resize = None;
+                            continue;
+                        }
+                        shown_scale = s;
+                        pending_resize = Some((w, h, s));
                         send_pending_resize(&mut stage, &mut writer, &mut pending_resize).await?;
                         continue;
                     }
@@ -1145,6 +1161,10 @@ async fn active(
                         }
                     }
                     if let Some(rect) = rect_of(&r, &image) {
+                        if !first_image {
+                            first_image = true;
+                            tracing::info!(ms = started.elapsed().as_millis() as u64, "RDP: erstes Bild nach dem Verbindungsaufbau");
+                        }
                         if !emit(Event::Rect { rect, rgba: crop(&image, rect) }) {
                             return Ok(Flow::Closed("Fenster geschlossen".into()));
                         }
@@ -1438,7 +1458,9 @@ mod probe {
             crate::diag::add_secret(&pw);
             (c.user.clone(), pw)
         };
-        let (user, password) = get(if desktop_only { "Sesam Test" } else { "Sesam Test RDP" });
+        // SESAM_RDP_CRED: Name eines Tresor-Eintrags (z. B. «Windows Demo»), sonst die Testkonten.
+        let name = std::env::var("SESAM_RDP_CRED").unwrap_or_else(|_| (if desktop_only { "Sesam Test" } else { "Sesam Test RDP" }).into());
+        let (user, password) = get(&name);
         let (host, port) = addr.rsplit_once(':').unwrap();
         let pins: std::collections::HashMap<String, String> =
             std::fs::read_to_string(appdata.join("known_certs.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
