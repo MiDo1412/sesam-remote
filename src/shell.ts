@@ -9,10 +9,10 @@ import "@xterm/xterm/css/xterm.css";
 import { api, HOSTKEY_UNKNOWN } from "./api";
 import { askHostKey, askText } from "./ui";
 import { ICON } from "./icons";
-import { openMenu } from "./menu";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { createKeyboard, isTouch, termSequence } from "./osk";
-import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings, themeFont } from "./termthemes";
+import { resolveTheme, saveTermSettings, termSettings, themeFont } from "./termthemes";
+import { schemeGallery } from "./schemegallery";
 import { localProfile } from "./terminal";
 
 const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
@@ -106,21 +106,54 @@ export function shellTab(ctx: TabCtx): TabHandle {
     if (q) search.findPrevious(q, { caseSensitive: false });
     term.focus();
   };
-  const schemeBtn: HTMLButtonElement = toolButton(ICON.font, "Darstellung", async () => {
-    const t = termSettings();
-    const v = await openMenu(
-      schemeBtn,
-      [
-        { value: "auto", label: "Automatisch (wie System)", section: "Farbschema" },
-        ...Object.entries(TERM_THEMES).map(([value, x]) => ({ value, label: x.label })),
-        { value: "+", label: "Schrift grösser", shortcut: "Strg++", separator: true },
-        { value: "-", label: "Schrift kleiner", shortcut: "Strg+-" },
-      ],
-      { checked: t.theme },
-    );
-    if (v === "+" || v === "-") font(v === "+" ? 1 : -1);
-    else if (v) saveTermSettings({ ...t, theme: v });
+  // «Darstellung»: Galerie als Aufklappfeld; Darüberfahren zeigt das Schema sofort in dieser Shell.
+  let pop: HTMLElement | null = null;
+  const closePop = () => {
+    if (!pop) return;
+    pop.remove();
+    pop = null;
+    applySettings(); // Vorschau zurücknehmen
+    removeEventListener("pointerdown", outside, true);
     term.focus();
+  };
+  const outside = (e: Event) => {
+    if (pop && !pop.contains(e.target as Node) && !schemeBtn.contains(e.target as Node)) closePop();
+  };
+  const schemeBtn: HTMLButtonElement = toolButton(ICON.font, "Darstellung", () => {
+    if (pop) return closePop();
+    pop = document.createElement("div");
+    pop.className = "scheme-pop";
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Darstellung der Shell");
+    const head = document.createElement("div");
+    head.className = "scheme-pop-head";
+    const title = document.createElement("h3");
+    title.textContent = "Farbschema";
+    const smaller = Object.assign(document.createElement("button"), { type: "button", textContent: "A−", title: "Schrift kleiner (Strg+-)" });
+    const bigger = Object.assign(document.createElement("button"), { type: "button", textContent: "A+", title: "Schrift grösser (Strg++)" });
+    smaller.onclick = () => font(-1);
+    bigger.onclick = () => font(1);
+    head.append(title, smaller, bigger);
+    const gallery = schemeGallery(
+      local?.theme || termSettings().theme,
+      (id) => {
+        saveTermSettings({ ...termSettings(), theme: id });
+        closePop();
+      },
+      (id) => {
+        if (!id) return applySettings();
+        term.options.theme = resolveTheme(id);
+        host.style.background = ctx.pane.style.background = term.options.theme.background ?? "";
+      },
+    );
+    pop.append(head, gallery);
+    pop.onkeydown = (e) => e.key === "Escape" && (e.stopPropagation(), closePop());
+    document.body.append(pop);
+    const r = schemeBtn.getBoundingClientRect();
+    pop.style.top = `${r.bottom + 6}px`;
+    pop.style.right = `${Math.max(8, innerWidth - r.right)}px`;
+    addEventListener("pointerdown", outside, true);
+    gallery.querySelector<HTMLElement>("[aria-checked=true]")?.focus();
   });
   // Bildschirmtastatur: xterm-Eingabefeld plus Zusatztasten (Esc, Strg, Pfeile, F-Tasten).
   const kb = createKeyboard({ pane: ctx.pane, input: term.textarea!, press: (k, m) => term.input(termSequence(k, m, term.modes.applicationCursorKeysMode)) });
@@ -207,6 +240,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     close() {
       ro.disconnect();
       kb.dispose();
+      closePop();
       removeEventListener("sesam:terminal-settings", applySettings);
       unlistenDrop.then((u) => u());
       scheme.removeEventListener("change", applySettings);

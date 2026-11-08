@@ -70,6 +70,8 @@ interface Tab {
   color: string;
   icon: string;
   group?: TabGroup;
+  /** Nummer unter den offenen Tabs derselben Verbindung und Art (0, 1, 2 …): eigener Speicherplatz für Name, Farbe, Gruppe. */
+  slot: number;
 }
 
 /** Tab-Gruppe; ihre Tabs stehen in `tabs` immer direkt hintereinander. */
@@ -119,7 +121,7 @@ const lastIndex = <T>(a: T[], f: (x: T) => boolean) => {
 
 // ---------- Gespeicherte Tab-Angaben (localStorage «sesam.tabs») ----------
 // Schlüssel: Verbindungs-ID + Art. Nur Name, Farbe, Symbol und Gruppe; keine Zugangsdaten, keine Sitzungs-IDs.
-// shortcut: mehrere Tabs derselben Verbindung und Art teilen einen Eintrag (zuletzt geändert gewinnt).
+// Mehrere Tabs derselben Verbindung und Art: der erste nutzt den Schlüssel ohne Zusatz, weitere «#1», «#2» … (Reihenfolge beim Öffnen).
 interface Saved { name?: string; color?: string; icon?: string; group?: string }
 const STORE = "sesam.tabs";
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -130,7 +132,8 @@ const saved: { tabs: Record<string, Saved>; groups: Record<string, { color: stri
   } catch {}
   return { tabs: {}, groups: {} };
 })();
-const savedKey = (t: Tab) => `${t.ctx.conn.id}|${t.kind}`;
+const slotKey = (base: string, slot: number) => (slot ? `${base}#${slot}` : base);
+const savedKey = (t: Tab) => slotKey(`${t.ctx.conn.id}|${t.kind}`, t.slot);
 
 /** Angaben der geänderten Tabs und aller Gruppen sichern. */
 function remember(...changed: Tab[]) {
@@ -197,6 +200,13 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
     name: "",
     color: "",
     icon: "",
+    // kleinste freie Nummer unter den offenen Tabs dieser Verbindung und Art
+    slot: (() => {
+      const used = new Set(tabs.filter((t) => t.ctx.conn.id === conn.id && t.kind === kind).map((t) => t.slot));
+      let n = 0;
+      while (used.has(n)) n++;
+      return n;
+    })(),
     handle: { close() {} },
     ctx: {
       id,
@@ -274,7 +284,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
     if (v === "unsplit") (split = null), activate(active!);
   };
   // Gespeicherte Angaben dieser Verbindung und Art übernehmen (Werte aus dem localStorage prüfen).
-  const s = saved.tabs[`${conn.id}|${kind}`];
+  const s = saved.tabs[slotKey(`${conn.id}|${kind}`, tab.slot)];
   if (s) {
     tab.name = str(s.name);
     tab.color = str(s.color);
@@ -433,6 +443,7 @@ function activate(tab: Tab) {
   $("session-sub").textContent = tab.sub;
   $("library").hidden = true;
   $("session").hidden = false;
+  tab.tabEl.scrollIntoView({ block: "nearest", inline: "nearest" }); // bei vielen Tabs den aktiven sichtbar halten
   tab.handle.onShow?.();
 }
 
@@ -478,6 +489,12 @@ function layoutTabs() {
     want.push(t.tabEl);
   }
   const box = $("tabs");
+  // Mausrad scrollt die Tab-Leiste waagrecht (wie in Edge und Windows Terminal).
+  box.onwheel ??= (e: WheelEvent) => {
+    if (!e.deltaY || box.scrollWidth <= box.clientWidth) return;
+    e.preventDefault();
+    box.scrollLeft += e.deltaY;
+  };
   if (want.length !== box.children.length || want.some((el, i) => box.children[i] !== el)) box.replaceChildren(...want);
 }
 
@@ -593,7 +610,10 @@ async function addToGroup(tab: Tab) {
   if (v === "new") {
     const name = await askText("Neue Gruppe", "Name der Tab-Gruppe. Danach wählst du die Farbe.", "Weiter");
     if (!name) return;
-    g = liveGroups().find((x) => x.name === name) ?? makeGroup(name, (await colorMenu(tab.tabEl, "")) ?? "");
+    // Ohne gewählte Farbe die nächste freie nehmen (wie Edge): sonst sieht man nicht, welche Tabs dazugehören.
+    const used = new Set(liveGroups().map((x) => x.color));
+    const auto = Object.keys(GROUP_COLORS).find((k) => k && !used.has(k)) ?? Object.keys(GROUP_COLORS).find(Boolean) ?? "";
+    g = liveGroups().find((x) => x.name === name) ?? makeGroup(name, (await colorMenu(tab.tabEl, auto)) ?? auto); // «Keine» bleibt möglich
   }
   if (g) setGroup(tab, g);
 }

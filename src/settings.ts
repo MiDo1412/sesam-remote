@@ -2,7 +2,8 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import { resolveTheme, saveTermSettings, TERM_THEMES, termSettings } from "./termthemes";
+import { saveTermSettings, termSettings } from "./termthemes";
+import { schemeGallery } from "./schemegallery";
 import { ask } from "./ui";
 import { renderCredList } from "./creds";
 import { renderProfiles } from "./termprofiles";
@@ -35,8 +36,24 @@ addEventListener("storage", (e) => {
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+/** Grösse des Einstellungsfensters (vom Benutzer gezogen) merken. */
+const SIZE_KEY = "sesam.settingsSize";
+let sizeWatch: ResizeObserver | null = null;
+
 export async function openSettings(tab = "general") {
   const dlg = $<HTMLDialogElement>("settings");
+  const box = dlg.querySelector<HTMLElement>(".settings")!;
+  try {
+    const sz = JSON.parse(localStorage.getItem(SIZE_KEY) ?? "null");
+    if (sz && sz.w > 400 && sz.h > 300) (box.style.width = `${sz.w}px`), (box.style.height = `${sz.h}px`);
+  } catch {}
+  sizeWatch ??= new ResizeObserver(() => {
+    if (!dlg.open || !box.style.width) return;
+    try {
+      localStorage.setItem(SIZE_KEY, JSON.stringify({ w: box.offsetWidth, h: box.offsetHeight }));
+    } catch {}
+  });
+  sizeWatch.observe(box);
   const show = (t: string) => {
     for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.setAttribute("aria-selected", String(b.dataset.pane === t));
     for (const p of dlg.querySelectorAll<HTMLElement>(".settings-pane")) p.hidden = p.id !== `settings-${t}`;
@@ -59,22 +76,8 @@ export async function openSettings(tab = "general") {
   // Shell
   const t = termSettings();
   const list = $("settings-schemes");
-  list.replaceChildren(
-    ...[["auto", "Automatisch (wie System)"], ...Object.entries(TERM_THEMES).map(([id, x]) => [id, x.label])].map(([id, label]) => {
-      const th = resolveTheme(id);
-      const l = document.createElement("label");
-      l.className = "scheme";
-      const swatch = document.createElement("span");
-      swatch.className = "scheme-preview";
-      swatch.style.background = th.background ?? "";
-      swatch.style.color = th.foreground ?? "";
-      swatch.innerHTML = `<b style="color:${th.green}">mike@host</b>:<span style="color:${th.blue}">~</span>$ ls`;
-      const input = Object.assign(document.createElement("input"), { type: "radio", name: "termTheme", value: id, checked: t.theme === id });
-      input.onchange = () => saveTermSettings({ ...termSettings(), theme: id });
-      l.append(input, swatch, document.createTextNode(label));
-      return l;
-    }),
-  );
+  // Galerie mit Vorschau; die Auswahl wirkt sofort auf offene Shells.
+  list.replaceChildren(schemeGallery(t.theme, (id) => saveTermSettings({ ...termSettings(), theme: id })));
   const size = $<HTMLInputElement>("settings-fontsize");
   size.value = String(t.fontSize);
   size.onchange = () => saveTermSettings({ ...termSettings(), fontSize: Math.max(8, Math.min(32, Number(size.value) || 13)) });
