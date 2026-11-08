@@ -15,18 +15,38 @@ export async function fetchPorts(host: string, port: number, user: string, passw
   }
 }
 
+/** Hinweis mit Überschrift und Schritten (statt einer langen Zeile), z. B. für eine sofort abgelehnte Verbindung. */
+export interface Hint { title: string; text: string; steps: string[]; help?: string }
+
+/** Server bricht schon die Aushandlung ab (Windows 10054/10053, Unix ECONNRESET): er lehnt ab, bevor ein Passwort geprüft wird. */
+export function rejectedHint(msg: string, c: Pick<Connection, "rdpTarget" | "rdpSessionUser" | "os">): Hint | null {
+  if (!/os error (10054|10053|104)\b|connection reset|vom Remotehost geschlossen/i.test(msg)) return null;
+  const gnome = c.rdpTarget === "session" || c.os === "ubuntu" || c.os === "linux" || c.os === "raspberry";
+  if (gnome)
+    return {
+      title: "Der Rechner hat die Verbindung abgelehnt",
+      text: "Die Bildschirmfreigabe dieses Benutzers hat keine Zugangsdaten, oder sie kann sie nicht lesen.",
+      steps: [
+        "Auf dem Rechner als dieser Benutzer anmelden.",
+        "Einstellungen › System › Remote-Desktop › Desktopfreigabe: Benutzername und Passwort setzen.",
+        "Meldet sich der Benutzer automatisch an: den Schlüsselbund ohne Passwort speichern, sonst kann GNOME die Zugangsdaten nach einem Neustart nicht lesen.",
+      ],
+      help: "rdp-gnome",
+    };
+  return {
+    title: "Der Rechner hat die Verbindung abgelehnt",
+    text: "Er hat abgebrochen, bevor ein Passwort geprüft wurde.",
+    steps: c.os === "windows"
+      ? ["Auf dem Rechner Remotedesktop einschalten (Einstellungen › System › Remotedesktop).", "Prüfen, ob eine Firewall den Port sperrt.", "Ist Netzwerkebenen-Authentifizierung vorgeschrieben, Benutzer und Passwort in Sesam eintragen."]
+      : ["Prüfen, ob der Remote-Desktop-Dienst auf dem Rechner eingerichtet ist und Zugangsdaten hat.", "Prüfen, ob eine Firewall den Port sperrt."],
+    help: c.os === "windows" ? "rdp-windows" : undefined,
+  };
+}
+
 /** «Anmeldung abgelehnt» je nach Ziel klar benennen. */
 export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "rdpSessionUser" | "os">) {
-  // Server bricht schon die Aushandlung ab (Windows 10054/10053, Unix ECONNRESET): er lehnt ab, bevor ein Passwort geprüft wird.
-  if (/os error (10054|10053|104)|connection reset|vom Remotehost geschlossen/i.test(msg)) {
-    const linux = c.rdpTarget === "session" || c.os === "ubuntu" || c.os === "linux" || c.os === "raspberry";
-    const why = linux
-      ? "Bei der GNOME-Bildschirmfreigabe heisst das meist: Für diesen Benutzer sind keine Zugangsdaten gesetzt, oder sein Schlüsselbund ist gesperrt, weil er sich automatisch anmeldet (dann kann GNOME die Zugangsdaten nicht lesen). Abhilfe: Zugangsdaten unter Einstellungen › System › Remote-Desktop › Desktopfreigabe setzen und bei automatischer Anmeldung den Schlüsselbund ohne Passwort speichern (Setup-Script Schritt 4 oder «Passwörter und Schlüssel»)."
-      : c.os === "windows"
-        ? "Bei Windows oft: Remotedesktop ist aus, die Firewall blockiert, oder der Server verlangt eine andere Sicherheitsstufe."
-        : "Häufige Gründe: Der Dienst ist nicht eingerichtet (keine Zugangsdaten), eine Firewall blockiert, oder der Server verlangt eine andere Sicherheitsstufe.";
-    return `Der Server hat die Verbindung sofort beendet, noch vor der Anmeldung. ${why}`;
-  }
+  const h = rejectedHint(msg, c);
+  if (h) return `${h.title}. ${h.text}`;
   if (!msg.includes("Anmeldung abgelehnt")) return msg;
   if (c.rdpTarget === "login") return "Der Anmeldebildschirm hat die Zugangsdaten abgelehnt. Gefragt sind die Zugangsdaten der Systemfreigabe von GNOME Remote Desktop (Sesam-Setup-Script oder «sudo grdctl --system»), nicht unbedingt die des Ubuntu-Kontos.";
   if (c.rdpTarget === "session") return `Die Freigabe von ${c.rdpSessionUser || "diesem Benutzer"} hat die Zugangsdaten abgelehnt (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe).`;

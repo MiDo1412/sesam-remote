@@ -14,7 +14,11 @@ mod imp {
 
     static ACTIVE: AtomicBool = AtomicBool::new(false);
     pub static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    static NOT_FRONT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     static APP: OnceLock<AppHandle> = OnceLock::new();
+    /// Abgefangene Tasten gehen über diesen Kanal an einen eigenen Thread: der Hook selbst muss sofort zurückkehren,
+    /// sonst wertet Windows ihn als zu langsam, gibt die Taste trotzdem weiter und entfernt ihn still.
+    static OUT: OnceLock<std::sync::Mutex<std::sync::mpsc::Sender<HookKey>>> = OnceLock::new();
 
     #[derive(Clone, serde::Serialize)]
     struct HookKey {
@@ -42,14 +46,17 @@ mod imp {
 
     unsafe extern "system" fn hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
         CALLS.fetch_add(1, Ordering::Relaxed);
-        if code >= 0 && ACTIVE.load(Ordering::Relaxed) && our_window_in_front() {
+        let front = our_window_in_front();
+        if !front {
+            NOT_FRONT.fetch_add(1, Ordering::Relaxed);
+        }
+        if code >= 0 && ACTIVE.load(Ordering::Relaxed) && front {
             let k = unsafe { &*(l.0 as *const KBDLLHOOKSTRUCT) };
             let pressed = |vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY| unsafe { GetAsyncKeyState(vk.0 as i32) } < 0;
             if let Some(code) = grab(k.vkCode as u16, pressed(VK_MENU), pressed(VK_CONTROL)) {
                 let down = !matches!(w.0 as u32, WM_KEYUP | WM_SYSKEYUP);
-                tracing::debug!(code, down, "Systemtaste an den Remotecomputer");
-                if let Some(app) = APP.get() {
-                    let _ = app.emit("sesam-hook-key", HookKey { code, down });
+                if let Some(tx) = OUT.get().and_then(|m| m.try_lock().ok()) {
+                    let _ = tx.send(HookKey { code, down });
                 }
                 return LRESULT(1); // nicht an Windows (kein Startmenü, kein Fensterwechsel)
             }
@@ -62,6 +69,16 @@ mod imp {
     /// und wird von Windows nicht gedrosselt; ein gedrosselter Hook wird still entfernt).
     pub fn init(app: AppHandle) {
         let _ = APP.set(app);
+        let (tx, rx) = std::sync::mpsc::channel::<HookKey>();
+        let _ = OUT.set(std::sync::Mutex::new(tx));
+        std::thread::spawn(move || {
+            for k in rx {
+                tracing::info!(code = k.code, down = k.down, "Systemtaste an den Remotecomputer");
+                if let Some(app) = APP.get() {
+                    let _ = app.emit("sesam-hook-key", k);
+                }
+            }
+        });
     }
 
     /// Thread-ID des Hook-Threads (0 = kein Hook).
@@ -108,7 +125,7 @@ mod imp {
 
     pub fn set_active(on: bool) {
         if ACTIVE.swap(on, Ordering::Relaxed) != on {
-            tracing::info!(on, "Windows-Tastenkombinationen an den Remotecomputer");
+            tracing::info!(on, hook_aufrufe = CALLS.load(Ordering::Relaxed), davon_nicht_vorne = NOT_FRONT.load(Ordering::Relaxed), "Windows-Tastenkombinationen an den Remotecomputer");
             if on { install() } else { remove() }
         }
     }

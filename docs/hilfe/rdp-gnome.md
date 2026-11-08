@@ -83,6 +83,23 @@ grdctl rdp set-credentials
 **In Sesam:** RDP aktiv, Port wie in den Einstellungen angezeigt, Benutzer und RDP-Passwort aus der
 Freigabe. Läuft Remote Login gleichzeitig, nutzt die Freigabe einen anderen Port als 3389.
 
+### Automatische Anmeldung und Schlüsselbund
+
+GNOME speichert die Zugangsdaten der Desktopfreigabe im **Schlüsselbund** des Benutzers. Meldet sich der
+Benutzer automatisch an (ohne Passwort), bleibt dieser Schlüsselbund nach jedem Neustart gesperrt. GNOME kann
+die Zugangsdaten dann nicht lesen und lehnt jede Verbindung sofort ab, obwohl sie gespeichert sind.
+
+Abhilfe, einmal als dieser Benutzer:
+
+1. **Passwörter und Schlüssel** öffnen.
+2. Links **Anmeldung** mit der rechten Maustaste anklicken › **Passwort ändern**.
+3. Das bisherige Passwort eingeben (meist das Konto-Passwort), das neue leer lassen und die Frage nach
+   unverschlüsselter Speicherung bestätigen.
+4. Neu starten oder ab- und wieder anmelden.
+
+Das Setup-Script erledigt das in Schritt 4 auf Wunsch. Zu bedenken: Andere Passwörter in diesem Schlüsselbund
+liegen danach unverschlüsselt auf der Platte.
+
 ## Rechner ohne Monitor
 
 Ohne angeschlossenen Monitor gibt es keinen Bildschirm, den GNOME freigeben kann. Abhilfe ist ein

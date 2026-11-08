@@ -666,3 +666,11 @@ dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; paddin
 .palette li[aria-selected=true] { background: var(--accent); color: var(--on-accent); }
 .palette li small { color: inherit; opacity: 0.65; font-size: 12px; white-space: nowrap; }
 .palette li.empty { color: var(--muted); justify-content: center; }
+
+/* Verständlicher Hinweis bei abgelehnter Verbindung (statt einer langen Zeile) */
+.conn-hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - 48px)); padding: 20px 22px; border-radius: 12px; background: var(--card); color: var(--text); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3); font-size: 13px; line-height: 1.5; z-index: 6; }
+.conn-hint h3 { margin: 0 0 6px; font-size: 15px; }
+.conn-hint p { margin: 0 0 10px; color: var(--muted); }
+.conn-hint ol { margin: 0 0 14px; padding-left: 20px; }
+.conn-hint li + li { margin-top: 4px; }
+.desktop { position: relative; }

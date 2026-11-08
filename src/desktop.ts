@@ -11,7 +11,8 @@ import { saveDesktopThumb } from "./thumbs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
 import { remoteSize } from "./desksize";
-import { explainRdpError } from "./ubuntu";
+import { explainRdpError, rejectedHint, type Hint } from "./ubuntu";
+import { openHelp } from "./help";
 import { listen } from "@tauri-apps/api/event";
 import { appSettings } from "./settings";
 import { openMenu } from "./menu";
@@ -545,6 +546,22 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
     }
   };
 
+  /** Verständlicher Hinweis mitten in der Fläche: Überschrift, kurze Erklärung, Schritte, Hilfe. */
+  const showHint = (h: Hint) => {
+    const box = document.createElement("div");
+    box.className = "conn-hint";
+    box.setAttribute("role", "alert");
+    const ol = document.createElement("ol");
+    ol.append(...h.steps.map((s) => Object.assign(document.createElement("li"), { textContent: s })));
+    box.append(Object.assign(document.createElement("h3"), { textContent: h.title }), Object.assign(document.createElement("p"), { textContent: h.text }), ol);
+    if (h.help) {
+      const more = Object.assign(document.createElement("button"), { type: "button", textContent: "Mehr erfahren" });
+      more.onclick = () => openHelp(h.help!);
+      box.append(more);
+    }
+    status.textContent = "";
+    wrap.append(box);
+  };
   let remember = true;
   // Kommt nach dem Verbinden kein Bild, das sagen statt eine schwarze Fläche zu zeigen.
   let gotImage = false;
@@ -607,7 +624,11 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
           continue;
         }
         status.textContent = "Verbindung abgebrochen: Zertifikat nicht bestätigt.";
-      } else status.textContent = `Keine Verbindung: ${explainRdpError(msg, c)}`;
+      } else {
+        const h = rejectedHint(msg, c);
+        if (h) showHint(h);
+        else status.textContent = `Keine Verbindung: ${explainRdpError(msg, c)}`;
+      }
       ctx.setState("closed");
     }
     break;
