@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Vor jedem Commit: Commit-Kennung für die Anzeige in der App und Prüfung der Versionsnummer.
+# Ein Commit ändert keine Nummer, ein Release schon (scripts/release.mjs, docs/versionierung.md).
+# Einmal pro Klon einschalten:  git config core.hooksPath .githooks
+# Läuft unter Windows mit der Bash von Git for Windows.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+# Kurze Commit-Kennung für «Über Sesam Remote». HEAD ist hier noch der Vorgänger; post-commit
+# schreibt danach die neue Kennung. Die Datei ist nicht versioniert (.gitignore).
+git rev-parse --short HEAD > .git-commit 2>/dev/null || true
+
+# Alle Kopien der Nummer (package.json, tauri.conf.json, Cargo.toml) müssen VERSION entsprechen.
+node scripts/release.mjs check

@@ -100,7 +100,8 @@ export async function openSettings(tab = "general") {
   fam.onchange = () => saveTermSettings({ ...termSettings(), fontFamily: fam.value.trim() });
 
   // Über
-  $("settings-version").textContent = await getVersion().catch(() => "");
+  const v = await getVersion().catch(() => "");
+  $("settings-version").textContent = __COMMIT__ ? `${v} (${__COMMIT__})` : v;
   show(tab);
   if (!dlg.open) dlg.showModal();
 }

@@ -29,3 +29,6 @@ test-build/
 
 # Werkzeug-Cache, gehört nicht ins Repo
 .impeccable/
+
+# Commit für die App-Anzeige, schreibt der post-commit-Hook
+.git-commit

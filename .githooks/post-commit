@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Schreibt die Kennung des eben entstandenen Commits nach .git-commit (Anzeige in der App).
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+git rev-parse --short HEAD > .git-commit 2>/dev/null || true
