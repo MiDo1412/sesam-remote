@@ -1,3 +1,6 @@
+import { fl } from "./icons";
+import chevronDown from "@fluentui/svg-icons/icons/chevron_down_20_regular.svg?raw";
+import checkmark from "@fluentui/svg-icons/icons/checkmark_20_regular.svg?raw";
 /** Menüs im Stil von macOS: Pull-down (Aktionen) und Pop-up mit Häkchen (Auswahlwerte).
  *  Ersetzt native <select>, die unter Windows/WebView2 fremd aussehen.
  *  Tastatur: Pfeile, Pos1/Ende, Enter/Leertaste, Esc, Tippen springt zum Eintrag. */
@@ -16,10 +19,8 @@ export interface MenuItem {
   separator?: boolean;
 }
 
-const svg = (d: string) =>
-  `<svg viewBox="0 0 256 256" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-export const ICON_CHEVRON = svg('<polyline points="208 96 128 176 48 96"/>');
-export const ICON_CHECK = svg('<polyline points="40 144 96 200 224 72"/>');
+export const ICON_CHEVRON = fl(chevronDown, 12);
+export const ICON_CHECK = fl(checkmark, 14);
 
 let current: { close: (value: string | null) => void } | null = null;
 

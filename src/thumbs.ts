@@ -4,7 +4,7 @@ import type { Connection } from "./api";
 import { ICON } from "./icons";
 
 const OS: Record<string, { icon: string; color: string; label: string }> = {
-  ubuntu: { icon: ICON.osLinux, color: "#8a3b5e", label: "Ubuntu" },
+  ubuntu: { icon: ICON.osUbuntu, color: "#8a3b5e", label: "Ubuntu" },
   linux: { icon: ICON.osLinux, color: "#3c4a57", label: "Linux" },
   macos: { icon: ICON.osMac, color: "#3d6a8c", label: "macOS" },
   windows: { icon: ICON.osWindows, color: "#245a8f", label: "Windows" },

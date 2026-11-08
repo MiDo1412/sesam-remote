@@ -1,100 +1,122 @@
-/** Phosphor Icons (MIT), nur die gebrauchten, als Inline-SVG mit currentColor. */
-import arrowClockwise from "@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw";
-import arrowLeft from "@phosphor-icons/core/assets/regular/arrow-left.svg?raw";
-import arrowRight from "@phosphor-icons/core/assets/regular/arrow-right.svg?raw";
-import arrowUp from "@phosphor-icons/core/assets/regular/arrow-up.svg?raw";
-import arrowsLeftRight from "@phosphor-icons/core/assets/regular/arrows-left-right.svg?raw";
-import house from "@phosphor-icons/core/assets/regular/house.svg?raw";
-import arrowSquareOut from "@phosphor-icons/core/assets/regular/arrow-square-out.svg?raw";
-import question from "@phosphor-icons/core/assets/regular/question.svg?raw";
-import screencast from "@phosphor-icons/core/assets/regular/screencast.svg?raw";
-import splitH from "@phosphor-icons/core/assets/regular/square-split-horizontal.svg?raw";
-import splitV from "@phosphor-icons/core/assets/regular/square-split-vertical.svg?raw";
-import minus from "@phosphor-icons/core/assets/regular/minus.svg?raw";
-import arrowsOut from "@phosphor-icons/core/assets/regular/arrows-out.svg?raw";
-import camera from "@phosphor-icons/core/assets/regular/camera.svg?raw";
-import clipboardText from "@phosphor-icons/core/assets/regular/clipboard-text.svg?raw";
-import copy from "@phosphor-icons/core/assets/regular/copy.svg?raw";
-import downloadSimple from "@phosphor-icons/core/assets/regular/download-simple.svg?raw";
-import folder from "@phosphor-icons/core/assets/regular/folder.svg?raw";
-import folderPlus from "@phosphor-icons/core/assets/regular/folder-plus.svg?raw";
-import handTap from "@phosphor-icons/core/assets/regular/hand-tap.svg?raw";
-import frameCorners from "@phosphor-icons/core/assets/regular/frame-corners.svg?raw";
-import globe from "@phosphor-icons/core/assets/regular/globe.svg?raw";
-import keyboard from "@phosphor-icons/core/assets/regular/keyboard.svg?raw";
-import linuxLogo from "@phosphor-icons/core/assets/regular/linux-logo.svg?raw";
-import appleLogo from "@phosphor-icons/core/assets/regular/apple-logo.svg?raw";
-import windowsLogo from "@phosphor-icons/core/assets/regular/windows-logo.svg?raw";
-import cpu from "@phosphor-icons/core/assets/regular/cpu.svg?raw";
-import desktopTower from "@phosphor-icons/core/assets/regular/desktop-tower.svg?raw";
-import lightning from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
-import floppy from "@phosphor-icons/core/assets/regular/floppy-disk.svg?raw";
-import magnifyingGlass from "@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw";
-import magnifyingGlassPlus from "@phosphor-icons/core/assets/regular/magnifying-glass-plus.svg?raw";
-import monitor from "@phosphor-icons/core/assets/regular/monitor.svg?raw";
-import pencilSimple from "@phosphor-icons/core/assets/regular/pencil-simple.svg?raw";
-import plug from "@phosphor-icons/core/assets/regular/plug.svg?raw";
-import plus from "@phosphor-icons/core/assets/regular/plus.svg?raw";
-import terminalWindow from "@phosphor-icons/core/assets/regular/terminal-window.svg?raw";
-import textAa from "@phosphor-icons/core/assets/regular/text-aa.svg?raw";
-import trash from "@phosphor-icons/core/assets/regular/trash.svg?raw";
-import uploadSimple from "@phosphor-icons/core/assets/regular/upload-simple.svg?raw";
-import x from "@phosphor-icons/core/assets/regular/x.svg?raw";
-import squaresFour from "@phosphor-icons/core/assets/regular/squares-four.svg?raw";
-import list from "@phosphor-icons/core/assets/regular/list.svg?raw";
-import gearSix from "@phosphor-icons/core/assets/regular/gear-six.svg?raw";
-import pushPin from "@phosphor-icons/core/assets/regular/push-pin.svg?raw";
-import cornersIn from "@phosphor-icons/core/assets/regular/corners-in.svg?raw";
-import dotsThree from "@phosphor-icons/core/assets/regular/dots-three.svg?raw";
+/** Zentrale Symbol-Schicht: ein Name je Aktion (ICON.refresh …), Quelle je Plattform.
+ *  Windows (und vorerst überall): Fluent System Icons von Microsoft (MIT, @fluentui/svg-icons), Regular 20 px,
+ *  als Inline-SVG mit currentColor; nur die gebrauchten Dateien kommen ins Bundle.
+ *  Betriebssystem-Logos: siehe unten. Lizenzen: docs/lizenzen/README.md. */
+import fAdd from "@fluentui/svg-icons/icons/add_20_regular.svg?raw";
+import fArrowClockwise from "@fluentui/svg-icons/icons/arrow_clockwise_20_regular.svg?raw";
+import fArrowDownload from "@fluentui/svg-icons/icons/arrow_download_20_regular.svg?raw";
+import fArrowLeft from "@fluentui/svg-icons/icons/arrow_left_20_regular.svg?raw";
+import fArrowMaximize from "@fluentui/svg-icons/icons/arrow_maximize_20_regular.svg?raw";
+import fArrowRight from "@fluentui/svg-icons/icons/arrow_right_20_regular.svg?raw";
+import fArrowSwap from "@fluentui/svg-icons/icons/arrow_swap_20_regular.svg?raw";
+import fArrowUp from "@fluentui/svg-icons/icons/arrow_up_20_regular.svg?raw";
+import fArrowUpload from "@fluentui/svg-icons/icons/arrow_upload_20_regular.svg?raw";
+import fCamera from "@fluentui/svg-icons/icons/camera_20_regular.svg?raw";
+import fClipboardTextLtr from "@fluentui/svg-icons/icons/clipboard_text_ltr_20_regular.svg?raw";
+import fCopy from "@fluentui/svg-icons/icons/copy_20_regular.svg?raw";
+import fDelete from "@fluentui/svg-icons/icons/delete_20_regular.svg?raw";
+import fDesktop from "@fluentui/svg-icons/icons/desktop_20_regular.svg?raw";
+import fDismiss from "@fluentui/svg-icons/icons/dismiss_20_regular.svg?raw";
+import fEdit from "@fluentui/svg-icons/icons/edit_20_regular.svg?raw";
+import fFlash from "@fluentui/svg-icons/icons/flash_20_regular.svg?raw";
+import fFolder from "@fluentui/svg-icons/icons/folder_20_regular.svg?raw";
+import fFolderAdd from "@fluentui/svg-icons/icons/folder_add_20_regular.svg?raw";
+import fFullScreenMaximize from "@fluentui/svg-icons/icons/full_screen_maximize_20_regular.svg?raw";
+import fFullScreenMinimize from "@fluentui/svg-icons/icons/full_screen_minimize_20_regular.svg?raw";
+import fGlobe from "@fluentui/svg-icons/icons/globe_20_regular.svg?raw";
+import fGrid from "@fluentui/svg-icons/icons/grid_20_regular.svg?raw";
+import fHandLeft from "@fluentui/svg-icons/icons/hand_left_20_regular.svg?raw";
+import fHome from "@fluentui/svg-icons/icons/home_20_regular.svg?raw";
+import fKeyboard from "@fluentui/svg-icons/icons/keyboard_20_regular.svg?raw";
+import fMoreHorizontal from "@fluentui/svg-icons/icons/more_horizontal_20_regular.svg?raw";
+import fOpen from "@fluentui/svg-icons/icons/open_20_regular.svg?raw";
+import fPin from "@fluentui/svg-icons/icons/pin_20_regular.svg?raw";
+import fPlugDisconnected from "@fluentui/svg-icons/icons/plug_disconnected_20_regular.svg?raw";
+import fQuestionCircle from "@fluentui/svg-icons/icons/question_circle_20_regular.svg?raw";
+import fSave from "@fluentui/svg-icons/icons/save_20_regular.svg?raw";
+import fSearch from "@fluentui/svg-icons/icons/search_20_regular.svg?raw";
+import fSettings from "@fluentui/svg-icons/icons/settings_20_regular.svg?raw";
+import fShareScreenStart from "@fluentui/svg-icons/icons/share_screen_start_20_regular.svg?raw";
+import fSplitHorizontal from "@fluentui/svg-icons/icons/split_horizontal_20_regular.svg?raw";
+import fSplitVertical from "@fluentui/svg-icons/icons/split_vertical_20_regular.svg?raw";
+import fSubtract from "@fluentui/svg-icons/icons/subtract_20_regular.svg?raw";
+import fTextBulletListLtr from "@fluentui/svg-icons/icons/text_bullet_list_ltr_20_regular.svg?raw";
+import fTextFont from "@fluentui/svg-icons/icons/text_font_20_regular.svg?raw";
+import fWindowConsole from "@fluentui/svg-icons/icons/window_console_20_regular.svg?raw";
+import fZoomIn from "@fluentui/svg-icons/icons/zoom_in_20_regular.svg?raw";
+// Betriebssystem-Logos einfarbig aus Simple Icons (CC0), gleiche 24-px-Box wie die Fluent-Symbole.
+import linuxLogo from "simple-icons/icons/linux.svg?raw";
+import appleLogo from "simple-icons/icons/apple.svg?raw";
+import ubuntuLogo from "simple-icons/icons/ubuntu.svg?raw";
+import piLogo from "simple-icons/icons/raspberrypi.svg?raw";
+import desktopTower from "@fluentui/svg-icons/icons/desktop_tower_20_regular.svg?raw";
+/** Windows: Simple Icons führt das Logo nicht mehr (Markenrecht); das schlichte Vierfelder-Zeichen selbst gezeichnet. */
+const windowsLogo = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2 2h9.5v9.5H2zm10.5 0H22v9.5h-9.5zM2 12.5h9.5V22H2zm10.5 0H22V22h-9.5z"/></svg>`;
+/** Simple-Icons-SVG ohne <title> (sonst erscheint beim Darüberfahren ein Browser-Tooltip). */
+const logo = (s: string, n: number) => fl(s.replace(/<title>[^<]*<\/title>/, ""), n);
 
-const sized = (s: string, n = 16) => s.replace("<svg ", `<svg width="${n}" height="${n}" aria-hidden="true" focusable="false" `);
+/** Fluent-SVGs haben eigene width/height und keine Füllfarbe: ersetzen bzw. currentColor setzen. */
+export const fl = (s: string, n = 16) => s.replace(/<svg[^>]*?(viewBox="[^"]+")[^>]*>/, `<svg xmlns="http://www.w3.org/2000/svg" $1 width="${n}" height="${n}" fill="currentColor" aria-hidden="true" focusable="false">`);
 
 export const ICON = {
-  refresh: sized(arrowClockwise),
-  back: sized(arrowLeft),
-  forward: sized(arrowRight),
-  up: sized(arrowUp),
-  compare: sized(arrowsLeftRight),
-  home: sized(house),
-  detach: sized(arrowSquareOut),
-  span: sized(arrowsOut),
-  screenshot: sized(camera),
-  typeClipboard: sized(clipboardText),
-  copy: sized(copy),
-  download: sized(downloadSimple),
-  folder: sized(folder),
-  newFolder: sized(folderPlus),
-  fullscreen: sized(frameCorners),
-  globe: sized(globe),
-  handTap: sized(handTap),
-  keyboard: sized(keyboard),
-  osLinux: sized(linuxLogo, 40),
-  osMac: sized(appleLogo, 40),
-  osWindows: sized(windowsLogo, 40),
-  osPi: sized(cpu, 40),
-  osGeneric: sized(desktopTower, 40),
-  quick: sized(lightning),
-  save: sized(floppy),
-  search: sized(magnifyingGlass),
-  magnify: sized(magnifyingGlassPlus),
-  desktop: sized(monitor),
-  rename: sized(pencilSimple),
-  disconnect: sized(plug),
-  plus: sized(plus),
-  shell: sized(terminalWindow),
-  font: sized(textAa),
-  trash: sized(trash),
-  upload: sized(uploadSimple),
-  close: sized(x, 12),
-  minimize: sized(minus, 12),
-  splitRight: sized(splitH),
-  splitDown: sized(splitV),
-  screencast: sized(screencast),
-  question: sized(question, 14),
-  viewGrid: sized(squaresFour),
-  viewList: sized(list),
-  settings: sized(gearSix),
-  pin: sized(pushPin),
-  windowed: sized(cornersIn),
-  more: sized(dotsThree),
+  refresh: fl(fArrowClockwise),
+  back: fl(fArrowLeft),
+  forward: fl(fArrowRight),
+  up: fl(fArrowUp),
+  compare: fl(fArrowSwap),
+  home: fl(fHome),
+  detach: fl(fOpen),
+  span: fl(fArrowMaximize),
+  screenshot: fl(fCamera),
+  typeClipboard: fl(fClipboardTextLtr),
+  copy: fl(fCopy),
+  download: fl(fArrowDownload),
+  folder: fl(fFolder),
+  newFolder: fl(fFolderAdd),
+  fullscreen: fl(fFullScreenMaximize),
+  globe: fl(fGlobe),
+  handTap: fl(fHandLeft),
+  keyboard: fl(fKeyboard),
+  quick: fl(fFlash),
+  save: fl(fSave),
+  search: fl(fSearch),
+  magnify: fl(fZoomIn),
+  desktop: fl(fDesktop),
+  rename: fl(fEdit),
+  disconnect: fl(fPlugDisconnected),
+  plus: fl(fAdd),
+  shell: fl(fWindowConsole),
+  font: fl(fTextFont),
+  trash: fl(fDelete),
+  upload: fl(fArrowUpload),
+  close: fl(fDismiss, 12),
+  minimize: fl(fSubtract, 12),
+  splitRight: fl(fSplitVertical),
+  splitDown: fl(fSplitHorizontal),
+  screencast: fl(fShareScreenStart),
+  question: fl(fQuestionCircle, 14),
+  viewGrid: fl(fGrid),
+  viewList: fl(fTextBulletListLtr),
+  settings: fl(fSettings),
+  pin: fl(fPin),
+  windowed: fl(fFullScreenMinimize),
+  more: fl(fMoreHorizontal),
+  osLinux: logo(linuxLogo, 40),
+  osUbuntu: logo(ubuntuLogo, 40),
+  osMac: logo(appleLogo, 40),
+  osWindows: logo(windowsLogo, 40),
+  osPi: logo(piLogo, 40),
+  osGeneric: fl(desktopTower, 40),
+};
+
+/** Für macOS/iPadOS vorbereitet: dieselben Namen als SF-Symbol-Namen (nur auf Apple-Geräten erlaubt, ungetestet). */
+export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
+  refresh: "arrow.clockwise", back: "chevron.backward", forward: "chevron.forward", up: "arrow.up", compare: "arrow.left.arrow.right",
+  home: "house", detach: "macwindow.on.rectangle", span: "rectangle.split.3x1", screenshot: "camera", typeClipboard: "doc.on.clipboard",
+  copy: "doc.on.doc", download: "arrow.down.circle", folder: "folder", newFolder: "folder.badge.plus", fullscreen: "arrow.up.left.and.arrow.down.right",
+  globe: "globe", handTap: "hand.tap", keyboard: "keyboard", quick: "bolt", save: "square.and.arrow.down", search: "magnifyingglass",
+  magnify: "plus.magnifyingglass", desktop: "display", rename: "pencil", disconnect: "powerplug", plus: "plus", shell: "terminal",
+  font: "textformat", trash: "trash", upload: "arrow.up.circle", close: "xmark", minimize: "minus", splitRight: "rectangle.split.2x1",
+  splitDown: "rectangle.split.1x2", screencast: "rectangle.on.rectangle", question: "questionmark.circle", viewGrid: "square.grid.2x2",
+  viewList: "list.bullet", settings: "gearshape", pin: "pin", windowed: "arrow.down.right.and.arrow.up.left", more: "ellipsis",
 };

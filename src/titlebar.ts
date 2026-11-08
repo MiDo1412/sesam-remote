@@ -4,13 +4,14 @@ import { api } from "./api";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openMenu, type MenuItem } from "./menu";
 import { topics } from "./help";
-import minusSvg from "@phosphor-icons/core/assets/regular/minus.svg?raw";
-import squareSvg from "@phosphor-icons/core/assets/regular/square.svg?raw";
-import restoreSvg from "@phosphor-icons/core/assets/regular/copy.svg?raw";
-import closeSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
+import { fl } from "./icons";
+import minusSvg from "@fluentui/svg-icons/icons/subtract_20_regular.svg?raw";
+import squareSvg from "@fluentui/svg-icons/icons/square_20_regular.svg?raw";
+import restoreSvg from "@fluentui/svg-icons/icons/square_multiple_20_regular.svg?raw";
+import closeSvg from "@fluentui/svg-icons/icons/dismiss_20_regular.svg?raw";
 
 // Eigene Symbole statt der Windows-Symbolschrift (die nicht überall verfügbar ist und dann bunt ersetzt wird).
-const glyph = (svg: string) => svg.replace("<svg ", '<svg width="12" height="12" aria-hidden="true" ');
+const glyph = (svg: string) => fl(svg, 14);
 import { invoke } from "@tauri-apps/api/core";
 
 export const isMac = navigator.userAgent.includes("Mac");
