@@ -673,4 +673,6 @@ dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; paddin
 .conn-hint li + li { margin-top: 4px; }
 .desktop { position: relative; }
 .help-search { width: 100%; height: 30px; margin-bottom: 8px; }
-.win-btn.more { width: 40px; }
+.win-btn.more { width: 40px; margin: 4px 0; height: auto; border-radius: 6px; }
+.win-btn.more:hover, .win-btn.more[aria-expanded="true"] { background: var(--hover); }
+.win-sep { width: 1px; margin: 9px 12px 9px 12px; background: var(--line, rgba(128, 128, 128, 0.3)); }

@@ -7,7 +7,7 @@ import minusSvg from "@fluentui/svg-icons/icons/subtract_20_regular.svg?raw";
 import squareSvg from "@fluentui/svg-icons/icons/square_20_regular.svg?raw";
 import restoreSvg from "@fluentui/svg-icons/icons/square_multiple_20_regular.svg?raw";
 import closeSvg from "@fluentui/svg-icons/icons/dismiss_20_regular.svg?raw";
-import moreSvg from "@fluentui/svg-icons/icons/more_horizontal_20_regular.svg?raw";
+import menuSvg from "@fluentui/svg-icons/icons/navigation_20_regular.svg?raw";
 
 // Eigene Symbole statt der Windows-Symbolschrift (die nicht überall verfügbar ist und dann bunt ersetzt wird).
 const glyph = (svg: string) => fl(svg, 14);
@@ -21,7 +21,7 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
   document.body.classList.add("custom-titlebar");
   const win = getCurrentWindow();
 
-  // Kurzes App-Menü «⋯» oben rechts (wie Edge/Teams), höchstens 7 Einträge. Alles Weitere über die Befehlspalette,
+  // Kurzes App-Menü (☰) oben rechts (wie Edge/Teams), höchstens 7 Einträge. Alles Weitere über die Befehlspalette,
   // Kontextmenüs, Kürzel und die Verbindungsleiste.
   const items: MenuItem[] = [
     { value: "cmd:new", label: "Neue Verbindung …", shortcut: "Strg+N" },
@@ -55,9 +55,12 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
       return b;
     };
     const max = mk(glyph(squareSvg), "Maximieren", () => win.toggleMaximize());
-    const more = mk(fl(moreSvg, 16), "Menü", () => void menu(more), "more");
+    const more = mk(fl(menuSvg, 16), "Menü (Alt)", () => void menu(more), "more");
     more.setAttribute("aria-haspopup", "menu");
-    ctl.append(more, mk(glyph(minusSvg), "Minimieren", () => win.minimize()), max, mk(glyph(closeSvg), "Schliessen", () => win.close(), "close"));
+    more.setAttribute("aria-keyshortcuts", "Alt");
+    const sep = Object.assign(document.createElement("span"), { className: "win-sep" });
+    sep.setAttribute("aria-hidden", "true");
+    ctl.append(more, sep, mk(glyph(minusSvg), "Minimieren", () => win.minimize()), max, mk(glyph(closeSvg), "Schliessen", () => win.close(), "close"));
     h.append(ctl);
     const sync = async () => {
       const on = await win.isMaximized();
@@ -68,6 +71,20 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
     void sync();
     void win.onResized(sync);
   }
+
+  // Alt allein öffnet das Menü wie in Windows-Apps. Nicht, solange das Remote-Bild den Fokus hat (Alt gehört dann nach drüben).
+  let altAlone = false;
+  addEventListener("keydown", (e) => (altAlone = e.key === "Alt" && !e.repeat && !(document.activeElement instanceof HTMLCanvasElement)), true);
+  addEventListener("pointerdown", () => (altAlone = false), true);
+  addEventListener("keyup", (e) => {
+    if (e.key !== "Alt" || !altAlone) return;
+    altAlone = false;
+    const btn = [...document.querySelectorAll<HTMLElement>(".win-btn.more")].find((b) => b.offsetParent !== null);
+    if (btn && !document.querySelector("dialog[open]")) {
+      e.preventDefault();
+      void menu(btn);
+    }
+  }, true);
 }
 
 /** Kürzel so anzeigen, wie das System sie schreibt: macOS ⌘ ⇧ ⌥, sonst Strg/Umschalt/Alt. */
