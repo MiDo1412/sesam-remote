@@ -2,10 +2,11 @@
  *  Ein lokales Terminal ist ein Shell-Tab mit der Pseudo-Verbindung `local:<Profil>` (gleiche Oberfläche wie SSH). */
 import { invoke } from "@tauri-apps/api/core";
 import type { Connection } from "./api";
-import { openMenu } from "./menu";
+import { ICON_CHEVRON, openMenu } from "./menu";
 import { openTab } from "./tabs";
 import { tell } from "./ui";
 import { TERM_THEMES } from "./termthemes";
+import { ICON } from "./icons";
 import { initProfileSettings } from "./termprofiles";
 
 export interface TermProfile {
@@ -99,13 +100,17 @@ export async function openTerminal(id?: string, cwd?: string) {
   openTab(conn, "shell", true);
 }
 
+/** Symbol je Profil im Menü (16 px wie alle Menüsymbole). */
+const profileIcon = (p: TermProfile) =>
+  p.icon === "linux" ? ICON.osLinux.replace(/width="\d+" height="\d+"/, 'width="16" height="16"') : p.icon === "windows" ? ICON.osWindows.replace(/width="\d+" height="\d+"/, 'width="16" height="16"') : ICON.shell;
+
 /** Auswahlmenü «+ ▾» mit allen Profilen. */
 export async function profileMenu(anchor: HTMLElement) {
   const all = await allProfiles();
   const def = defaultProfileId() || all[0]?.id;
   const v = await openMenu(
     anchor,
-    all.map((p, i) => ({ value: p.id, label: p.name, shortcut: p.id === def ? "Standard" : undefined, section: i === 0 ? "Neues Terminal" : p.custom && !all[i - 1]?.custom ? "Eigene Profile" : undefined })),
+    all.map((p, i) => ({ value: p.id, label: p.name, icon: profileIcon(p), shortcut: p.id === def ? "Standard" : undefined, section: i === 0 ? "Neues Terminal" : p.custom && !all[i - 1]?.custom ? "Eigene Profile" : undefined })),
   );
   if (v) void openTerminal(v);
 }
@@ -115,6 +120,13 @@ export function initTerminal() {
   for (const id of ["term-new", "lib-term-new"]) {
     const b = document.getElementById(id);
     if (b) b.onclick = () => void openTerminal();
+  }
+  // Split-Knopf wie im Windows Terminal: Plus | Chevron
+  const plus = document.getElementById("term-new");
+  if (plus) plus.innerHTML = ICON.plus;
+  for (const id of ["term-pick", "lib-term-pick"]) {
+    const b = document.getElementById(id);
+    if (b) b.innerHTML = ICON_CHEVRON;
   }
   for (const id of ["term-pick", "lib-term-pick"]) {
     const b = document.getElementById(id);

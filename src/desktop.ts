@@ -424,19 +424,20 @@ export function desktopTab(ctx: TabCtx): TabHandle {
       .catch((e) => (status.textContent = String(e)));
   };
 
-  const orientBtn = toolButton(ICON.desktop, "Hoch-/Querformat", () => {
+  const orientBtn = toolButton(ICON.desktop, "Hochformat", () => {
     orientation = orientation === "portrait" ? "landscape" : "portrait";
     orientBtn.classList.toggle("on", orientation === "portrait");
+    orientBtn.setAttribute("aria-label", orientation === "portrait" ? "Querformat" : "Hochformat");
     requestSize();
-  });
+  }, { secondary: true });
   orientBtn.classList.toggle("on", orientation === "portrait");
-  const spanBtn = toolButton(ICON.span, "Alle Monitore", () => toggleSpan(), { shortcut: "nur RDP" });
+  const spanBtn = toolButton(ICON.span, "Alle Monitore", () => toggleSpan(), { shortcut: "nur RDP", secondary: true });
   spanBtn.hidden = !rdp;
   ctx.toolbar.prepend(orientBtn, toolSep());
   ctx.toolbar.append(
     ...touch.buttons,
-    toolButton(ICON.typeClipboard, "Zwischenablage abtippen", typeClipboard),
-    toolButton(ICON.screenshot, "Bildschirmfoto", screenshot),
+    toolButton(ICON.typeClipboard, "Zwischenablage abtippen", typeClipboard, { secondary: true }),
+    toolButton(ICON.screenshot, "Bildschirmfoto", screenshot, { secondary: true }),
     toolSep(),
     spanBtn,
     toolButton(ICON.fullscreen, "Vollbild", toggleFullscreen, { shortcut: "F11" }),

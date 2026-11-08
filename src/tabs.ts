@@ -83,6 +83,8 @@ interface TabGroup {
 }
 
 /** Wählbare Tab-Symbole («Standard» = Symbol der Art). */
+/** Alle Einträge gleich gross (16 px), auch die Betriebssystem-Logos (die sind für Vorschaubilder 40 px). */
+const small = (svg: string) => svg.replace(/width="\d+" height="\d+"/, 'width="16" height="16"');
 const TAB_ICONS: Record<string, { label: string; svg: string }> = {
   "": { label: "Standard", svg: "" },
   desktop: { label: "Desktop", svg: ICON.desktop },
@@ -91,10 +93,10 @@ const TAB_ICONS: Record<string, { label: string; svg: string }> = {
   globe: { label: "Netz", svg: ICON.globe },
   keyboard: { label: "Tastatur", svg: ICON.keyboard },
   quick: { label: "Blitz", svg: ICON.quick },
-  osWindows: { label: "Windows", svg: ICON.osWindows },
-  osMac: { label: "macOS", svg: ICON.osMac },
-  osLinux: { label: "Linux", svg: ICON.osLinux },
-  osPi: { label: "Raspberry Pi", svg: ICON.osPi },
+  osWindows: { label: "Windows", svg: small(ICON.osWindows) },
+  osMac: { label: "macOS", svg: small(ICON.osMac) },
+  osLinux: { label: "Linux", svg: small(ICON.osLinux) },
+  osPi: { label: "Raspberry Pi", svg: small(ICON.osPi) },
 };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -302,10 +304,11 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   activate(tab);
   tab.handle = factories[kind](tab.ctx);
   // «Abkoppeln» und «Minimieren» vor «Trennen» in jeder Werkzeugleiste (auch für das Menü «Sitzung»).
-  const extraBtns = [toolButton(ICON.detach, detachedWindow ? "Andocken" : "Abkoppeln", () => detachTab(tab), { shortcut: detachedWindow ? "zurück ins Hauptfenster" : "eigenes Fenster" })];
-  if (!detachedWindow) extraBtns.push(toolButton(ICON.minimize, "Minimieren", () => minimizeTab(tab), { shortcut: "läuft weiter" }));
+  const extraBtns = [toolButton(ICON.detach, detachedWindow ? "Andocken" : "Abkoppeln", () => detachTab(tab), { shortcut: detachedWindow ? "zurück ins Hauptfenster" : "eigenes Fenster", secondary: true })];
+  if (!detachedWindow) extraBtns.push(toolButton(ICON.minimize, "Minimieren", () => minimizeTab(tab), { shortcut: "läuft weiter", secondary: true }));
   const last = toolbar.lastElementChild;
   for (const b of extraBtns) last ? toolbar.insertBefore(b, last) : toolbar.append(b);
+  overflowMenu(toolbar, last);
 }
 
 // ---------- Abkoppeln / Andocken ----------
@@ -738,10 +741,37 @@ export function runTool(label: string) {
 }
 
 /** Werkzeugknopf mit Icon; Tooltip mit Tastenkürzel. */
-export function toolButton(icon: string, label: string, onClick: () => void, opts: { shortcut?: string; text?: boolean; danger?: boolean } = {}) {
+/** Sekundäre Aktionen (Klasse `secondary`) wandern in ein Überlauf-Menü «…» vor `before`: ruhigere Werkzeugleiste. */
+function overflowMenu(toolbar: HTMLElement, before: Element | null) {
+  const items = [...toolbar.querySelectorAll<HTMLButtonElement>("button.tool.secondary")].filter((b) => !b.hidden);
+  if (!items.length) return;
+  for (const b of items) b.hidden = true;
+  // Trennstriche ohne sichtbare Knöpfe dazwischen ausblenden
+  let prevSep: HTMLElement | null = null;
+  let seen = false;
+  for (const el of [...toolbar.children] as HTMLElement[]) {
+    if (el.classList.contains("tool-sep")) {
+      if (!seen) el.hidden = true;
+      prevSep = el;
+      seen = false;
+    } else if (!el.hidden) seen = true;
+  }
+  if (prevSep && !seen) prevSep.hidden = true;
+  const more = toolButton(ICON.more, "Weitere Aktionen", async () => {
+    const shown = items.filter((b) => !b.disabled && b.dataset.na !== "1");
+    const v = await openMenu(
+      more,
+      shown.map((b, i) => ({ value: String(i), label: b.getAttribute("aria-label") ?? "", icon: b.querySelector("svg")?.outerHTML, checked: b.classList.contains("on") })),
+    );
+    if (v !== null) shown[Number(v)]?.click();
+  });
+  before ? toolbar.insertBefore(more, before) : toolbar.append(more);
+}
+
+export function toolButton(icon: string, label: string, onClick: () => void, opts: { shortcut?: string; text?: boolean; danger?: boolean; secondary?: boolean } = {}) {
   const b = document.createElement("button");
   b.type = "button";
-  b.className = `tool${opts.text ? " with-text" : ""}${opts.danger ? " danger" : ""}`;
+  b.className = `tool${opts.text ? " with-text" : ""}${opts.danger ? " danger" : ""}${opts.secondary ? " secondary" : ""}`;
   b.innerHTML = icon;
   if (opts.text) b.append(Object.assign(document.createElement("span"), { textContent: label }));
   b.title = opts.shortcut ? `${label} (${keyLabel(opts.shortcut)})` : label;

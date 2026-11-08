@@ -45,6 +45,7 @@ import list from "@phosphor-icons/core/assets/regular/list.svg?raw";
 import gearSix from "@phosphor-icons/core/assets/regular/gear-six.svg?raw";
 import pushPin from "@phosphor-icons/core/assets/regular/push-pin.svg?raw";
 import cornersIn from "@phosphor-icons/core/assets/regular/corners-in.svg?raw";
+import dotsThree from "@phosphor-icons/core/assets/regular/dots-three.svg?raw";
 
 const sized = (s: string, n = 16) => s.replace("<svg ", `<svg width="${n}" height="${n}" aria-hidden="true" focusable="false" `);
 
@@ -95,4 +96,5 @@ export const ICON = {
   settings: sized(gearSix),
   pin: sized(pushPin),
   windowed: sized(cornersIn),
+  more: sized(dotsThree),
 };
