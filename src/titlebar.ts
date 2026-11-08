@@ -1,3 +1,4 @@
+import { api } from "./api";
 /** Eigene Titelleiste: unter Windows ohne Fensterrahmen (Logo-Menü links, Fenstersteuerung rechts),
  *  unter macOS bleibt die Menüleiste nativ und die Titelleiste ist transparent (Ampel links). */
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -100,7 +101,7 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
 async function editCommand(cmd: string, el: HTMLElement | null) {
   el?.focus();
   if (cmd !== "paste") return void document.execCommand(cmd === "selectAll" ? "selectAll" : cmd);
-  const text = await navigator.clipboard.readText().catch(() => "");
+  const text = await api.clipRead().catch(() => "");
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     el.setRangeText(text, el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, "end");
     el.dispatchEvent(new Event("input", { bubbles: true }));

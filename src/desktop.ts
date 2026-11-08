@@ -305,7 +305,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
 
   // Zwischenablage als Tastatureingabe (für Anmeldebildschirme und Konsolen ohne Zwischenablage).
   const typeClipboard = async () => {
-    const text = (await navigator.clipboard.readText().catch(() => "")).replace(/\r\n/g, "\n");
+    const text = (await api.clipRead().catch(() => "")).replace(/\r\n/g, "\n");
     if (!sid || !text) return void (status.textContent = "Die Zwischenablage ist leer.");
     if (text.length > 200 && !(await ask("Langen Text abtippen?", `${text.length} Zeichen werden als Tastendrücke gesendet. Das dauert etwa ${Math.ceil((text.length * 15) / 1000)} Sekunden.`, "Abtippen"))) return;
     canvas.focus();

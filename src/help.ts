@@ -1,3 +1,4 @@
+import { api } from "./api";
 import { marked } from "marked";
 import { downloadScript } from "./setup";
 import vnc from "../docs/hilfe/vnc.md?raw";
@@ -39,7 +40,7 @@ export function openHelp(id: string) {
       b.className = "copy";
       b.textContent = "Kopieren";
       b.onclick = async () => {
-        await navigator.clipboard.writeText(pre.querySelector("code")?.textContent?.trimEnd() ?? "");
+        await api.clipWrite(pre.querySelector("code")?.textContent?.trimEnd() ?? "");
         b.textContent = "Kopiert";
         setTimeout(() => (b.textContent = "Kopieren"), 1500);
       };

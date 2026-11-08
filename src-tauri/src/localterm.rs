@@ -50,6 +50,10 @@ pub fn open(spec: &Spec, cols: u16, rows: u16, events: Relay<ShellEvent>) -> Res
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "Sesam");
+    // Wie Terminal.app und mintty: ohne Spracheinstellung UTF-8 vorgeben, sonst zeigen bash & Co. Emoji/Umlaute falsch.
+    if std::env::var_os("LANG").is_none() && std::env::var_os("LC_ALL").is_none() {
+        cmd.env("LANG", if cfg!(target_os = "macos") { "en_US.UTF-8" } else { "C.UTF-8" });
+    }
     for (k, v) in &spec.env {
         cmd.env(k, v);
     }

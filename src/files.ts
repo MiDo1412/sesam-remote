@@ -853,7 +853,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     if (v === "transfer") transfer(p, [...p.selected]);
     if (v === "rename") remote ? renameRemote() : renameLocal();
     if (v === "chmod" && e) chmod(e);
-    if (v === "copy") navigator.clipboard.writeText([...p.selected].map((n) => join(p, n)).join("\n")).catch(() => {});
+    if (v === "copy") api.clipWrite([...p.selected].map((n) => join(p, n)).join("\n")).catch(() => {});
     if (v === "delete") deleteRemote();
     if (v === "mkdir") mkdir(p);
     if (v === "touch") newFile();

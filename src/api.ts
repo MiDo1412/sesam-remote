@@ -175,6 +175,9 @@ export const api = {
     return invoke<void>("desktop_attach", { sid, onEvent: ch });
   },
   /** Lokales Terminal (PTY) mit einem Profil starten; Schreiben/Grösse/Schliessen wie bei der SSH-Shell. */
+  /** Zwischenablage über das System statt navigator.clipboard (das fragt in WebView2 nach einer Berechtigung). */
+  clipRead: () => invoke<string>("clip_read"),
+  clipWrite: (text: string) => invoke<void>("clip_write", { text }),
   termOpen: (profile: { command: string; args: string[]; cwd?: string; env?: Record<string, string> }, cols: number, rows: number, onEvent: (e: ShellEvent) => void) => {
     const ch = new Channel<ShellEvent>();
     ch.onmessage = onEvent;

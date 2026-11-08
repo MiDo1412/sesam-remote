@@ -89,11 +89,11 @@ export function shellTab(ctx: TabCtx): TabHandle {
   // ---------- Werkzeugleiste ----------
   const copy = () => {
     const sel = term.getSelection();
-    if (sel) navigator.clipboard.writeText(sel);
+    if (sel) api.clipWrite(sel);
     term.focus();
   };
   const paste = async () => {
-    const t = await navigator.clipboard.readText().catch(() => "");
+    const t = await api.clipRead().catch(() => "");
     if (t) term.paste(t);
     term.focus();
   };

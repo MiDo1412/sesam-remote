@@ -685,6 +685,21 @@ async fn term_profiles() -> Vec<profiles::Profile> {
     tauri::async_runtime::spawn_blocking(profiles::detect).await.unwrap_or_default()
 }
 
+/// Text aus der Zwischenablage des Systems (ohne Berechtigungsabfrage der Webansicht).
+#[tauri::command]
+fn clip_read() -> Result<String, String> {
+    arboard::Clipboard::new().and_then(|mut c| c.get_text()).or_else(|e| match e {
+        arboard::Error::ContentNotAvailable => Ok(String::new()),
+        e => Err(e),
+    }).map_err(|e| e.to_string())
+}
+
+/// Text in die Zwischenablage des Systems.
+#[tauri::command]
+fn clip_write(text: String) -> Result<(), String> {
+    arboard::Clipboard::new().and_then(|mut c| c.set_text(text)).map_err(|e| e.to_string())
+}
+
 /// «Beenden» aus dem eigenen Menü (Windows/Linux).
 #[tauri::command]
 fn app_exit(app: AppHandle) {
@@ -1460,6 +1475,8 @@ pub fn run() {
             sftp_remove,
             sftp_close,
             app_exit,
+            clip_read,
+            clip_write,
             term_profiles,
             term_open,
             rdp_check,
