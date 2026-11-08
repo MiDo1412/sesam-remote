@@ -67,6 +67,10 @@ export interface Connection {
   /** Agent an den Server weiterreichen (nur Shell, nur mit sshAgent). */
   agentForward: boolean;
   lastUsed: string | null;
+  /** MAC-Adresse für Wake-on-LAN (selbst ermittelt oder eingetragen). */
+  mac: string;
+  /** Desktop durch einen SSH-Tunnel. */
+  sshTunnel: boolean;
 }
 
 export interface Cred {
@@ -177,6 +181,9 @@ export const api = {
   /** Lokales Terminal (PTY) mit einem Profil starten; Schreiben/Grösse/Schliessen wie bei der SSH-Shell. */
   /** Zwischenablage über das System statt navigator.clipboard (das fragt in WebView2 nach einer Berechtigung). */
   clipRead: () => invoke<string>("clip_read"),
+  /** Erreichbarkeit (Latenz in ms, null = nicht erreichbar); merkt sich dabei die MAC-Adresse. */
+  connReach: (id: string) => invoke<number | null>("conn_reach", { id }),
+  connWake: (id: string) => invoke<void>("conn_wake", { id }),
   clipWrite: (text: string) => invoke<void>("clip_write", { text }),
   termOpen: (profile: { command: string; args: string[]; cwd?: string; env?: Record<string, string> }, cols: number, rows: number, onEvent: (e: ShellEvent) => void) => {
     const ch = new Channel<ShellEvent>();

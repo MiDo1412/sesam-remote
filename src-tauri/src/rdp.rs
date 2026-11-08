@@ -933,17 +933,51 @@ async fn run(
     mut redirects: u32,
 ) {
     let mut stalls = 0;
+    let mut drops = 0u32;
     loop {
+        let since = std::time::Instant::now();
         let flow = active(result, framed, &mut rx, &emit, t.scale, hop.rdstls.is_some()).await;
+        // Lief die Sitzung eine Weile stabil, beginnt die Zählung der Wiederverbindungen neu.
+        if since.elapsed() > std::time::Duration::from_secs(60) {
+            drops = 0;
+        }
         let why = match flow {
             Ok(Flow::Closed(why)) => why,
+            // Netzabbruch, Ruhezustand, WLAN-Wechsel: selbst neu verbinden (wie mstsc), höchstens 5 Versuche.
+            // Nicht, wenn das Fenster weg ist (Sender geschlossen) oder der Server sauber beendet hat (Flow::Closed).
+            Err(e) if drops < 5 && !rx.is_closed() => {
+                tracing::info!(error = %e, "RDP: Verbindung unterbrochen");
+                let mut last = e;
+                let mut back = None;
+                while drops < 5 {
+                    drops += 1;
+                    emit(Event::Info(format!("Verbindung unterbrochen. Sesam verbindet neu (Versuch {drops} von 5) …")));
+                    tokio::time::sleep(std::time::Duration::from_secs([2u64, 4, 8, 16, 30][drops as usize - 1])).await;
+                    (t, hop, redirects) = (orig.clone(), Hop::default(), 0);
+                    match reconnect(&mut t, &mut hop, &seen, &mut redirects).await {
+                        Ok(x) => {
+                            back = Some(x);
+                            break;
+                        }
+                        Err(e2) => last = e2,
+                    }
+                }
+                match back {
+                    Some((r, f)) => {
+                        emit(Event::Info(String::new()));
+                        (result, framed) = (r, f);
+                        continue;
+                    }
+                    None => last,
+                }
+            }
             Err(e) => e,
             // Wie «Neu verbinden» von Hand: von vorne beim ursprünglichen Ziel, höchstens zweimal.
             Ok(Flow::Stalled) if stalls < 2 => {
                 stalls += 1;
                 tracing::info!(stalls, "RDP: Übergabe hängt (einfarbige Fläche), verbinde neu");
                 emit(Event::Info("Die Sitzung wird übernommen … Sesam verbindet neu.".into()));
-                (t, hop) = (orig.clone(), Hop::default());
+                (t, hop, redirects) = (orig.clone(), Hop::default(), 0);
                 match reconnect(&mut t, &mut hop, &seen, &mut redirects).await {
                     Ok((r, f)) => {
                         emit(Event::Info(String::new()));

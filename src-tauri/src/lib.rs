@@ -17,6 +17,7 @@ mod scp;
 mod sftp;
 mod ssh;
 mod vault;
+mod wake;
 mod vnc;
 
 use library::Connection;
@@ -686,6 +687,77 @@ async fn term_profiles() -> Vec<profiles::Profile> {
     tauri::async_runtime::spawn_blocking(profiles::detect).await.unwrap_or_default()
 }
 
+/// Laufende SSH-Tunnel je Desktop-Sitzung (beim Trennen beendet).
+type Tunnel = (Arc<russh::client::Handle<ssh::Client>>, tokio::task::JoinHandle<()>);
+/// Beendet den Tunnel, wenn er nicht an eine Sitzung übergeben wurde (Fehler beim Verbinden).
+struct TunnelGuard(Option<Tunnel>);
+impl Drop for TunnelGuard {
+    fn drop(&mut self) {
+        if let Some((_, task)) = self.0.take() {
+            task.abort();
+        }
+    }
+}
+static TUNNELS: std::sync::LazyLock<Mutex<HashMap<String, Tunnel>>> = std::sync::LazyLock::new(Default::default);
+fn tunnel_end(sid: &str) {
+    if let Some((_, task)) = TUNNELS.lock().unwrap().remove(sid) {
+        task.abort();
+    }
+}
+
+/// «Sicher über SSH verbinden»: SSH zum Rechner, lokaler Port → `port` dort. Gibt (Host, Port) für RDP/VNC zurück.
+async fn desktop_via_ssh(c: &Connection, port: u16) -> Result<(String, u16, Option<Tunnel>), String> {
+    if !c.ssh_tunnel {
+        return Ok((c.address.clone(), port, None));
+    }
+    if c.ssh_port.is_none() {
+        return Err("«Sicher über SSH verbinden» braucht SSH bei dieser Verbindung (Dienste › Shell).".into());
+    }
+    let t = ssh_target(c, None)?;
+    let h = ssh::connect(&t).await.map_err(|e| {
+        if e.starts_with(ssh::HOSTKEY_UNKNOWN) {
+            "SSH-Tunnel: Der Schlüssel des Servers ist noch nicht bestätigt. Bitte einmal die Shell öffnen und ihn bestätigen.".to_string()
+        } else {
+            format!("SSH-Tunnel: {e}")
+        }
+    })?;
+    let h = Arc::new(h);
+    let (local, task) = forward::tunnel(h.clone(), port).await?;
+    tracing::info!(port, local, "SSH-Tunnel für den Desktop steht");
+    Ok(("127.0.0.1".into(), local, Some((h, task))))
+}
+
+/// Erreichbarkeit einer Verbindung (Latenz in ms). Merkt sich dabei die MAC-Adresse für Wake-on-LAN.
+#[tauri::command]
+async fn conn_reach(path: State<'_, LibraryPath>, id: String) -> Result<Option<u32>, String> {
+    let c = find(&path, &id)?;
+    let ports: Vec<u16> = [c.rdp_port, c.vnc_port, c.ssh_port, c.ftp_port].into_iter().flatten().collect();
+    let ms = wake::reach(&c.address, &ports).await;
+    if ms.is_some() && c.mac.is_empty() {
+        let host = c.address.clone();
+        if let Some(mac) = tauri::async_runtime::spawn_blocking(move || wake::mac_of(&host)).await.ok().flatten() {
+            let _g = LIBRARY_LOCK.lock().unwrap();
+            if let Ok(mut items) = library::load(&path.0) {
+                if let Some(x) = items.iter_mut().find(|x| x.id == id) {
+                    x.mac = mac;
+                    let _ = library::save(&path.0, &items);
+                }
+            }
+        }
+    }
+    Ok(ms)
+}
+
+/// Rechner per Wake-on-LAN aufwecken (MAC aus der Verbindung).
+#[tauri::command]
+fn conn_wake(path: State<'_, LibraryPath>, id: String) -> Result<(), String> {
+    let c = find(&path, &id)?;
+    if c.mac.is_empty() {
+        return Err("Für diesen Rechner ist keine MAC-Adresse bekannt. Sesam merkt sie sich, sobald er einmal eingeschaltet erreichbar war; sie lässt sich auch unter «Erweitert» eintragen.".into());
+    }
+    wake::wake(&c.mac)
+}
+
 /// Windows-Tastenkombinationen an den entfernten Rechner geben (Desktop-Tab mit Fokus), siehe kbhook.
 #[tauri::command]
 fn kbhook_set(active: bool) -> usize {
@@ -1009,7 +1081,9 @@ async fn vnc_open(
     };
     let login = vnc::Login { host: &c.address, user: &c.user, password: password.as_deref(), vnc_password: vnc_password.as_deref(), cert };
     let timeout = std::time::Duration::from_secs(15);
-    let stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((c.address.as_str(), port)))
+    let (via_host, via_port, tunnel) = desktop_via_ssh(&c, port).await?;
+    let mut tunnel = TunnelGuard(tunnel);
+    let stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((via_host.as_str(), via_port)))
         .await
         .map_err(|_| "Zeitüberschreitung beim Verbinden".to_string())?
         .map_err(|e| format!("Verbindung fehlgeschlagen: {e}"))?;
@@ -1061,6 +1135,9 @@ async fn vnc_open(
     touch(&path, &c.id);
     relay::DESKTOPS.lock().unwrap().insert(sid.clone(), events.clone());
     desktops.0.lock().unwrap().insert(sid.clone(), Desktop { session: Arc::new(session), share, events });
+    if let Some(t) = tunnel.0.take() {
+        TUNNELS.lock().unwrap().insert(sid.clone(), t);
+    }
     Ok(sid)
 }
 
@@ -1150,6 +1227,7 @@ async fn vnc_clipboard_sync(desktops: State<'_, Desktops>, sid: String) -> Resul
 
 #[tauri::command]
 fn vnc_close(desktops: State<Desktops>, sid: String) {
+    tunnel_end(&sid);
     relay::DESKTOPS.lock().unwrap().remove(&sid);
     if let Some(d) = desktops.0.lock().unwrap().remove(&sid) {
         d.session.close();
@@ -1252,9 +1330,11 @@ async fn rdp_open(
     let pins_path = path.0.with_file_name("known_certs.json");
     let mut pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
+    let (via_host, via_port, tunnel) = desktop_via_ssh(&c, port).await?;
+    let mut tunnel = TunnelGuard(tunnel);
     let target = rdp::Target {
-        host: c.address.clone(),
-        port,
+        host: via_host,
+        port: via_port,
         user,
         domain,
         password,
@@ -1289,6 +1369,9 @@ async fn rdp_open(
             return Err(e);
         }
     };
+    if let Some(t) = tunnel.0.take() {
+        TUNNELS.lock().unwrap().insert(sid.clone(), t);
+    }
     if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && seen.lock().unwrap().as_ref() == Some(fp)) {
         pins.insert(pin_key, fp);
         let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
@@ -1337,6 +1420,7 @@ fn rdp_set_size(sessions: State<RdpSessions>, sid: String, width: u16, height: u
 
 #[tauri::command]
 fn rdp_close(app: AppHandle, sessions: State<RdpSessions>, sid: String) {
+    tunnel_end(&sid);
     relay::DESKTOPS.lock().unwrap().remove(&sid);
     if let Some(s) = sessions.0.lock().unwrap().remove(&sid) {
         s.close();
@@ -1425,6 +1509,7 @@ pub fn run() {
                     .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")
                     .text("help:rdp-windows", "RDP mit Windows")
                     .text("help:rdp-xrdp", "RDP mit xrdp (Linux)")
+                    .text("help:komfort", "Komfortfunktionen")
                     .text("help:vnc", "VNC allgemein")
                     .text("help:wayvnc", "wayvnc (wlroots)")
                     .text("help:macos", "macOS-Bildschirmfreigabe")
@@ -1490,6 +1575,8 @@ pub fn run() {
             clip_read,
             clip_write,
             kbhook_set,
+            conn_reach,
+            conn_wake,
             term_profiles,
             term_open,
             rdp_check,

@@ -651,3 +651,18 @@ header.toolbar, header.session-bar, .session-head, .session-id, .tools { user-se
 #session-panes.split-right, #session-panes.split-down { background: var(--chrome-line); }
 #session-panes .tab-pane.secondary { opacity: 0.92; }
 #session-panes .tab-pane.secondary:hover { opacity: 1; }
+
+/* Online-Status in der Bibliothek */
+.online-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; }
+.online-dot.on { background: #30a46c; box-shadow: 0 0 0 2px color-mix(in srgb, #30a46c 22%, transparent); }
+.online-dot.off { background: var(--muted); opacity: 0.55; }
+.online-dot.unknown { display: none; }
+
+/* Befehlspalette */
+dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; padding: 0; overflow: hidden; }
+.palette input { width: 100%; height: 48px; padding: 0 18px; border: 0; border-bottom: 1px solid var(--line); background: transparent; font-size: 15px; outline: none; }
+.palette ul { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow: auto; }
+.palette li { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 34px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+.palette li[aria-selected=true] { background: var(--accent); color: var(--on-accent); }
+.palette li small { color: inherit; opacity: 0.65; font-size: 12px; white-space: nowrap; }
+.palette li.empty { color: var(--muted); justify-content: center; }

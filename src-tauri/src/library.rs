@@ -87,6 +87,10 @@ pub struct Connection {
     /// Agenten an den Server weiterreichen (nur mit `ssh_agent`).
     pub agent_forward: bool,
     pub last_used: Option<String>,
+    /// MAC-Adresse für Wake-on-LAN (selbst ermittelt, wenn der Rechner einmal erreichbar war, oder eingetragen).
+    pub mac: String,
+    /// Desktop (RDP/VNC) durch einen SSH-Tunnel: der Dienst muss nicht offen im Netz stehen.
+    pub ssh_tunnel: bool,
 }
 
 impl Default for Connection {
@@ -140,6 +144,8 @@ impl Default for Connection {
             ssh_agent: false,
             agent_forward: false,
             last_used: None,
+            mac: String::new(),
+            ssh_tunnel: false,
         }
     }
 }

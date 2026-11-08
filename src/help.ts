@@ -10,6 +10,7 @@ import rdpXrdp from "../docs/hilfe/rdp-xrdp.md?raw";
 import ssh from "../docs/hilfe/ssh.md?raw";
 import ftp from "../docs/hilfe/ftp.md?raw";
 import creds from "../docs/hilfe/zugangsdaten.md?raw";
+import komfort from "../docs/hilfe/komfort.md?raw";
 
 /** Anleitungen aus docs/hilfe; die IDs nutzt auch das Menü «Hilfe» (lib.rs). */
 export const topics = [
@@ -22,6 +23,7 @@ export const topics = [
   { id: "macos", title: "macOS-Bildschirmfreigabe", md: macos },
   { id: "ssh", title: "SSH und SFTP", md: ssh },
   { id: "ftp", title: "FTP und FTPS", md: ftp },
+  { id: "komfort", title: "Komfortfunktionen", md: komfort },
 ] as const;
 
 export type TopicId = (typeof topics)[number]["id"];

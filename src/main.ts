@@ -6,8 +6,10 @@ import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
 import { detachedWindow, detachToken, initTabs, openTab, runTool, takeOver } from "./tabs";
 import { ask, choose, tell } from "./ui";
-import { openHelp } from "./help";
-import { initTitlebar, isMac } from "./titlebar";
+import { openHelp, topics } from "./help";
+import { connectionCommands, initPalette } from "./palette";
+import { clipHistory, initClipHistory } from "./cliphistory";
+import { initTitlebar, isMac, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
 import { applyAppearance, openSettings } from "./settings";
@@ -230,6 +232,48 @@ const el = (tag: string, props: Record<string, string> = {}, ...kids: (Node | st
 };
 
 let startLinkDone = false;
+// ---------- Online-Status und Wake-on-LAN ----------
+/** Latenz je Verbindung (ms), null = nicht erreichbar, fehlt = noch nicht geprüft. */
+const reachOf = new Map<string, number | null>();
+function onlineDot(c: Connection) {
+  const ms = reachOf.get(c.id);
+  if (ms === undefined) return el("span", { class: "online-dot unknown", "aria-hidden": "true" });
+  const label = ms === null ? "Nicht erreichbar" : `Erreichbar · ${ms} ms`;
+  return el("span", { class: `online-dot ${ms === null ? "off" : "on"}`, title: label, role: "img", "aria-label": label });
+}
+let probing = false;
+/** Alle Verbindungen prüfen (höchstens 4 gleichzeitig), danach neu zeichnen. Alle 30 s, solange die Bibliothek sichtbar ist. */
+async function probeAll() {
+  if (probing || document.hidden || $("library").hidden) return;
+  probing = true;
+  const queue = items.filter((c) => c.address);
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    for (let c = queue.shift(); c; c = queue.shift()) reachOf.set(c.id, await api.connReach(c.id).catch(() => null));
+  }));
+  probing = false;
+  render();
+}
+setInterval(() => void probeAll(), 30000);
+async function wakeAndOpen(c: Connection) {
+  try {
+    await api.connWake(c.id);
+  } catch (e) {
+    return tell("Aufwecken nicht möglich", String(e));
+  }
+  tell("Aufwecken …", `Sesam hat ${c.name} ein Wake-on-LAN-Signal geschickt und verbindet, sobald der Rechner antwortet (höchstens 2 Minuten).`);
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const ms = await api.connReach(c.id).catch(() => null);
+    if (ms !== null) {
+      reachOf.set(c.id, ms);
+      document.querySelector<HTMLDialogElement>("dialog[open]#ask")?.close();
+      render();
+      return open(c, c.defaultView);
+    }
+  }
+  tell("Keine Antwort", `${c.name} hat nach 2 Minuten nicht geantwortet. Ist Wake-on-LAN im BIOS/UEFI und in der Netzwerkkarte eingeschaltet, und ist der Rechner im selben Netz?`);
+}
+
 async function reload() {
   try {
     [items, groups] = await Promise.all([api.list(), api.groupsList()]);
@@ -239,6 +283,7 @@ async function reload() {
   const f = filter;
   if (f.kind === "group" && !groups.some((g) => g.name === f.name)) filter = { kind: "all" };
   render();
+  void probeAll();
   if (!startLinkDone && !detachedWindow) {
     startLinkDone = true;
     deepLinkCurrent().then((urls) => urls?.forEach(handleLink)).catch(() => {});
@@ -295,7 +340,7 @@ function render() {
         { type: "button", class: "card", "aria-pressed": String(c.id === selected) },
         thumbEl(c, kind),
         el("div", { class: "card-name" }, c.name),
-        el("div", { class: "card-sub" }, c.address),
+        el("div", { class: "card-sub" }, onlineDot(c), c.address),
       );
       card.onclick = () => ((selected = c.id), render());
       card.onpointerdown = (e) => dragCard(e, card, c);
@@ -416,7 +461,8 @@ function renderDetails() {
       fact("Anmeldung", c.hasPassword || c.hasKey || c.hasVncPassword || c.hasRdpPassword || c.credentialId || c.rdpCredentialId || c.vncCredentialId ? "Im Tresor" : "Keine gespeichert"),
       fact("Schlüssel", c.hasKey ? "Im Tresor" : "–"),
     ),
-    btn("Desktop öffnen", "primary", () => open(c, "desktop"), !desktopProtocol(c)),
+    ...(reachOf.get(c.id) === null && c.mac ? [btn("Aufwecken und verbinden", "primary", () => void wakeAndOpen(c))] : []),
+    btn("Desktop öffnen", reachOf.get(c.id) === null && c.mac ? "" : "primary", () => open(c, "desktop"), !desktopProtocol(c)),
     el(
       "div",
       { class: "pair" },
@@ -621,6 +667,7 @@ const blank = (): Connection => ({
   gatewayCredentialId: null,
   sharedFolder: "",
   skipCertCheck: false,
+  sshTunnel: false,
   rdpNoNtlm: false,
   rdpKdc: "",
   rdpGateway: "",
@@ -641,6 +688,7 @@ const blank = (): Connection => ({
   sshCompression: false,
   forwards: [],
   jumpHost: "",
+  mac: "",
   sshAgent: false,
   agentForward: false,
   lastUsed: null,
@@ -692,6 +740,7 @@ function edit(c: Connection | null, asNew = false) {
   f.playAudio.checked = editing.playAudio;
   f.sharedFolder.value = editing.sharedFolder;
   f.skipCertCheck.checked = editing.skipCertCheck;
+  f.sshTunnel.checked = !!editing.sshTunnel;
   (form.elements.namedItem("os") as HTMLSelectElement).value = editing.os ?? "";
   fillCreds(editing.credentialId ?? null);
   for (const p of svcPickers) void p.fill(editing[p.name] ?? null);
@@ -722,6 +771,7 @@ function edit(c: Connection | null, asNew = false) {
     ...items.filter((x) => x.id !== self && x.sshPort).map((x) => el("option", { value: x.id }, `${x.name} (${x.address})`)),
   );
   jumpHost.value = editing.jumpHost ?? "";
+  f.mac.value = editing.mac ?? "";
   jumpHostMenu.sync();
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
@@ -829,6 +879,7 @@ form.onsubmit = async (ev) => {
     playAudio: fd.get("playAudio") !== null,
     sharedFolder: s("sharedFolder"),
     skipCertCheck: fd.get("skipCertCheck") !== null,
+    sshTunnel: fd.get("sshTunnel") !== null,
     os: s("os") as Connection["os"],
     credentialId: s("credentialId") || null,
     customThumb: pendingThumb ? true : clearThumb ? false : editing.customThumb,
@@ -849,6 +900,7 @@ form.onsubmit = async (ev) => {
       .map((l) => l.trim())
       .filter(Boolean),
     jumpHost: s("jumpHost"),
+    mac: s("mac").trim().toUpperCase(),
     sshAgent: fd.get("sshAgent") !== null,
     agentForward: fd.get("agentForward") !== null,
     fitToWindow: fd.get("fitToWindow") !== null,
@@ -887,6 +939,21 @@ const quick = initQuick((c) => edit({ ...c, id: crypto.randomUUID(), name: c.add
 $("empty-new").onclick = () => edit(null);
 const ubuntu = initUbuntu(blank, () => reload());
 initTerminal();
+initPalette(() => [
+  ...items.flatMap((c) => connectionCommands(c, open, { desktop: !!desktopProtocol(c), files: !!filesProtocol(c) })),
+  { label: "Neue Verbindung …", keywords: "hinzufügen anlegen", run: () => $("new").click() },
+  { label: "Schnelle Verbindung …", hint: keyLabel("Strg+K"), keywords: "einmalig quick", run: () => $("quick").click() },
+  { label: "Neues Terminal", hint: keyLabel("Strg+T"), keywords: "shell konsole powershell", run: () => void openTerminal() },
+  { label: "Einstellungen", hint: keyLabel("Strg+,"), keywords: "optionen", run: () => void openSettings() },
+  ...topics.map((t) => ({ label: `Hilfe: ${t.title}`, keywords: "anleitung", run: () => openHelp(t.id) })),
+  ...clipHistory().map((t, i) => ({
+    label: `Zwischenablage: ${t.replace(/\s+/g, " ").slice(0, 70)}`,
+    hint: i === 0 ? "aktuell" : `vor ${i + 1}.`,
+    keywords: "verlauf kopieren einfügen",
+    run: () => void api.clipWrite(t),
+  })),
+]);
+initClipHistory();
 $("empty-ubuntu").onclick = () => ubuntu.open();
 initFieldHelp(document.getElementById("editor-form")!);
 initFieldHelp(document.getElementById("quick-form")!);

@@ -433,7 +433,23 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   orientBtn.classList.toggle("on", orientation === "portrait");
   const spanBtn = toolButton(ICON.span, "Alle Monitore", () => toggleSpan(), { shortcut: "nur RDP", secondary: true });
   spanBtn.hidden = !rdp;
-  ctx.toolbar.prepend(orientBtn, toolSep());
+  // Verbindungsqualität: Bildrate, Datenmenge (dekodiert) und Latenz (TCP-Verbindungsaufbau), alle 2 s.
+  const stats = { rects: 0, bytes: 0, ms: null as number | null, tick: 0 };
+  const quality = Object.assign(document.createElement("span"), { className: "quality" });
+  quality.setAttribute("aria-live", "off");
+  const qTimer = window.setInterval(async () => {
+    if (!sid || !ctx.isActive()) return;
+    if (stats.tick++ % 5 === 0 && !c.id.startsWith("quick")) stats.ms = await api.connReach(c.id).catch(() => null);
+    const fps = Math.round(stats.rects / 2);
+    const mb = stats.bytes / 2 / 1e6;
+    quality.textContent = `${fps} fps · ${mb < 1 ? `${Math.round(mb * 1000)} KB/s` : `${mb.toFixed(1)} MB/s`}${stats.ms != null ? ` · ${stats.ms} ms` : ""}`;
+    quality.title = `Verbindungsqualität (${rdp ? "RDP" : "VNC"})
+Bildaktualisierungen pro Sekunde: ${fps}
+Bilddaten (entpackt): ${mb.toFixed(2)} MB/s${stats.ms != null ? `
+Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
+    stats.rects = stats.bytes = 0;
+  }, 2000);
+  ctx.toolbar.prepend(quality, orientBtn, toolSep());
   ctx.toolbar.append(
     ...touch.buttons,
     toolButton(ICON.typeClipboard, "Zwischenablage abtippen", typeClipboard, { secondary: true }),
@@ -478,6 +494,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     unlistenHook.then((u) => u());
     invoke("kbhook_set", { active: false }).catch(() => {});
     clearTimeout(barTimer);
+    clearInterval(qTimer);
     if (sid) (rdp ? api.rdpClose(sid) : api.vncClose(sid)).catch(() => {});
     sid = null;
     if (spanned) toggleSpan();
@@ -488,6 +505,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   // ---------- Bild vom Server ----------
   const onFrame = (buf: ArrayBuffer) => {
     const v = new DataView(buf);
+    if (v.getUint8(0) === 0) (stats.rects++, (stats.bytes += buf.byteLength));
     const text = () => new TextDecoder().decode(new Uint8Array(buf, 1));
     switch (v.getUint8(0)) {
       case 0: {

@@ -8,6 +8,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import "@xterm/xterm/css/xterm.css";
 import { api, HOSTKEY_UNKNOWN } from "./api";
 import { askHostKey, askText } from "./ui";
+import { openMenu } from "./menu";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { createKeyboard, isTouch, termSequence } from "./osk";
@@ -18,6 +19,9 @@ import { localProfile, profileTheme, setProfileTheme } from "./terminal";
 const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
 
 /** SSH-Shell als Tab. */
+/** Alle offenen Shells in diesem Fenster (für «An alle Shells senden»). */
+const allShells = new Set<{ send: (d: string) => unknown; name: string }>();
+
 export function shellTab(ctx: TabCtx): TabHandle {
   const c = ctx.conn;
   // Lokales Terminal (Pseudo-Verbindung «local:…») oder SSH.
@@ -57,7 +61,13 @@ export function shellTab(ctx: TabCtx): TabHandle {
   };
   const ro = new ResizeObserver(refit);
   ro.observe(host);
-  term.onData(send);
+  // «An alle Shells senden»: Eingabe geht zusätzlich an alle anderen offenen Shells (wie Broadcast im Windows Terminal).
+  const me = { send, name: c.name };
+  allShells.add(me);
+  term.onData((d) => {
+    send(d);
+    if (broadcast) for (const s of allShells) if (s !== me) s.send(d);
+  });
 
   // Einstellungen wirken sofort auf offene Shells.
   const applySettings = () => {
@@ -107,6 +117,34 @@ export function shellTab(ctx: TabCtx): TabHandle {
     if (q) search.findPrevious(q, { caseSensitive: false });
     term.focus();
   };
+  let broadcast = false;
+  const broadcastBtn: HTMLButtonElement = toolButton(ICON.span, "An alle Shells senden", () => {
+    broadcast = !broadcast;
+    broadcastBtn.classList.toggle("on", broadcast);
+    broadcastBtn.setAttribute("aria-pressed", String(broadcast));
+    status.textContent = broadcast ? `Eingabe geht an alle offenen Shells (${allShells.size}).` : "";
+    term.focus();
+  }, { secondary: true });
+  // Textbausteine je Verbindung (lokal gespeichert, keine Passwörter hinein).
+  const snipKey = `sesam.snippets.${c.id.startsWith("local:") ? "local" : c.id}`;
+  const snippets = async () => {
+    let list: string[] = [];
+    try {
+      list = JSON.parse(localStorage.getItem(snipKey) ?? "[]");
+    } catch {}
+    const v = await openMenu(schemeBtn, [
+      ...list.map((t, i) => ({ value: String(i), label: t.length > 60 ? `${t.slice(0, 57)}…` : t })),
+      { value: "new", label: "Neuer Textbaustein …", separator: list.length > 0 },
+      ...(list.length ? [{ value: "clear", label: "Alle Textbausteine löschen" }] : []),
+    ]);
+    if (v === "new") {
+      const t = await askText("Neuer Textbaustein", "Text oder Befehl, der mit einem Klick in die Shell geht. «\\n» am Ende führt ihn aus. Keine Passwörter speichern.", "Sichern");
+      if (t) localStorage.setItem(snipKey, JSON.stringify([...list, t]));
+    } else if (v === "clear") localStorage.removeItem(snipKey);
+    else if (v !== null) send(list[Number(v)].replace(/\\n$/, "\r"));
+    term.focus();
+  };
+
   // «Darstellung»: Galerie als Aufklappfeld; Darüberfahren zeigt das Schema sofort in dieser Shell.
   let pop: HTMLElement | null = null;
   const closePop = () => {
@@ -166,6 +204,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
     toolButton(ICON.copy, "Kopieren", copy, { shortcut: "Strg+Umschalt+C" }),
     toolButton(ICON.typeClipboard, "Einfügen", paste, { shortcut: "Strg+Umschalt+V" }),
     toolButton(ICON.search, "Suchen", find, { shortcut: "Strg+Umschalt+F" }),
+    broadcastBtn,
+    toolButton(ICON.typeClipboard, "Textbausteine", () => void snippets(), { secondary: true }),
     schemeBtn,
     ...(isTouch() ? [kb.button] : []),
     toolSep(),
@@ -244,6 +284,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
       ro.disconnect();
       kb.dispose();
       closePop();
+      allShells.delete(me);
       removeEventListener("sesam:terminal-settings", applySettings);
       unlistenDrop.then((u) => u());
       scheme.removeEventListener("change", applySettings);

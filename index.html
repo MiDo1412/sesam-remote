@@ -240,6 +240,7 @@
           </div>
         </div>
         <label class="option"><span><b>An Fenster anpassen</b><small>Die Auflösung des entfernten Rechners folgt der Fenstergrösse</small></span><input type="checkbox" name="fitToWindow" /></label>
+        <label class="option"><span><b>Sicher über SSH verbinden</b><small>Desktop (RDP/VNC) durch einen SSH-Tunnel: der Dienst muss nicht offen im Netz stehen, unverschlüsseltes VNC wird verschlüsselt. Braucht SSH bei dieser Verbindung.</small></span><input type="checkbox" name="sshTunnel" /></label>
         <label class="option"><span><b>Gemeinsame Zwischenablage</b><small>Text, Bilder und Dateien hier kopieren, dort einfügen</small></span><input type="checkbox" name="sharedClipboard" /></label>
 
 
@@ -283,6 +284,7 @@
               <textarea name="forwards" rows="3" class="mono" spellcheck="false" placeholder="L8080 localhost:80&#10;R9000 localhost:3000&#10;D1080"></textarea>
               <small class="note">Je Zeile eine Regel: L = lokaler Port über den Server, R = Server-Port hierher, D = SOCKS5-Proxy. Lokal nur auf 127.0.0.1.</small>
             </label>
+            <label data-tip="Für «Aufwecken und verbinden». Sesam merkt sie sich selbst, sobald der Rechner einmal eingeschaltet erreichbar war (gleiches Netz). Format AA:BB:CC:DD:EE:FF.">MAC-Adresse (Wake-on-LAN)<input name="mac" class="mono" autocomplete="off" spellcheck="false" placeholder="wird selbst ermittelt" pattern="^$|^([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}$" /></label>
             <label class="option warn"><span><b>Veraltete Algorithmen erlauben</b><small>Für alte Server: SHA-1, CBC, 3DES, ssh-rsa. Schwächer, nur wenn nötig.</small></span><input type="checkbox" name="sshLegacy" /></label>
           </div>
         </fieldset>

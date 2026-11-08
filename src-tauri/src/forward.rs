@@ -235,3 +235,25 @@ mod tests {
         assert!(socks5_request(&mut a).await.is_err());
     }
 }
+
+/// Tunnel für einen Desktop-Dienst: lokaler Port auf 127.0.0.1 (vom System gewählt) → `port` auf dem Server selbst.
+/// Der Tunnel lebt, bis der zurückgegebene Task abgebrochen wird.
+pub async fn tunnel(h: Arc<Handle<Client>>, port: u16) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
+    let l = TcpListener::bind(("127.0.0.1", 0)).await.map_err(|e| format!("SSH-Tunnel: {e}"))?;
+    let local = l.local_addr().map_err(|e| e.to_string())?.port();
+    let task = tokio::spawn(async move {
+        while let Ok((mut tcp, peer)) = l.accept().await {
+            let h = h.clone();
+            tokio::spawn(async move {
+                let _ = tcp.set_nodelay(true);
+                match h.channel_open_direct_tcpip("127.0.0.1", port.into(), peer.ip().to_string(), peer.port().into()).await {
+                    Ok(ch) => {
+                        let _ = tokio::io::copy_bidirectional(&mut tcp, &mut ch.into_stream()).await;
+                    }
+                    Err(e) => tracing::info!("SSH-Tunnel zu Port {port} abgelehnt: {e}"),
+                }
+            });
+        }
+    });
+    Ok((local, task))
+}
