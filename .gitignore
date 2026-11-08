@@ -26,3 +26,6 @@ dist-ssr
 # Feste Testversion für Mike, nicht versionieren
 test-build/
 .claude/
+
+# Werkzeug-Cache, gehört nicht ins Repo
+.impeccable/
