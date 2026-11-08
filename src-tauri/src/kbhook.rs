@@ -16,6 +16,8 @@ mod imp {
     pub static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     static NOT_FRONT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     static APP: OnceLock<AppHandle> = OnceLock::new();
+    /// Tasten, deren Drücken abgefangen wurde: ihr Loslassen gehört auch nach drüben.
+    static HELD: [AtomicBool; 256] = [const { AtomicBool::new(false) }; 256];
     /// Abgefangene Tasten gehen über diesen Kanal an einen eigenen Thread: der Hook selbst muss sofort zurückkehren,
     /// sonst wertet Windows ihn als zu langsam, gibt die Taste trotzdem weiter und entfernt ihn still.
     static OUT: OnceLock<std::sync::Mutex<std::sync::mpsc::Sender<HookKey>>> = OnceLock::new();
@@ -39,27 +41,40 @@ mod imp {
         }
     }
 
-    fn our_window_in_front() -> bool {
+    /// Prozess-ID des Fensters vorne (nur fürs Protokoll).
+    static FRONT_PID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    fn front_pid() -> u32 {
         let mut pid = 0u32;
         unsafe { GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid)) };
-        pid == std::process::id()
+        pid
     }
 
     unsafe extern "system" fn hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
         CALLS.fetch_add(1, Ordering::Relaxed);
-        let front = our_window_in_front();
-        if !front {
+        // Kein eigener Vordergrund-Vergleich mehr: er schlug bei Mike immer fehl (Fenster vorne hatte nicht die eigene
+        // Prozess-ID). ACTIVE ist ohnehin nur an, solange Sesam den Fokus hat und das Remote-Bild aktiv ist.
+        let pid = front_pid();
+        FRONT_PID.store(pid, Ordering::Relaxed);
+        if pid != std::process::id() {
             NOT_FRONT.fetch_add(1, Ordering::Relaxed);
         }
-        if code >= 0 && ACTIVE.load(Ordering::Relaxed) && front {
+        if code >= 0 {
             let k = unsafe { &*(l.0 as *const KBDLLHOOKSTRUCT) };
+            let vk = (k.vkCode & 0xFF) as usize;
+            let down = !matches!(w.0 as u32, WM_KEYUP | WM_SYSKEYUP);
             let pressed = |vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY| unsafe { GetAsyncKeyState(vk.0 as i32) } < 0;
-            if let Some(code) = grab(k.vkCode as u16, pressed(VK_MENU), pressed(VK_CONTROL)) {
-                let down = !matches!(w.0 as u32, WM_KEYUP | WM_SYSKEYUP);
+            // Loslassen einer abgefangenen Taste immer abfangen, auch wenn ACTIVE inzwischen aus ist: sonst öffnet
+            // ein durchgereichtes Win-Up lokal das Startmenü und drüben bleibt die Taste hängen.
+            let held = !down && HELD[vk].swap(false, Ordering::Relaxed);
+            let caught = if held { grab(k.vkCode as u16, true, true) } else if ACTIVE.load(Ordering::Relaxed) { grab(k.vkCode as u16, pressed(VK_MENU), pressed(VK_CONTROL)) } else { None };
+            if let Some(code) = caught {
+                if down {
+                    HELD[vk].store(true, Ordering::Relaxed);
+                }
                 if let Some(tx) = OUT.get().and_then(|m| m.try_lock().ok()) {
                     let _ = tx.send(HookKey { code, down });
                 }
-                return LRESULT(1); // nicht an Windows (kein Startmenü, kein Fensterwechsel)
+                return LRESULT(1); // nicht an Windows (kein Startmenü, kein Fensterwechsel); die Webansicht sieht sie so auch nicht, also kein doppeltes Senden
             }
         }
         unsafe { CallNextHookEx(None, code, w, l) }
@@ -105,7 +120,14 @@ mod imp {
 
     pub fn set_active(on: bool) {
         if ACTIVE.swap(on, Ordering::Relaxed) != on {
-            tracing::info!(on, hook_aufrufe = CALLS.load(Ordering::Relaxed), davon_nicht_vorne = NOT_FRONT.load(Ordering::Relaxed), "Windows-Tastenkombinationen an den Remotecomputer");
+            tracing::info!(
+                on,
+                hook_aufrufe = CALLS.load(Ordering::Relaxed),
+                davon_nicht_vorne = NOT_FRONT.load(Ordering::Relaxed),
+                vorne_pid = FRONT_PID.load(Ordering::Relaxed),
+                eigene_pid = std::process::id(),
+                "Windows-Tastenkombinationen an den Remotecomputer"
+            );
         }
     }
 }
