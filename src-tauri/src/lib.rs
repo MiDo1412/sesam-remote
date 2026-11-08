@@ -1528,8 +1528,8 @@ mod setup_script_tests {
     #[test]
     fn setup_script_is_the_released_version() {
         let (bytes, sha) = super::setup_script();
-        assert_eq!(sha, "0dd5318c82655441f520b955244d6b41e0038286799328ae9772adab397fa3ef");
-        assert_eq!(bytes.len(), 16556);
+        assert_eq!(sha, "066c8bbdf4ca6173713f3e21f46d1fa695aac8d1815e388dc2fe868492571b7a");
+        assert_eq!(bytes.len(), 17656);
         assert!(!bytes.starts_with(&[0xEF, 0xBB, 0xBF]) && !bytes.windows(2).any(|w| w == b"\r\n"));
     }
 }

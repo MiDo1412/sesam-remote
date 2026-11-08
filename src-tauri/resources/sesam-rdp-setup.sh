@@ -74,6 +74,8 @@ cat > "$USER_SCRIPT" <<'EOF'
 # Sesam Remote: RDP-Bildschirmfreigabe für die eigene Sitzung einschalten (eigenes Zertifikat, fester Port aus /etc/sesam-rdp/ports).
 # Die Zugangsdaten setzt jeder Benutzer selbst: Einstellungen > System > Remotedesktop > Desktopfreigabe.
 set -e
+# nur echte Benutzer, nicht gdm-greeter & Co.
+uid=$(id -u); { [ "$uid" -ge 1000 ] && [ "$uid" -lt 60000 ]; } || exit 0
 D="$HOME/.local/share/gnome-remote-desktop/certificates"
 if [ ! -s "$D/rdp-tls.crt" ]; then
   mkdir -p "$D"
@@ -163,23 +165,15 @@ done
 # --- 4. Zugangsdaten für "Sitzung übernehmen" ----------------------------------------------------
 titel 4 "Zugangsdaten für \"Sitzung übernehmen\"" "Jeder Benutzer hat eigene. GNOME speichert sie in seinem Schlüsselbund, darum geht das nur, solange er am Bildschirm angemeldet ist."
 LATER=()
-for u in $(human_users); do
-  if ! logged_in "$u"; then LATER+=("$u"); continue; fi
-  CR=$(grd_creds "$(user_status "$u")")
-  stand "$u" "angemeldet · Zugangsdaten $( [ "$CR" = gesetzt ] && gut gesetzt || warn fehlen )"
-  if [ "$CR" = gesetzt ]; then q="Zugangsdaten für $u ändern?"; a="neue eingeben"; e="behalten"
-  else q="Zugangsdaten für $u setzen?"; a="setzen"; e="später"; fi
-  if ! frage "$q" "$a" "$e"; then as_user "$u" systemctl --user restart sesam-rdp-user.service gnome-remote-desktop.service >/dev/null 2>&1 || true; continue; fi
-  locked=$(as_user "$u" busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/login \
-           org.freedesktop.Secret.Collection Locked 2>/dev/null || true)
-  if [ "$locked" = "b true" ]; then
-    if [ "$u" != "$AUTO" ]; then hinweis "Der Schlüsselbund von $u ist gesperrt. $u bitte einmal von Hand anmelden, dann erneut starten."; continue; fi
-    hinweis "$u meldet sich automatisch an. Dabei bleibt sein Schlüsselbund gesperrt, und GNOME kann die Zugangsdaten nicht lesen."
-    echo "    Abhilfe: Schlüsselbund ohne Passwort. Gespeicherte Passwörter von $u liegen dann unverschlüsselt auf der Platte."
-    frage "Schlüsselbund von $u ohne Passwort speichern?" "ja, nötig für den Fernzugriff" "abbrechen" || continue
-    read -rsp "    Bisheriges Schlüsselbund-Passwort (meist das Ubuntu-Passwort von $u, vor einer allfälligen Änderung): " KP; echo
-    # Passwort über stdin, nie als Argument (sonst landet es im Protokoll)
-    printf '%s\n' "$KP" | as_user "$u" python3 -c '
+keyring_encrypted() { # 0 = Schlüsselbund hat ein Passwort (ein unverschlüsselter ist Klartext und beginnt mit "[keyring]")
+  local kr; kr="$(home_of "$1")/.local/share/keyrings/login.keyring"
+  [ -f "$kr" ] && [ "$(head -c 12 "$kr")" = "GnomeKeyring" ]
+}
+keyring_remove_password() { # $1 Benutzer; geht gesperrt und entsperrt
+  local KP
+  read -rsp "    Bisheriges Schlüsselbund-Passwort (meist das Ubuntu-Passwort von $1, vor einer allfälligen Änderung): " KP; echo
+  # Passwort über stdin, nie als Argument (sonst landet es im Protokoll)
+  printf '%s\n' "$KP" | as_user "$1" python3 -c '
 import sys
 from gi.repository import Gio, GLib
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -195,12 +189,40 @@ try:
     call(I, "UnlockWithMasterPassword", GLib.Variant("(o(oayays))", (col, sec(""))))
 except GLib.Error as e:
     sys.exit("    Schlüsselbund nicht geändert (Passwort falsch?): " + e.message)
-' || continue
-    ok "Schlüsselbund von $u ist jetzt ohne Passwort."
+' && ok "Schlüsselbund von $1 ist jetzt ohne Passwort."
+}
+for u in $(human_users); do
+  if ! logged_in "$u"; then LATER+=("$u"); continue; fi
+  restart_user() { as_user "$u" systemctl --user restart sesam-rdp-user.service gnome-remote-desktop.service >/dev/null 2>&1 || true; }
+  CR=$(grd_creds "$(user_status "$u")")
+  stand "$u" "angemeldet · Zugangsdaten $( [ "$CR" = gesetzt ] && gut gesetzt || warn "fehlen oder Schlüsselbund gesperrt" )"
+  if [ "$u" = "$AUTO" ]; then
+    # Bei automatischer Anmeldung zählt, ob der Schlüsselbund ein Passwort hat, nicht ob er gerade offen ist:
+    # nach jedem Neustart bleibt ein Schlüsselbund mit Passwort gesperrt.
+    if keyring_encrypted "$u"; then
+      stand "" "Schlüsselbund: $(warn "mit Passwort, nach Neustart nicht lesbar")"
+      hinweis "Schlüsselbund von $u hat ein Passwort. Nach jedem Neustart kann GNOME die Zugangsdaten nicht lesen."
+      echo "    Abhilfe: Schlüsselbund ohne Passwort. Gespeicherte Passwörter von $u liegen dann unverschlüsselt auf der Platte."
+      if frage "Schlüsselbund von $u ohne Passwort speichern?" "ja, nötig für den Fernzugriff" "so lassen"; then
+        keyring_remove_password "$u" && { restart_user; CR=$(grd_creds "$(user_status "$u")"); } || true
+      fi
+    else
+      stand "" "Schlüsselbund: $(gut "ohne Passwort (gut für automatische Anmeldung)")"
+    fi
+  fi
+  if [ "$CR" = gesetzt ]; then q="Zugangsdaten für $u ändern?"; a="neue eingeben"; e="behalten"
+  else q="Zugangsdaten für $u setzen?"; a="setzen"; e="später"; fi
+  if ! frage "$q" "$a" "$e"; then restart_user; continue; fi
+  if [ "$u" != "$AUTO" ]; then
+    locked=$(as_user "$u" busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/login \
+             org.freedesktop.Secret.Collection Locked 2>/dev/null || true)
+    if [ "$locked" = "b true" ]; then hinweis "Der Schlüsselbund von $u ist gesperrt. $u bitte einmal von Hand anmelden, dann erneut starten."; continue; fi
+  elif keyring_encrypted "$u"; then
+    hinweis "Ohne Passwort-freien Schlüsselbund gelten die Zugangsdaten nur bis zum nächsten Neustart."
   fi
   echo "  Benutzername und Passwort für \"Sitzung von $u übernehmen\" eingeben (Tipp: Ubuntu-Benutzer und -Passwort von $u):"
   as_user "$u" grdctl rdp set-credentials
-  as_user "$u" systemctl --user restart sesam-rdp-user.service gnome-remote-desktop.service >/dev/null 2>&1 || true
+  restart_user
   ok "Zugangsdaten für $u gespeichert."
 done
 if [ ${#LATER[@]} -gt 0 ]; then
