@@ -12,6 +12,9 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
 import { remoteSize } from "./desksize";
 import { explainRdpError } from "./ubuntu";
+import { listen } from "@tauri-apps/api/event";
+import { appSettings } from "./settings";
+import { openMenu } from "./menu";
 
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
@@ -247,11 +250,100 @@ export function desktopTab(ctx: TabCtx): TabHandle {
 
   // ---------- Vollbild und Zwischenablage ----------
   const win = getCurrentWindow();
+  let isFs = false;
+  // Hinweis nur kurz zeigen, nicht dauerhaft über dem Bild.
+  let hintTimer = 0;
+  const hint = (text: string, ms = 3000) => {
+    status.textContent = text;
+    clearTimeout(hintTimer);
+    hintTimer = window.setTimeout(() => status.textContent === text && (status.textContent = ""), ms);
+  };
+  // Windows-Tastenkombinationen an den Remotecomputer (Einstellung wie in mstsc), nur solange das Bild den Fokus hat.
+  const hookWanted = () => {
+    const k = appSettings().systemKeys;
+    return !!sid && ctx.isActive() && document.activeElement === canvas && document.hasFocus() && (k === "remote" || (k === "fullscreen" && (isFs || !!spanned)));
+  };
+  const syncHook = () => invoke("kbhook_set", { active: hookWanted() }).catch(() => {});
+  canvas.addEventListener("focus", syncHook);
+  canvas.addEventListener("blur", syncHook);
+  window.addEventListener("blur", syncHook);
+  window.addEventListener("focus", syncHook);
+  const unlistenHook = listen<{ code: string; down: boolean }>("sesam-hook-key", (ev) => {
+    if (document.activeElement !== canvas || !ctx.isActive()) return;
+    const { code, down } = ev.payload;
+    send(down, { code, key: code.startsWith("Meta") ? "Meta" : code });
+  });
+
+  // Verbindungsleiste im Vollbild (wie mstsc): oben mittig, blendet sich nach 2 s aus, erscheint am oberen Rand.
+  const bar = document.createElement("div");
+  bar.className = "fs-bar";
+  bar.setAttribute("role", "toolbar");
+  bar.setAttribute("aria-label", "Verbindungsleiste");
+  let pinned = false;
+  let barTimer = 0;
+  const showBar = (ms = 2000) => {
+    if (!isFs) return;
+    bar.classList.add("show");
+    clearTimeout(barTimer);
+    if (!pinned) barTimer = window.setTimeout(() => !bar.matches(":hover") && bar.classList.remove("show"), ms);
+  };
+  const barBtn = (icon: string, label: string, onClick: () => void) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = icon;
+    b.title = label;
+    b.setAttribute("aria-label", label);
+    b.onclick = onClick;
+    return b;
+  };
+  const pinBtn = barBtn(ICON.pin, "Leiste fixieren", () => {
+    pinned = !pinned;
+    pinBtn.classList.toggle("on", pinned);
+    pinBtn.setAttribute("aria-pressed", String(pinned));
+    showBar();
+  });
+  const barName = document.createElement("span");
+  barName.className = "fs-name";
+  barName.textContent = c.name;
+  const keysBtn = barBtn(ICON.keyboard, "Tasten senden", async () => {
+    const v = await openMenu(keysBtn, [
+      { value: "cad", label: "Strg+Alt+Entf" },
+      { value: "cse", label: "Strg+Umschalt+Esc" },
+      { value: "alttab", label: "Alt+Tab" },
+      { value: "altf4", label: "Alt+F4" },
+      { value: "super", label: "Windows-Taste" },
+      { value: "print", label: "Druck" },
+    ]);
+    if (v) (sendKeys.value = v), sendKeys.dispatchEvent(new Event("change"));
+  });
+  bar.append(
+    pinBtn,
+    keysBtn,
+    barBtn(ICON.typeClipboard, "Zwischenablage abtippen", () => void typeClipboard()),
+    barName,
+    barBtn(ICON.minimize, "Minimieren", () => void win.minimize()),
+    barBtn(ICON.windowed, "Fenstermodus (F11)", () => void toggleFullscreen()),
+    barBtn(ICON.disconnect, "Trennen", () => ctx.closeSelf()),
+  );
+  bar.onmouseleave = () => showBar(800);
+  ctx.pane.append(bar);
+  wrap.addEventListener("mousemove", (e) => {
+    if (isFs && e.clientY < 6) showBar();
+  });
+
   const toggleFullscreen = async () => {
     const on = !(await win.isFullscreen());
     await win.setFullscreen(on);
+    isFs = on;
     document.getElementById("session")!.classList.toggle("fullscreen", on);
-    if (on) status.textContent = "F11 beendet das Vollbild.";
+    bar.classList.toggle("show", false);
+    if (on) {
+      showBar();
+      hint("F11 beendet das Vollbild.");
+      canvas.focus();
+    }
+    syncHook();
+    setTimeout(syncHook, 400); // der Wechsel ins Vollbild nimmt dem Fenster kurz den Fokus
   };
   // «Alle Monitore» (RDP): rahmenloses Fenster über alle Monitore, Server bekommt deren Anordnung.
   let spanned: { pos: PhysicalPosition; size: PhysicalSize; mode: Mode } | null = null;
@@ -291,7 +383,9 @@ export function desktopTab(ctx: TabCtx): TabHandle {
       height: m.size.height,
       primary: m.name === prim.name && m.position.x === prim.position.x && m.position.y === prim.position.y,
     }))).catch((e) => (status.textContent = String(e)));
-    status.textContent = "F11 beendet «Alle Monitore».";
+    hint("F11 beendet «Alle Monitore».");
+    canvas.focus();
+    syncHook();
   };
 
   const onF11 = (e: KeyboardEvent) => {
@@ -378,6 +472,11 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     releaseAll();
     window.removeEventListener("keydown", onF11);
     window.removeEventListener("focus", syncClipboard);
+    window.removeEventListener("blur", syncHook);
+    window.removeEventListener("focus", syncHook);
+    unlistenHook.then((u) => u());
+    invoke("kbhook_set", { active: false }).catch(() => {});
+    clearTimeout(barTimer);
     if (sid) (rdp ? api.rdpClose(sid) : api.vncClose(sid)).catch(() => {});
     sid = null;
     if (spanned) toggleSpan();

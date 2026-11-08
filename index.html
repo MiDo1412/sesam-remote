@@ -365,6 +365,14 @@
             </div>
           </div>
           <p class="note">«Automatisch» folgt der Einstellung des Betriebssystems.</p>
+          <label class="row" id="system-keys-row"><span>Windows-Tastenkombinationen anwenden</span>
+            <select name="systemKeys">
+              <option value="remote">Auf dem Remotecomputer</option>
+              <option value="fullscreen">Nur im Vollbildmodus</option>
+              <option value="local">Auf diesem Computer</option>
+            </select>
+          </label>
+          <p class="note">Gilt für Win-Taste, Alt+Tab, Alt+Esc, Strg+Esc und Druck, solange ein Remotedesktop den Fokus hat. Strg+Alt+Entf bleibt immer beim eigenen Computer; dafür gibt es «Tasten senden».</p>
         </section>
         <section class="settings-pane" id="settings-shell" hidden>
           <h2>Shell</h2>

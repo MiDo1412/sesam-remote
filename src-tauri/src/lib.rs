@@ -2,6 +2,7 @@ mod clipshare;
 mod creds;
 mod diag;
 mod h264;
+mod kbhook;
 mod kdc;
 mod forward;
 mod ftp;
@@ -683,6 +684,16 @@ fn local_rename(path: String, name: String) -> Result<String, String> {
 #[tauri::command]
 async fn term_profiles() -> Vec<profiles::Profile> {
     tauri::async_runtime::spawn_blocking(profiles::detect).await.unwrap_or_default()
+}
+
+/// Windows-Tastenkombinationen an den entfernten Rechner geben (Desktop-Tab mit Fokus), siehe kbhook.
+#[tauri::command]
+fn kbhook_set(active: bool) -> usize {
+    kbhook::set_active(active);
+    #[cfg(windows)]
+    return kbhook::CALLS.load(std::sync::atomic::Ordering::Relaxed);
+    #[cfg(not(windows))]
+    0
 }
 
 /// Text aus der Zwischenablage des Systems (ohne Berechtigungsabfrage der Webansicht).
@@ -1441,6 +1452,7 @@ pub fn run() {
             }
             let dir = app.path().app_data_dir()?;
             diag::init(&dir);
+            kbhook::init(app.handle().clone());
             let _ = LIBRARY_FILE.set(dir.join("library.json"));
             app.manage(LibraryPath(dir.join("library.json")));
             app.manage(ssh::Shells::default());
@@ -1477,6 +1489,7 @@ pub fn run() {
             app_exit,
             clip_read,
             clip_write,
+            kbhook_set,
             term_profiles,
             term_open,
             rdp_check,

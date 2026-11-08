@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { saveTermSettings, termSettings } from "./termthemes";
 import { schemeGallery } from "./schemegallery";
 import { ask } from "./ui";
+import { enhanceSelect } from "./menu";
 import { renderCredList } from "./creds";
 import { renderProfiles } from "./termprofiles";
 import { renderGroupSettings } from "./groups";
@@ -12,11 +13,14 @@ import { renderGroupSettings } from "./groups";
 export type Appearance = "auto" | "light" | "dark";
 const KEY = "sesam.app";
 
-export function appSettings(): { appearance: Appearance } {
+/** Wo Windows-Tastenkombinationen (Win, Alt+Tab …) wirken, wie in mstsc. */
+export type SystemKeys = "remote" | "fullscreen" | "local";
+
+export function appSettings(): { appearance: Appearance; systemKeys: SystemKeys } {
   try {
-    return { appearance: "auto", ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
+    return { appearance: "auto", systemKeys: "fullscreen", ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
   } catch {
-    return { appearance: "auto" };
+    return { appearance: "auto", systemKeys: "fullscreen" };
   }
 }
 
@@ -38,6 +42,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 /** Grösse des Einstellungsfensters (vom Benutzer gezogen) merken. */
 const SIZE_KEY = "sesam.settingsSize";
+let keysMenu: { sync(): void } | undefined;
 let sizeWatch: ResizeObserver | null = null;
 
 export async function openSettings(tab = "general") {
@@ -65,6 +70,15 @@ export async function openSettings(tab = "general") {
   for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.onclick = () => show(b.dataset.pane!);
 
   // Allgemein
+  const keys = dlg.querySelector<HTMLSelectElement>("[name=systemKeys]")!;
+  keys.value = appSettings().systemKeys;
+  keysMenu ??= enhanceSelect(keys);
+  keysMenu.sync();
+  keys.onchange = () => localStorage.setItem(KEY, JSON.stringify({ ...appSettings(), systemKeys: keys.value }));
+  // shortcut: nur Windows fängt die Kombinationen ab (kbhook.rs); auf macOS fehlt der Ereignis-Tap noch.
+  const onWin = navigator.userAgent.includes("Windows");
+  $("system-keys-row").hidden = !onWin;
+  ($("system-keys-row").nextElementSibling as HTMLElement).hidden = !onWin;
   for (const r of dlg.querySelectorAll<HTMLInputElement>("[name=appearance]")) {
     r.checked = r.value === appSettings().appearance;
     r.onchange = () => {

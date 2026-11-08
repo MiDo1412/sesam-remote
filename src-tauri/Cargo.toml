@@ -80,7 +80,7 @@ portable-pty = "0.9"
 [target.'cfg(windows)'.dependencies]
 ironrdp-cliprdr-native = "0.9"
 # H.264 (EGFX AVC) über Media Foundation; dieselbe Version wie bei cpal/ironrdp im Baum
-windows = { version = "0.62", features = ["Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_Foundation"] }
+windows = { version = "0.62", features = ["Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Win32_System_Threading"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

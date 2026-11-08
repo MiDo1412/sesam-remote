@@ -391,6 +391,15 @@ label.option small { margin-top: 2px; }
 .tab-pane { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .tab-pane > .terminal, .tab-pane > .desktop, .tab-pane > .files { flex: 1; min-height: 0; }
 .fullscreen .session-head { display: none; }
+/* Verbindungsleiste im Vollbild (wie mstsc): oben mittig, ausgeblendet bis zum oberen Rand oder fixiert */
+.fs-bar { display: none; position: absolute; top: 0; left: 50%; z-index: 20; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 0 0 12px 12px; background: rgba(28, 28, 30, 0.88); color: #f2f2f2; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); backdrop-filter: blur(12px); transform: translate(-50%, -100%); transition: transform 180ms ease; }
+.fullscreen .fs-bar { display: flex; }
+.fs-bar.show { transform: translate(-50%, 0); }
+.fs-bar button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: inherit; }
+.fs-bar button:hover { background: rgba(255, 255, 255, 0.14); }
+.fs-bar button.on { background: rgba(255, 255, 255, 0.22); }
+.fs-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fs-name { padding: 0 14px; font-size: 13px; font-weight: 600; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Werkzeugknöpfe mit Icons */
 button.tool { height: 30px; min-width: 30px; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--chrome-text); font-size: 12px; }
