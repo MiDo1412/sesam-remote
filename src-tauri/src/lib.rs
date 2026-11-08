@@ -758,14 +758,17 @@ fn conn_wake(path: State<'_, LibraryPath>, id: String) -> Result<(), String> {
     wake::wake(&c.mac)
 }
 
+/// Selbsttest der Windows-Tastenkombinationen (Befehlspalette «Diagnose: Tastentest»), läuft ausserhalb des Hauptthreads.
+#[tauri::command]
+async fn kbhook_selftest() -> String {
+    tauri::async_runtime::spawn_blocking(kbhook::selftest).await.unwrap_or_default()
+}
+
 /// Windows-Tastenkombinationen an den entfernten Rechner geben (Desktop-Tab mit Fokus), siehe kbhook.
 #[tauri::command]
 fn kbhook_set(active: bool) -> usize {
     kbhook::set_active(active);
-    #[cfg(windows)]
-    return kbhook::CALLS.load(std::sync::atomic::Ordering::Relaxed);
-    #[cfg(not(windows))]
-    0
+    kbhook::calls()
 }
 
 /// Text aus der Zwischenablage des Systems (ohne Berechtigungsabfrage der Webansicht).
@@ -1430,6 +1433,10 @@ fn rdp_close(app: AppHandle, sessions: State<RdpSessions>, sid: String) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Hilfsprozess für die Windows-Tastenkombinationen (siehe kbhook), startet ohne Fenster und ohne Tauri.
+    if std::env::args().nth(1).as_deref() == Some("--kbhook-helper") {
+        return kbhook::helper(std::env::args().nth(2).and_then(|p| p.parse().ok()).unwrap_or(0));
+    }
     tauri::Builder::default()
         // Zweiter Start (z. B. Klick auf eine Verknüpfung): Link an die laufende App, Fenster nach vorne.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -1575,6 +1582,7 @@ pub fn run() {
             clip_read,
             clip_write,
             kbhook_set,
+            kbhook_selftest,
             conn_reach,
             conn_wake,
             term_profiles,

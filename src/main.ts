@@ -971,6 +971,15 @@ const palette = initPalette(() => [
   { label: "Sitzung minimieren", keywords: "läuft weiter", run: () => runTool("Minimieren") },
   { label: "Sitzung trennen", keywords: "schliessen beenden", run: () => runTool("Trennen") },
   { label: "Über Sesam Remote", keywords: "version info", run: () => void openSettings("about") },
+  {
+    label: "Diagnose: Tastentest",
+    keywords: "windows taste win alt tab hook",
+    // Erst das Remote-Bild aktiv machen (Maus darüber), dann starten: drückt Win, Win+R und Alt+Tab und zeigt, wo sie ankamen.
+    run: () => {
+      (document.querySelector<HTMLCanvasElement>(".desktop-view:not([hidden]) canvas, canvas") ?? undefined)?.focus();
+      setTimeout(async () => tell("Tastentest", await invoke<string>("kbhook_selftest")), 1000);
+    },
+  },
   { label: "Sesam beenden", hint: keyLabel("Alt+F4"), keywords: "schliessen quit", run: () => void invoke("app_exit") },
   ...topics.map((t) => ({ label: `Hilfe: ${t.title}`, keywords: "anleitung", run: () => openHelp(t.id) })),
   ...clipHistory().map((t, i) => ({
