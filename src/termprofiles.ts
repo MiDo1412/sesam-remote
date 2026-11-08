@@ -1,5 +1,7 @@
 /** Einstellungen › Terminal: Standardprofil wählen, eigene Profile anlegen/ändern/löschen. */
-import { allProfiles, customProfiles, defaultProfileId, saveCustomProfiles, setDefaultProfile, themeChoices, type TermProfile } from "./terminal";
+import { allProfiles, customProfiles, defaultProfileId, profileThemeChoice, saveCustomProfiles, setDefaultProfile, setProfileTheme, systemTheme, themeChoices, type TermProfile } from "./terminal";
+import { TERM_THEMES } from "./termthemes";
+import { enhanceSelect } from "./menu";
 import { ask } from "./ui";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,7 +21,22 @@ export async function renderProfiles() {
         Object.assign(document.createElement("div"), { className: "cert-host", textContent: p.name + (p.custom ? "" : " (erkannt)") }),
         Object.assign(document.createElement("div"), { className: "cmd", textContent: [p.command, ...p.args].join(" ") }),
       );
-      row.append(radio, text);
+      // Design je Profil: Systemvorbild (z. B. PowerShell blau), wie SSH (Einstellungen › Shell) oder ein bestimmtes.
+      const design = document.createElement("select");
+      design.setAttribute("aria-label", `Design für ${p.name}`);
+      design.append(
+        new Option(`Systemvorbild (${TERM_THEMES[systemTheme(p)]?.label ?? "Standard"})`, ""),
+        new Option("Wie unter «Shell» eingestellt", "global"),
+        ...Object.entries(TERM_THEMES).map(([v, t]) => new Option(t.label, v)),
+      );
+      design.value = profileThemeChoice(p);
+      design.onchange = () => setProfileTheme(p.id, design.value);
+      const designWrap = document.createElement("div");
+      designWrap.className = "profile-design";
+      designWrap.onclick = (e) => e.preventDefault(); // Klick im Label wählt sonst das Standardprofil
+      designWrap.append(design);
+      row.append(radio, text, designWrap);
+      enhanceSelect(design);
       if (p.custom) {
         const edit = Object.assign(document.createElement("button"), { type: "button", className: "link", textContent: "Bearbeiten" });
         edit.onclick = (e) => (e.preventDefault(), void editProfile(p));

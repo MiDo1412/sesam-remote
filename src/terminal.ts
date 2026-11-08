@@ -46,8 +46,47 @@ export async function allProfiles(): Promise<TermProfile[]> {
 export const defaultProfileId = () => localStorage.getItem(DEFAULT_KEY) ?? "";
 export const setDefaultProfile = (id: string) => localStorage.setItem(DEFAULT_KEY, id);
 
-/** Profil eines Terminal-Tabs (undefined = keine lokale Shell, sondern SSH). */
-export const localProfile = (connId: string) => (connId.startsWith("local:") ? byConn.get(connId) : undefined);
+/** Profil eines Terminal-Tabs (undefined = keine lokale Shell, sondern SSH). Steckt in der Pseudo-Verbindung,
+ *  damit es auch in «Weitere Sitzung», abgekoppelten Fenstern und nach dem Wiederherstellen da ist. */
+export const localProfile = (c: Connection): TermProfile | undefined =>
+  c.id.startsWith("local:") ? ((c as Connection & { profile?: TermProfile }).profile ?? byConn.get(c.id)) : undefined;
+
+/** Design wie das Vorbild des Systems: PowerShell blau, cmd schwarz, Ubuntu aubergine, macOS Terminal hell … */
+export function systemTheme(p: TermProfile): string {
+  const id = p.id.toLowerCase();
+  const name = p.name.toLowerCase();
+  if (id === "powershell" || id === "vs-pwsh" && name.includes("windows")) return "powershell";
+  if (id === "cmd" || id === "vs-cmd") return "cmd";
+  if (id.startsWith("wsl-")) return name.includes("ubuntu") ? "ubuntu" : "linux-console";
+  if (navigator.userAgent.includes("Mac")) return "mac-basic";
+  if (navigator.userAgent.includes("Linux")) return navigator.userAgent.includes("Ubuntu") ? "ubuntu" : "gnome";
+  return "windows-terminal"; // pwsh 7, Git Bash und Interpreter wie im Windows Terminal
+}
+
+const THEMES_KEY = "sesam.terminalThemes";
+/** Gewähltes Design je Profil: "" = Systemvorbild, "global" = wie in den Einstellungen (wie SSH), sonst TERM_THEMES-ID. */
+export function profileThemeChoice(p: TermProfile): string {
+  try {
+    return JSON.parse(localStorage.getItem(THEMES_KEY) ?? "{}")[p.id] ?? (p.theme || "");
+  } catch {
+    return p.theme || "";
+  }
+}
+export function setProfileTheme(id: string, theme: string) {
+  let all: Record<string, string> = {};
+  try {
+    all = JSON.parse(localStorage.getItem(THEMES_KEY) ?? "{}");
+  } catch {}
+  if (theme) all[id] = theme;
+  else delete all[id];
+  localStorage.setItem(THEMES_KEY, JSON.stringify(all));
+  dispatchEvent(new CustomEvent("sesam:terminal-settings"));
+}
+/** Wirksames Farbschema eines Profils; `global` = Schema aus den Einstellungen. */
+export const profileTheme = (p: TermProfile, global: string) => {
+  const v = profileThemeChoice(p);
+  return v === "global" ? global : v || systemTheme(p);
+};
 
 /** Neues lokales Terminal öffnen; ohne `id` mit dem Standardprofil. */
 export async function openTerminal(id?: string, cwd?: string) {
@@ -56,7 +95,7 @@ export async function openTerminal(id?: string, cwd?: string) {
   if (!p) return tell("Kein Terminal gefunden", "Auf diesem Computer wurde keine Shell erkannt. Unter Einstellungen › Terminal lässt sich ein eigenes Profil anlegen.");
   const connId = `local:${p.id}`;
   byConn.set(connId, cwd ? { ...p, cwd } : p);
-  const conn = { id: connId, name: p.name, address: "Dieser Computer", user: "", group: "", sshPort: null, vncPort: null, rdpPort: null } as unknown as Connection;
+  const conn = { id: connId, name: p.name, address: "Dieser Computer", user: "", group: "", sshPort: null, vncPort: null, rdpPort: null, profile: cwd ? { ...p, cwd } : p } as unknown as Connection;
   openTab(conn, "shell", true);
 }
 
@@ -96,6 +135,7 @@ export const themeChoices = () => [["", "Wie in den Einstellungen"], ...Object.e
 /** Selbstprüfung: Profil-ID und Verbindungs-ID passen zusammen. */
 if (import.meta.env.DEV) {
   byConn.set("local:x", { id: "x", name: "X", command: "x", args: [], icon: "shell" });
-  console.assert(localProfile("local:x")?.id === "x" && localProfile("abc") === undefined, "localProfile");
+  console.assert(localProfile({ id: "local:x" } as Connection)?.id === "x" && localProfile({ id: "abc" } as Connection) === undefined, "localProfile");
+  console.assert(systemTheme({ id: "cmd", name: "Eingabeaufforderung", command: "", args: [], icon: "" }) === "cmd", "systemTheme cmd");
   byConn.delete("local:x");
 }

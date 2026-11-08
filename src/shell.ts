@@ -13,7 +13,7 @@ import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from ".
 import { createKeyboard, isTouch, termSequence } from "./osk";
 import { resolveTheme, saveTermSettings, termSettings, themeFont } from "./termthemes";
 import { schemeGallery } from "./schemegallery";
-import { localProfile } from "./terminal";
+import { localProfile, profileTheme, setProfileTheme } from "./terminal";
 
 const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
 
@@ -21,8 +21,9 @@ const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Cons
 export function shellTab(ctx: TabCtx): TabHandle {
   const c = ctx.conn;
   // Lokales Terminal (Pseudo-Verbindung «local:…») oder SSH.
-  const local = localProfile(c.id);
-  ctx.setSub(local ? `Dieser Computer · ${local.command}` : `SSH · ${c.user}@${c.address}:${c.sshPort}`);
+  const local = localProfile(c);
+  ctx.setSub(local ? `Lokal · ${local.name} · ${local.cwd || "Benutzerordner"}` : `SSH · ${c.user}@${c.address}:${c.sshPort}`);
+  if (local && !local.cwd) void api.localHome().then((h) => ctx.setSub(`Lokal · ${local.name} · ${h}`)).catch(() => {});
   const status = ctx.status;
   status.textContent = "Verbinde …";
 
@@ -61,7 +62,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
   // Einstellungen wirken sofort auf offene Shells.
   const applySettings = () => {
     const t = termSettings();
-    const theme = local?.theme || t.theme; // Profil darf ein eigenes Farbschema haben
+    const theme = local ? profileTheme(local, t.theme) : t.theme; // lokal: Design je Profil (Standard: Systemvorbild)
     term.options.theme = resolveTheme(theme);
     term.options.fontSize = t.fontSize;
     term.options.fontFamily = local?.font || t.fontFamily || (themeFont(theme) ? `${themeFont(theme)}, ${FONT}` : FONT);
@@ -135,9 +136,11 @@ export function shellTab(ctx: TabCtx): TabHandle {
     bigger.onclick = () => font(1);
     head.append(title, smaller, bigger);
     const gallery = schemeGallery(
-      local?.theme || termSettings().theme,
+      local ? profileTheme(local, termSettings().theme) : termSettings().theme,
       (id) => {
-        saveTermSettings({ ...termSettings(), theme: id });
+        // Lokal: Design dieses Profils; SSH: Design aus den Einstellungen.
+        if (local) setProfileTheme(local.id, id);
+        else saveTermSettings({ ...termSettings(), theme: id });
         closePop();
       },
       (id) => {
@@ -166,7 +169,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     schemeBtn,
     ...(isTouch() ? [kb.button] : []),
     toolSep(),
-    toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
+    local ? toolButton(ICON.close, "Schliessen", () => ctx.closeSelf(), { text: true }) : toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
   );
   // Tastenkürzel wie in Terminal-Apps (Strg+C ohne Umschalt bleibt beim Server).
   term.attachCustomKeyEventHandler((e) => {
