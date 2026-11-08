@@ -893,6 +893,7 @@ pub async fn open(
     emit: impl Fn(Event) -> bool + Send + Sync + 'static,
 ) -> Result<Session, String> {
     diag::add_secret(&t.password);
+    let orig = t.clone();
     let mut hop = Hop::default();
     let mut redirects = 0;
     let (result, framed) = loop {
@@ -908,18 +909,21 @@ pub async fn open(
             }
         }
     };
-    let task = tokio::spawn(run(t, hop, seen, result, framed, rx, emit, redirects));
+    let task = tokio::spawn(run(t, orig, hop, seen, result, framed, rx, emit, redirects));
     Ok(Session { tx, task })
 }
 
 enum Flow {
     Closed(String),
     Redirect(Redir),
+    /// Übergabe-Verbindung zeigt nach dem Anmelden nur eine einfarbige Fläche (Server hat die Sitzung verloren).
+    Stalled,
 }
 
 #[allow(clippy::too_many_arguments)]
 async fn run(
     mut t: Target,
+    orig: Target,
     mut hop: Hop,
     seen: SeenCert,
     mut result: ConnectionResult,
@@ -928,11 +932,28 @@ async fn run(
     emit: impl Fn(Event) -> bool + Send + Sync + 'static,
     mut redirects: u32,
 ) {
+    let mut stalls = 0;
     loop {
-        let flow = active(result, framed, &mut rx, &emit, t.scale).await;
+        let flow = active(result, framed, &mut rx, &emit, t.scale, hop.rdstls.is_some()).await;
         let why = match flow {
             Ok(Flow::Closed(why)) => why,
             Err(e) => e,
+            // Wie «Neu verbinden» von Hand: von vorne beim ursprünglichen Ziel, höchstens zweimal.
+            Ok(Flow::Stalled) if stalls < 2 => {
+                stalls += 1;
+                tracing::info!(stalls, "RDP: Übergabe hängt (einfarbige Fläche), verbinde neu");
+                emit(Event::Info("Die Sitzung wird übernommen … Sesam verbindet neu.".into()));
+                (t, hop) = (orig.clone(), Hop::default());
+                match reconnect(&mut t, &mut hop, &seen, &mut redirects).await {
+                    Ok((r, f)) => {
+                        emit(Event::Info(String::new()));
+                        (result, framed) = (r, f);
+                        continue;
+                    }
+                    Err(e) => e,
+                }
+            }
+            Ok(Flow::Stalled) => "Die Sitzung liess sich nach dem Anmelden nicht übernehmen. Bitte neu verbinden.".into(),
             // Umleitung im laufenden Betrieb, z. B. GNOME nach dem Login am Anmeldebildschirm.
             Ok(Flow::Redirect(r)) => {
                 redirects += 1;
@@ -977,6 +998,14 @@ async fn reconnect(t: &mut Target, hop: &mut Hop, seen: &SeenCert, redirects: &m
     }
 }
 
+/// Ganzes Bild (fast) eine Farbe? Prüft jeden 997. Bildpunkt (RGBA).
+fn is_uniform(px: &[u8]) -> bool {
+    let mut it = px.chunks_exact(4).step_by(997).map(|p| u16::from(p[0]) + u16::from(p[1]) + u16::from(p[2]));
+    let Some(first) = it.next() else { return false };
+    let (lo, hi) = it.fold((first, first), |(lo, hi), v| (lo.min(v), hi.max(v)));
+    hi - lo < 12
+}
+
 fn rect_of(r: &InclusiveRectangle, img: &DecodedImage) -> Option<Rect> {
     let (w, h) = (img.width(), img.height());
     let right = r.right.min(w.saturating_sub(1));
@@ -1002,6 +1031,7 @@ async fn active(
     rx: &mut UnboundedReceiver<Input>,
     emit: &(impl Fn(Event) -> bool + Send + Sync),
     scale: u32,
+    watch_grey: bool,
 ) -> Result<Flow, String> {
     let (mut reader, mut writer) = split_tokio_framed(framed);
     let size = result.desktop_size;
@@ -1031,10 +1061,19 @@ async fn active(
     let started = std::time::Instant::now();
     let mut first_image = false;
     let mut shown_scale = scale;
+    let mut grey_ticks = 0;
 
     loop {
         let outputs = tokio::select! {
             _ = clip_tick.tick() => {
+                // Übergabe (GNOME-Anmeldebildschirm): bleibt das Bild in den ersten 2 min 15 s lang einfarbig, ist die Sitzung weg.
+                if watch_grey && first_image && started.elapsed() < std::time::Duration::from_secs(120) {
+                    grey_ticks = if is_uniform(image.data()) { grey_ticks + 1 } else { 0 };
+                    if grey_ticks >= 3 {
+                        let _ = writer.write_all(&disconnect_frame()).await;
+                        return Ok(Flow::Stalled);
+                    }
+                }
                 let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { continue };
                 let msgs = c.drive_timeouts().map_err(err)?;
                 let frame = stage.process_svc_processor_messages(msgs).map_err(err)?;
@@ -1265,6 +1304,16 @@ async fn write_all<W: FramedWrite>(w: &mut W, outs: &[ActiveStageOutput]) -> Res
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn einfarbig_erkennen() {
+        let grau = [128u8, 128, 128, 255].repeat(5000);
+        let mut bild = grau.clone();
+        bild[997 * 4 * 3] = 0; // ein anderer Bildpunkt unter den geprüften
+        assert!(super::is_uniform(&grau));
+        assert!(!super::is_uniform(&bild));
+        assert!(!super::is_uniform(&[]));
+    }
+
     use super::*;
 
     #[test]
