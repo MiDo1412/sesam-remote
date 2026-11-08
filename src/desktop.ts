@@ -187,6 +187,12 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     if (e.key === "F11") return; // lokal: Vollbild
     e.preventDefault();
     if (!sid) return;
+    // Strg+Alt+Ende = Strg+Alt+Entf drüben (Windows lässt Strg+Alt+Entf nicht abfangen), wie Remotedesktopverbindung.
+    if (e.type === "keydown" && e.ctrlKey && e.altKey && e.code === "End") {
+      sendKeys.value = "cad";
+      sendKeys.dispatchEvent(new Event("change"));
+      return;
+    }
     const isDown = e.type === "keydown";
     if (e.key === "AltGraph") {
       altGr = isDown;
@@ -260,17 +266,26 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     hintTimer = window.setTimeout(() => status.textContent === text && (status.textContent = ""), ms);
   };
   // Windows-Tastenkombinationen an den Remotecomputer (Einstellung wie in mstsc), nur solange das Bild den Fokus hat.
+  // «Aktiv»: Fokus auf dem Bild oder Maus darüber (die Maus darüber gibt dem Bild auch den Fokus).
+  let hover = false;
+  const imageActive = () => document.activeElement === canvas || hover;
   const hookWanted = () => {
     const k = appSettings().systemKeys;
-    return !!sid && ctx.isActive() && document.activeElement === canvas && document.hasFocus() && (k === "remote" || (k === "fullscreen" && (isFs || !!spanned)));
+    return !!sid && ctx.isActive() && imageActive() && document.hasFocus() && (k === "remote" || (k === "fullscreen" && (isFs || !!spanned)));
   };
   const syncHook = () => invoke("kbhook_set", { active: hookWanted() }).catch(() => {});
   canvas.addEventListener("focus", syncHook);
   canvas.addEventListener("blur", syncHook);
+  canvas.addEventListener("pointerenter", () => {
+    hover = true;
+    if (document.hasFocus() && !document.querySelector("dialog[open]")) canvas.focus({ preventScroll: true });
+    syncHook();
+  });
+  canvas.addEventListener("pointerleave", () => ((hover = false), syncHook()));
   window.addEventListener("blur", syncHook);
   window.addEventListener("focus", syncHook);
   const unlistenHook = listen<{ code: string; down: boolean }>("sesam-hook-key", (ev) => {
-    if (document.activeElement !== canvas || !ctx.isActive()) return;
+    if (!imageActive() || !ctx.isActive()) return;
     const { code, down } = ev.payload;
     send(down, { code, key: code.startsWith("Meta") ? "Meta" : code });
   });

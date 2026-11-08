@@ -137,24 +137,11 @@
           <legend>Remotedesktop <small>RDP</small> <button type="button" class="help-btn" data-help="rdp-gnome" aria-label="Hilfe zu RDP">?</button></legend>
           <label class="switch"><input type="checkbox" name="rdpOn" /> Ein</label>
           <div class="svc-fields">
-            <label class="span">Was möchtest du öffnen?
-              <select name="rdpTarget">
-                <option value="">Windows-PC oder anderer RDP-Server</option>
-                <option value="login">Ubuntu: Anmeldebildschirm (als beliebiger Benutzer anmelden)</option>
-                <option value="session">Ubuntu: laufende Sitzung eines Benutzers übernehmen</option>
-              </select>
-            </label>
-            <div class="span pair" id="rdp-session-row" hidden>
-              <label>Sitzung von<input name="rdpSessionUser" list="rdp-users" autocomplete="off" spellcheck="false" placeholder="Benutzername" /></label>
-              <span class="fetch"><button type="button" id="rdp-ports-fetch">Vom PC abrufen</button><small id="rdp-ports-note">nur wenn mit dem Sesam-Setup-Script eingerichtet; liest die Ports per SSH</small></span>
-            </div>
-            <datalist id="rdp-users"></datalist>
             <label data-tip="Standard 3389. GNOME-Bildschirmfreigabe einzelner Benutzer: der Port aus der Übersicht des Setup-Scripts (z. B. 3390).">Port<input name="rdpPort" type="number" min="1" max="65535" class="mono" /></label>
             <label data-tip="Nur in Windows-Domänen, sonst leer lassen. Beispiel: FIRMA.">Domäne<input name="rdpDomain" autocomplete="off" spellcheck="false" placeholder="meist leer" /></label>
-            <p class="note span" id="rdp-cred-note" hidden></p>
-            <label class="option span" id="rdp-own-opt"><span><b>Eigene Zugangsdaten für RDP</b><small>Nur wenn RDP einen anderen Benutzer oder ein anderes Passwort braucht, z. B. bei GNOME (Ubuntu): die Angaben aus Einstellungen › System › Remote-Desktop.</small></span><input type="checkbox" name="rdpOwn" /></label>
+            <input type="checkbox" name="rdpOwn" hidden />
             <div class="span own-svc" id="rdp-own">
-              <label class="span">Zugangsdaten für RDP<select name="rdpCredentialId" data-own="Eigene für RDP (Felder unten)"></select></label>
+              <label class="span">Anmelden mit<select name="rdpCredentialId" data-own="Eigene für RDP"></select><small class="note" id="rdp-login-note"></small></label>
               <div class="pair own-fields">
               <label data-tip="Leer = Benutzername aus «Anmeldung» (empfohlen bei Ubuntu: Ubuntu-Konto für alles).">RDP-Benutzername<input name="rdpUser" autocomplete="off" spellcheck="false" placeholder="wie oben" /></label>
               <label>RDP-Passwort
@@ -164,6 +151,21 @@
               </div>
             </div>
             <div class="span check-row"><button type="button" id="rdp-check">Zugangsdaten prüfen</button><small id="rdp-check-result" role="status"></small></div>
+            <details class="span rdp-adv"><summary>Erweitert: Art des Zugangs</summary>
+              <label class="span">Art des Zugangs
+                <select name="rdpTarget">
+                  <option value="">Automatisch erkennen (empfohlen)</option>
+                  <option value="login">Ubuntu-Anmeldebildschirm (als beliebiger Benutzer anmelden)</option>
+                  <option value="session">Laufende Ubuntu-Sitzung eines Benutzers übernehmen</option>
+                </select>
+                <small class="note">Sesam erkennt Windows, den Ubuntu-Anmeldebildschirm und die Freigabe einer laufenden Sitzung beim Verbinden selbst. Die Wahl hier passt nur Hinweise und die Port-Vorschläge an.</small>
+              </label>
+              <div class="span pair" id="rdp-session-row" hidden>
+                <label>Sitzung von<input name="rdpSessionUser" list="rdp-users" autocomplete="off" spellcheck="false" placeholder="Benutzername" /></label>
+                <span class="fetch"><button type="button" id="rdp-ports-fetch">Vom PC abrufen</button><small id="rdp-ports-note">nur wenn mit dem Sesam-Setup-Script eingerichtet; liest die Ports per SSH</small></span>
+              </div>
+              <datalist id="rdp-users"></datalist>
+            </details>
             <label class="span" data-tip="Optional. Dieser Ordner erscheint auf dem entfernten Rechner als Laufwerk. Standardmässig aus.">Ordner als Laufwerk freigeben
               <span class="pick">
                 <input name="sharedFolder" class="mono" placeholder="aus" readonly />
@@ -369,12 +371,12 @@
           <p class="note">«Automatisch» folgt der Einstellung des Betriebssystems.</p>
           <label class="row" id="system-keys-row"><span>Windows-Tastenkombinationen anwenden</span>
             <select name="systemKeys">
-              <option value="remote">Auf dem Remotecomputer</option>
+              <option value="remote">Wenn das Remote-Bild aktiv ist (Standard)</option>
               <option value="fullscreen">Nur im Vollbildmodus</option>
-              <option value="local">Auf diesem Computer</option>
+              <option value="local">Immer auf diesem Computer</option>
             </select>
           </label>
-          <p class="note">Gilt für Win-Taste, Alt+Tab, Alt+Esc, Strg+Esc und Druck, solange ein Remotedesktop den Fokus hat. Strg+Alt+Entf bleibt immer beim eigenen Computer; dafür gibt es «Tasten senden».</p>
+          <p class="note">Gilt für Win-Taste und Win-Kombinationen, Alt+Tab, Alt+Esc, Alt+F4, Strg+Esc, Strg+Umschalt+Esc und Druck. «Aktiv» heisst: Sesam ist vorne und das Remote-Bild hat den Fokus oder die Maus ist darüber, im Fenster wie im Vollbild. Strg+Alt+Entf kann Windows nicht weitergeben; dafür Strg+Alt+Ende drücken (wie in Remotedesktopverbindung) oder «Tasten senden».</p>
         </section>
         <section class="settings-pane" id="settings-shell" hidden>
           <h2>Shell</h2>

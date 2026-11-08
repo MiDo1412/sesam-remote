@@ -63,22 +63,44 @@ document.getElementById("cred-adopt")!.onclick = async () => {
 };
 const formEls = (document.getElementById("editor-form") as HTMLFormElement).elements;
 
+const fld = (n: string) => formEls.namedItem(n) as HTMLInputElement;
+/** Kurzer Hinweis unter «Anmelden mit», je nach Servertyp (Art des Zugangs bzw. Betriebssystem). */
+function syncRdpNote() {
+  const target = (formEls.namedItem("rdpTarget") as HTMLSelectElement | null)?.value ?? "";
+  const os = (formEls.namedItem("os") as HTMLSelectElement | null)?.value ?? "";
+  const gnome = target !== "" || os === "ubuntu";
+  $("rdp-login-note").textContent =
+    target === "login" ? "Die Zugangsdaten der Systemfreigabe (Sesam-Setup-Script oder «sudo grdctl --system»); danach meldest du dich mit dem Ubuntu-Konto an."
+    : gnome ? "Die Zugangsdaten aus Einstellungen › System › Remote-Desktop des Ubuntu-PCs."
+    : os === "windows" ? "Meist das Windows-Konto, bei einem Microsoft-Konto die E-Mail-Adresse."
+    : os === "linux" || os === "raspberry" ? "Bei xrdp das Linux-Konto."
+    : "";
+}
+
 /** Gespeicherte Zugangsdaten auch pro Dienst (RDP, VNC, Gateway): Liste, «Eigene …» mit Feldern, «Neue speichern …». */
 const NEW_CRED = "__new";
+/** Nur RDP: «Wie unter Anmeldung» (keine eigenen Zugangsdaten). */
+const SAME_CRED = "__same";
 const svcPickers = (["rdpCredentialId", "vncCredentialId", "gatewayCredentialId"] as const).map((name) => {
   const sel = formEls.namedItem(name) as HTMLSelectElement;
   const fields = sel.closest(".own-svc, .adv-fields")!.querySelector<HTMLElement>(".own-fields")!;
   const menu = enhanceSelect(sel);
   let last = "";
-  const sync = () => (fields.hidden = sel.value !== "");
+  const isRdp = name === "rdpCredentialId";
+  const sync = () => {
+    fields.hidden = sel.value !== "";
+    // RDP: eine Auswahl statt Schalter + Auswahl; der versteckte Schalter steuert weiter das Speichern.
+    if (isRdp) (fld("rdpOwn").checked = sel.value !== SAME_CRED), syncRdpNote();
+  };
   const fill = async (selected: string | null) => {
     const list = await api.credsList().catch(() => []);
     sel.replaceChildren(
+      ...(isRdp ? [new Option("Wie unter «Anmeldung»", SAME_CRED)] : []),
       new Option(sel.dataset.own!, ""),
       ...list.map(([c]) => new Option(`${c.name}${c.user ? ` (${c.user})` : ""}`, c.id)),
       new Option("Neue Zugangsdaten speichern …", NEW_CRED),
     );
-    sel.value = last = selected && list.some(([c]) => c.id === selected) ? selected : "";
+    sel.value = last = selected && list.some(([c]) => c.id === selected) ? selected : isRdp && !fld("rdpOwn").checked ? SAME_CRED : "";
     menu.sync();
     sync();
   };
@@ -87,7 +109,7 @@ const svcPickers = (["rdpCredentialId", "vncCredentialId", "gatewayCredentialId"
     const c = await openCred(null);
     await fill(c ? c.id : last);
   });
-  return { name, sel, fill, value: () => sel.value || null };
+  return { name, sel, fill, value: () => (sel.value === SAME_CRED ? null : sel.value || null) };
 });
 const keyModeMenu = enhanceSelect(formEls.namedItem("keyMode") as HTMLSelectElement);
 const fileTransferMenu = enhanceSelect(formEls.namedItem("fileTransfer") as HTMLSelectElement);
@@ -96,25 +118,18 @@ const ftpSecurityMenu = enhanceSelect(ftpSecurity);
 const jumpHost = formEls.namedItem("jumpHost") as HTMLSelectElement;
 const jumpHostMenu = enhanceSelect(jumpHost);
 const osMenu = enhanceSelect(formEls.namedItem("os") as HTMLSelectElement);
+(formEls.namedItem("os") as HTMLSelectElement).addEventListener("change", syncRdpNote);
 
 // ---------- RDP zu Ubuntu: «Was möchtest du öffnen?» mit genau einem Zugangsdaten-Block ----------
 const rdpTargetSel = formEls.namedItem("rdpTarget") as HTMLSelectElement;
 const rdpTargetMenu = enhanceSelect(rdpTargetSel);
 let rdpPorts: [string, number][] = [];
-const fld = (n: string) => formEls.namedItem(n) as HTMLInputElement;
 function syncRdpTarget() {
   const v = rdpTargetSel.value;
-  const who = fld("rdpSessionUser").value.trim() || "diesem Benutzer";
   document.getElementById("rdp-session-row")!.hidden = v !== "session";
-  document.getElementById("rdp-own-opt")!.hidden = v !== "";
-  if (v) fld("rdpOwn").checked = true; // bei Ubuntu immer genau dieser eine Block
-  const note = document.getElementById("rdp-cred-note")!;
-  note.hidden = !v;
-  note.textContent =
-    v === "login"
-      ? "Zugang zum Anmeldebildschirm: die Systemfreigabe von GNOME Remote Desktop (eingerichtet mit dem Sesam-Setup-Script oder «sudo grdctl --system»). Danach meldest du dich wie gewohnt mit deinem Ubuntu-Konto an. Leer lassen, wenn es dieselben Angaben wie unter «Anmeldung» sind."
-      : `Freigabe-Zugangsdaten von ${who} (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe). Leer lassen, wenn es dieselben Angaben wie unter «Anmeldung» sind.`;
+  if (v) (document.querySelector<HTMLDetailsElement>(".rdp-adv")!.open = true); // bewusst gewählt: sichtbar lassen
   if (v === "login" && !fld("rdpPort").value) fld("rdpPort").value = "3389";
+  syncRdpNote();
 }
 rdpTargetSel.addEventListener("change", () => {
   if (rdpTargetSel.value === "login") fld("rdpPort").value = "3389";
@@ -714,6 +729,7 @@ function edit(c: Connection | null, asNew = false) {
   $("rdp-check-result").textContent = "";
   f.rdpOwn.checked = editing.hasRdpPassword || !!editing.rdpUser || !!editing.rdpCredentialId;
   f.vncOwn.checked = editing.hasVncPassword || !!editing.vncCredentialId;
+  document.querySelector<HTMLDetailsElement>(".rdp-adv")!.open = false;
   syncRdpTarget();
   f.rdpPassword.value = "";
   form.querySelector<HTMLInputElement>(`[name=desktopProtocol][value=${editing.desktopProtocol}]`)!.checked = true;
@@ -939,12 +955,23 @@ const quick = initQuick((c) => edit({ ...c, id: crypto.randomUUID(), name: c.add
 $("empty-new").onclick = () => edit(null);
 const ubuntu = initUbuntu(blank, () => reload());
 initTerminal();
-initPalette(() => [
+const palette = initPalette(() => [
   ...items.flatMap((c) => connectionCommands(c, open, { desktop: !!desktopProtocol(c), files: !!filesProtocol(c) })),
   { label: "Neue Verbindung …", keywords: "hinzufügen anlegen", run: () => $("new").click() },
   { label: "Schnelle Verbindung …", hint: keyLabel("Strg+K"), keywords: "einmalig quick", run: () => $("quick").click() },
   { label: "Neues Terminal", hint: keyLabel("Strg+T"), keywords: "shell konsole powershell", run: () => void openTerminal() },
   { label: "Einstellungen", hint: keyLabel("Strg+,"), keywords: "optionen", run: () => void openSettings() },
+  { label: "Ubuntu-PC hinzufügen …", keywords: "gnome assistent neue verbindung", run: () => ubuntu.open() },
+  { label: "Bibliothek anzeigen", keywords: "übersicht verbindungen", run: () => runTool("Bibliothek") },
+  { label: "Vorheriger Tab", keywords: "sitzung wechseln", run: () => runTool("Vorheriger Tab") },
+  { label: "Nächster Tab", keywords: "sitzung wechseln", run: () => runTool("Nächster Tab") },
+  { label: "Vollbild", hint: "F11", keywords: "ansicht", run: () => runTool("Vollbild") },
+  { label: "Sitzung in eigenem Fenster öffnen", keywords: "abkoppeln", run: () => runTool("Abkoppeln") },
+  { label: "Sitzung ins Hauptfenster zurück", keywords: "andocken", run: () => runTool("Andocken") },
+  { label: "Sitzung minimieren", keywords: "läuft weiter", run: () => runTool("Minimieren") },
+  { label: "Sitzung trennen", keywords: "schliessen beenden", run: () => runTool("Trennen") },
+  { label: "Über Sesam Remote", keywords: "version info", run: () => void openSettings("about") },
+  { label: "Sesam beenden", hint: keyLabel("Alt+F4"), keywords: "schliessen quit", run: () => void invoke("app_exit") },
   ...topics.map((t) => ({ label: `Hilfe: ${t.title}`, keywords: "anleitung", run: () => openHelp(t.id) })),
   ...clipHistory().map((t, i) => ({
     label: `Zwischenablage: ${t.replace(/\s+/g, " ").slice(0, 70)}`,
@@ -960,6 +987,7 @@ initFieldHelp(document.getElementById("quick-form")!);
 const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
   else if (cmd === "about") openSettings("about");
+  else if (cmd === "palette") palette.open();
   else if (cmd === "addubuntu") ubuntu.open();
   else if (cmd === "terminal") void openTerminal();
   else if (cmd === "new") edit(null);

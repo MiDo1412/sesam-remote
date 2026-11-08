@@ -34,6 +34,7 @@ mod imp {
             v if v == VK_SNAPSHOT.0 => Some("PrintScreen"),
             v if v == VK_TAB.0 && alt => Some("Tab"),
             v if v == VK_ESCAPE.0 && (alt || ctrl) => Some("Escape"),
+            0x73 if alt => Some("F4"), // Alt+F4 schliesst sonst Sesam statt des Fensters drüben (wie mstsc)
             _ => None,
         }
     }
@@ -64,9 +65,8 @@ mod imp {
         unsafe { CallNextHookEx(None, code, w, l) }
     }
 
-    /// Hook einmal installieren (eigener Thread mit Nachrichtenschleife, wie Windows es verlangt).
-    /// Nur die App merken; der Hook selbst kommt erst beim Einschalten (dann ist das Fenster vorne
-    /// und wird von Windows nicht gedrosselt; ein gedrosselter Hook wird still entfernt).
+    /// Beim Start einmal: Hook auf einem eigenen, dauerhaft laufenden Thread mit Nachrichtenschleife (wie mstsc).
+    /// Ob abgefangen wird, entscheidet nur `ACTIVE`; der Hook bleibt installiert.
     pub fn init(app: AppHandle) {
         let _ = APP.set(app);
         let (tx, rx) = std::sync::mpsc::channel::<HookKey>();
@@ -79,54 +79,33 @@ mod imp {
                 }
             }
         });
+        install();
     }
 
-    /// Thread-ID des Hook-Threads (0 = kein Hook).
-    static THREAD: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
     pub(super) fn install() {
-        use windows::Win32::System::Threading::{GetCurrentThreadId, GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_TIME_CRITICAL};
-        use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, TranslateMessage, UnhookWindowsHookEx};
-        if THREAD.load(Ordering::SeqCst) != 0 {
-            return;
-        }
-        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || unsafe {
-            let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+        use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, TranslateMessage};
+        std::thread::spawn(|| unsafe {
             let module = windows::Win32::System::LibraryLoader::GetModuleHandleW(None).unwrap_or_default();
-            let h = match SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), Some(module.into()), 0) {
-                Ok(h) => h,
-                Err(e) => {
-                    tracing::warn!(error = %e, "Tastatur-Hook liess sich nicht installieren");
-                    let _ = ready_tx.send(());
-                    return;
-                }
-            };
-            THREAD.store(GetCurrentThreadId(), Ordering::SeqCst);
-            let _ = ready_tx.send(());
+            match SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), Some(module.into()), 0) {
+                Ok(_) => tracing::info!("Tastatur-Hook installiert"),
+                Err(e) => return tracing::warn!(error = %e, "Tastatur-Hook liess sich nicht installieren"),
+            }
             let mut msg = MSG::default();
-            // Endet mit WM_QUIT aus `remove`.
-            while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
+            loop {
+                let r = GetMessageW(&mut msg, None, 0, 0).0;
+                if r <= 0 {
+                    tracing::warn!(r, "Tastatur-Hook: Nachrichtenschleife beendet");
+                    break;
+                }
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
-            let _ = UnhookWindowsHookEx(h);
         });
-        let _ = ready_rx.recv_timeout(std::time::Duration::from_secs(2));
-    }
-
-    fn remove() {
-        use windows::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, WM_QUIT};
-        let id = THREAD.swap(0, Ordering::SeqCst);
-        if id != 0 {
-            unsafe { let _ = PostThreadMessageW(id, WM_QUIT, WPARAM(0), LPARAM(0)); }
-        }
     }
 
     pub fn set_active(on: bool) {
         if ACTIVE.swap(on, Ordering::Relaxed) != on {
             tracing::info!(on, hook_aufrufe = CALLS.load(Ordering::Relaxed), davon_nicht_vorne = NOT_FRONT.load(Ordering::Relaxed), "Windows-Tastenkombinationen an den Remotecomputer");
-            if on { install() } else { remove() }
         }
     }
 }
@@ -171,5 +150,7 @@ mod tests {
         assert_eq!(grab(0x1B, false, false), None);
         assert_eq!(grab(0x41, true, true), None); // Strg+Alt+A
         assert_eq!(grab(0x2C, false, false), Some("PrintScreen"));
+        assert_eq!(grab(0x73, true, false), Some("F4")); // Alt+F4
+        assert_eq!(grab(0x73, false, false), None);
     }
 }

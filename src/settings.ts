@@ -18,9 +18,9 @@ export type SystemKeys = "remote" | "fullscreen" | "local";
 
 export function appSettings(): { appearance: Appearance; systemKeys: SystemKeys } {
   try {
-    return { appearance: "auto", systemKeys: "fullscreen", ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
+    return { appearance: "auto", systemKeys: "remote", ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
   } catch {
-    return { appearance: "auto", systemKeys: "fullscreen" };
+    return { appearance: "auto", systemKeys: "remote" };
   }
 }
 

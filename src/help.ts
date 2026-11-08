@@ -75,6 +75,20 @@ export function openHelp(id: string) {
       return b;
     }),
   );
+  // Suche: Themen ausblenden, deren Titel und Text das Gesuchte nicht enthalten.
+  const search = Object.assign(document.createElement("input"), { type: "search", placeholder: "Hilfe durchsuchen", className: "help-search" });
+  search.setAttribute("aria-label", "Hilfe durchsuchen");
+  search.oninput = () => {
+    const q = search.value.trim().toLowerCase();
+    let first: string | null = null;
+    for (const b of nav.querySelectorAll<HTMLButtonElement>("button.nav-item")) {
+      const t = topics.find((x) => x.id === b.dataset.id)!;
+      b.hidden = !!q && !`${t.title}\n${t.md}`.toLowerCase().includes(q);
+      if (!b.hidden) first ??= t.id;
+    }
+    if (q && first) show(first);
+  };
+  nav.prepend(search);
   show(id);
   if (!dlg.open) dlg.showModal();
 }
