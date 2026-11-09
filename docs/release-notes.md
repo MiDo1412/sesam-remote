@@ -48,6 +48,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 ### Betrieb
 
 - **Versionen:** die Nummer steht nur in `VERSION`; ein Release setzt sie in App, Installer und Paketdateien. Pro Klon einmal `git config core.hooksPath .githooks` ausführen.
+- **Git-Hooks auf Mac und Linux:** Die Hooks in `.githooks` sind jetzt ausführbar; vorher übersprang Git sie dort stillschweigend.
 
 ## 0.1.0 — 2026-11-06
 
