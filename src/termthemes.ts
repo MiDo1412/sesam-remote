@@ -52,9 +52,10 @@ export const TERM_THEMES: Record<string, { label: string; theme: ITheme; font?: 
 
 /** "auto" = Sesam Hell/Dunkel nach System. */
 export function resolveTheme(id: string): ITheme {
-  if (id === "auto" || !TERM_THEMES[id]) {
-    return TERM_THEMES[matchMedia("(prefers-color-scheme: dark)").matches ? "sesam-dark" : "sesam-light"].theme;
-  }
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  if (id === "auto" || !TERM_THEMES[id]) return TERM_THEMES[dark ? "sesam-dark" : "sesam-light"].theme;
+  // Wie Terminal.app: das Profil «Standard» folgt dem Erscheinungsbild des Systems.
+  if (id === "mac-basic" && dark) return { ...TERM_THEMES[id].theme, background: "#1e1e1e", foreground: "#ffffff", cursor: "#a0a0a0", selectionBackground: "#3f638b" };
   return TERM_THEMES[id].theme;
 }
 

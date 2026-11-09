@@ -52,7 +52,7 @@ export const setDefaultProfile = (id: string) => localStorage.setItem(DEFAULT_KE
 export const localProfile = (c: Connection): TermProfile | undefined =>
   c.id.startsWith("local:") ? ((c as Connection & { profile?: TermProfile }).profile ?? byConn.get(c.id)) : undefined;
 
-/** Design wie das Vorbild des Systems: PowerShell blau, cmd schwarz, Ubuntu aubergine, macOS Terminal hell … */
+/** Design wie das Vorbild des Systems: PowerShell blau, cmd schwarz, Ubuntu aubergine, macOS Terminal wie das System … */
 export function systemTheme(p: TermProfile): string {
   const id = p.id.toLowerCase();
   const name = p.name.toLowerCase();
