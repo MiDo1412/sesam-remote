@@ -1,6 +1,6 @@
 //! H.264 für EGFX (AVC420/AVC444) über den Decoder des Betriebssystems, ohne eigene Codec-Bibliothek
-//! (Lizenz- und Patentfragen in docs/architektur.md). Windows: Media Foundation (Microsoft H.264 Video Decoder MFT).
-//! macOS (VideoToolbox) fehlt noch; ohne Decoder kündigt EGFX kein AVC an und der Server nimmt andere Codecs.
+//! (Lizenz- und Patentfragen in docs/architektur.md). Windows: Media Foundation (Microsoft H.264 Video Decoder MFT),
+//! macOS: VideoToolbox. Ohne Decoder (Linux) kündigt EGFX kein AVC an und der Server nimmt andere Codecs.
 
 use ironrdp_egfx::decode::{DecodedFrame, DecoderError, DecoderResult, H264Decoder, Yuv420Frame};
 
@@ -8,7 +8,9 @@ use ironrdp_egfx::decode::{DecodedFrame, DecoderError, DecoderResult, H264Decode
 pub fn decoder() -> Option<Box<dyn H264Decoder>> {
     #[cfg(windows)]
     return Some(Box::new(mf::MfDecoder::default()));
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    return Some(Box::new(vt::VtDecoder::default()));
+    #[cfg(not(any(windows, target_os = "macos")))]
     None
 }
 
@@ -223,6 +225,254 @@ mod mf {
     }
 }
 
+/// NAL-Einheiten eines Annex-B-Stroms (ohne Startcodes).
+#[cfg(any(test, target_os = "macos"))]
+pub fn nal_units(data: &[u8]) -> Vec<&[u8]> {
+    let mut starts = Vec::new();
+    let mut i = 0;
+    while i + 3 <= data.len() {
+        if data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 {
+            starts.push(i + 3);
+            i += 3;
+        } else {
+            i += 1;
+        }
+    }
+    starts
+        .iter()
+        .enumerate()
+        .map(|(k, &a)| {
+            let mut b = starts.get(k + 1).map_or(data.len(), |&n| n - 3);
+            while b > a && data[b - 1] == 0 {
+                b -= 1; // Null vor dem nächsten 4-Byte-Startcode bzw. trailing_zero_8bits
+            }
+            &data[a..b]
+        })
+        .filter(|n| !n.is_empty())
+        .collect()
+}
+
+/// macOS: VideoToolbox über die C-Schnittstelle (CoreMedia/CoreVideo), ohne zusätzliche Pakete.
+#[cfg(target_os = "macos")]
+mod vt {
+    use super::*;
+    use std::ffi::c_void;
+    use std::ptr::{null, null_mut};
+
+    type Ref = *mut c_void;
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct CMTime {
+        value: i64,
+        timescale: i32,
+        flags: u32,
+        epoch: i64,
+    }
+    #[repr(C)]
+    struct CallbackRecord {
+        cb: extern "C" fn(*mut c_void, *mut c_void, i32, u32, Ref, CMTime, CMTime),
+        refcon: *mut c_void,
+    }
+
+    #[link(name = "VideoToolbox", kind = "framework")]
+    #[link(name = "CoreMedia", kind = "framework")]
+    #[link(name = "CoreVideo", kind = "framework")]
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CMVideoFormatDescriptionCreateFromH264ParameterSets(a: Ref, n: usize, p: *const *const u8, s: *const usize, nal_len: i32, out: *mut Ref) -> i32;
+        fn VTDecompressionSessionCreate(a: Ref, fmt: Ref, spec: Ref, attrs: Ref, cb: *const CallbackRecord, out: *mut Ref) -> i32;
+        fn VTDecompressionSessionDecodeFrame(s: Ref, sample: Ref, flags: u32, frame: *mut c_void, info: *mut u32) -> i32;
+        fn VTDecompressionSessionWaitForAsynchronousFrames(s: Ref) -> i32;
+        fn VTDecompressionSessionInvalidate(s: Ref);
+        fn CMBlockBufferCreateWithMemoryBlock(a: Ref, mem: *mut c_void, len: usize, ba: Ref, custom: *const c_void, off: usize, dl: usize, flags: u32, out: *mut Ref) -> i32;
+        fn CMBlockBufferReplaceDataBytes(src: *const c_void, dst: Ref, off: usize, len: usize) -> i32;
+        fn CMSampleBufferCreateReady(a: Ref, data: Ref, fmt: Ref, n: isize, nt: isize, t: *const c_void, ns: isize, sizes: *const usize, out: *mut Ref) -> i32;
+        fn CVPixelBufferLockBaseAddress(pb: Ref, f: u64) -> i32;
+        fn CVPixelBufferUnlockBaseAddress(pb: Ref, f: u64) -> i32;
+        fn CVPixelBufferGetBaseAddressOfPlane(pb: Ref, plane: usize) -> *const u8;
+        fn CVPixelBufferGetBytesPerRowOfPlane(pb: Ref, plane: usize) -> usize;
+        fn CVPixelBufferGetHeightOfPlane(pb: Ref, plane: usize) -> usize;
+        fn CVPixelBufferGetWidth(pb: Ref) -> usize;
+        fn CVPixelBufferGetHeight(pb: Ref) -> usize;
+        fn CFRelease(r: *const c_void);
+        fn CFNumberCreate(a: Ref, ty: isize, v: *const c_void) -> Ref;
+        fn CFDictionaryCreate(a: Ref, k: *const *const c_void, v: *const *const c_void, n: isize, kc: *const c_void, vc: *const c_void) -> Ref;
+        static kCVPixelBufferPixelFormatTypeKey: *const c_void;
+        static kCFTypeDictionaryKeyCallBacks: c_void;
+        static kCFTypeDictionaryValueCallBacks: c_void;
+    }
+
+    /// Bild aus dem Rückruf: NV12 zusammenhängend, Breite, Höhe, Zeilenlänge, Zeilen bis zur UV-Ebene.
+    type Out = Option<(Vec<u8>, u16, u16, usize, usize)>;
+
+    extern "C" fn on_frame(_: *mut c_void, frame: *mut c_void, status: i32, _: u32, img: Ref, _: CMTime, _: CMTime) {
+        if status != 0 || img.is_null() {
+            return;
+        }
+        let out = unsafe { &mut *(frame as *mut Out) };
+        unsafe {
+            CVPixelBufferLockBaseAddress(img, 1); // nur lesen
+            let (sy, suv) = (CVPixelBufferGetBytesPerRowOfPlane(img, 0), CVPixelBufferGetBytesPerRowOfPlane(img, 1));
+            let (hy, huv) = (CVPixelBufferGetHeightOfPlane(img, 0), CVPixelBufferGetHeightOfPlane(img, 1));
+            let (y, uv) = (CVPixelBufferGetBaseAddressOfPlane(img, 0), CVPixelBufferGetBaseAddressOfPlane(img, 1));
+            if sy == suv && !y.is_null() && !uv.is_null() {
+                let mut buf = Vec::with_capacity(sy * (hy + huv));
+                buf.extend_from_slice(std::slice::from_raw_parts(y, sy * hy));
+                buf.extend_from_slice(std::slice::from_raw_parts(uv, suv * huv));
+                let (w, h) = (CVPixelBufferGetWidth(img), CVPixelBufferGetHeight(img));
+                *out = Some((buf, u16::try_from(w).unwrap_or(0), u16::try_from(h).unwrap_or(0), sy, hy));
+            }
+            CVPixelBufferUnlockBaseAddress(img, 1);
+        }
+    }
+
+    #[derive(Default)]
+    pub struct VtDecoder {
+        session: Option<Ref>,
+        fmt: Option<Ref>,
+        sps: Vec<u8>,
+        pps: Vec<u8>,
+    }
+    // Die Sitzung gehört genau einem Decoder; VideoToolbox ist nicht an einen Thread gebunden.
+    unsafe impl Send for VtDecoder {}
+
+    fn fail(ctx: &str, status: i32) -> DecoderError {
+        DecoderError::msg(format!("H.264 (VideoToolbox) {ctx}: Status {status}"))
+    }
+
+    impl VtDecoder {
+        fn close(&mut self) {
+            unsafe {
+                if let Some(s) = self.session.take() {
+                    VTDecompressionSessionInvalidate(s);
+                    CFRelease(s);
+                }
+                if let Some(f) = self.fmt.take() {
+                    CFRelease(f);
+                }
+            }
+        }
+
+        fn open(&mut self) -> DecoderResult<()> {
+            self.close();
+            let sets = [self.sps.as_ptr(), self.pps.as_ptr()];
+            let sizes = [self.sps.len(), self.pps.len()];
+            let mut fmt = null_mut();
+            let st = unsafe { CMVideoFormatDescriptionCreateFromH264ParameterSets(null_mut(), 2, sets.as_ptr(), sizes.as_ptr(), 4, &mut fmt) };
+            if st != 0 {
+                return Err(fail("Format", st));
+            }
+            self.fmt = Some(fmt);
+            // NV12 in Videobereich ('420v'), wie Media Foundation unter Windows liefert.
+            let nv12: i32 = 0x3432_3076;
+            let mut session = null_mut();
+            let st = unsafe {
+                let num = CFNumberCreate(null_mut(), 3 /* kCFNumberSInt32Type */, (&nv12 as *const i32).cast());
+                let (k, v) = ([kCVPixelBufferPixelFormatTypeKey], [num as *const c_void]);
+                let attrs = CFDictionaryCreate(null_mut(), k.as_ptr(), v.as_ptr(), 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+                let cb = CallbackRecord { cb: on_frame, refcon: null_mut() };
+                let st = VTDecompressionSessionCreate(null_mut(), fmt, null_mut(), attrs, &cb, &mut session);
+                CFRelease(attrs);
+                CFRelease(num);
+                st
+            };
+            if st != 0 {
+                return Err(fail("Sitzung", st));
+            }
+            self.session = Some(session);
+            Ok(())
+        }
+
+        /// Ein Zugriffseinheit (alle Bild-NALs eines Aufrufs) im AVC-Format dekodieren, synchron.
+        fn frame(&mut self, avcc: &[u8]) -> DecoderResult<Out> {
+            let (Some(session), Some(fmt)) = (self.session, self.fmt) else { return Err(DecoderError::msg("H.264: kein SPS/PPS")) };
+            let mut out: Out = None;
+            unsafe {
+                let mut block = null_mut();
+                let st = CMBlockBufferCreateWithMemoryBlock(null_mut(), null_mut(), avcc.len(), null_mut(), null(), 0, avcc.len(), 1 /* AssureMemoryNow */, &mut block);
+                if st != 0 {
+                    return Err(fail("Puffer", st));
+                }
+                CMBlockBufferReplaceDataBytes(avcc.as_ptr().cast(), block, 0, avcc.len());
+                let mut sample = null_mut();
+                let size = avcc.len();
+                let st = CMSampleBufferCreateReady(null_mut(), block, fmt, 1, 0, null(), 1, &size, &mut sample);
+                CFRelease(block);
+                if st != 0 {
+                    return Err(fail("Probe", st));
+                }
+                let mut info = 0u32;
+                let st = VTDecompressionSessionDecodeFrame(session, sample, 0, (&mut out as *mut Out).cast(), &mut info);
+                VTDecompressionSessionWaitForAsynchronousFrames(session);
+                CFRelease(sample);
+                if st != 0 {
+                    return Err(fail("Dekodieren", st));
+                }
+            }
+            Ok(out)
+        }
+    }
+
+    impl H264Decoder for VtDecoder {
+        fn decode(&mut self, data: &[u8]) -> DecoderResult<DecodedFrame> {
+            self.decode_yuv420(data).map(|f| f.to_rgba())
+        }
+
+        fn decode_yuv420(&mut self, data: &[u8]) -> DecoderResult<Yuv420Frame> {
+            let data = to_annex_b(data);
+            let (mut sps, mut pps, mut avcc) = (None, None, Vec::with_capacity(data.len() + 16));
+            for nal in nal_units(&data) {
+                match nal[0] & 0x1f {
+                    7 => sps = Some(nal),
+                    8 => pps = Some(nal),
+                    9 | 6 => {} // Trennzeichen, SEI: nicht nötig
+                    _ => {
+                        avcc.extend_from_slice(&(nal.len() as u32).to_be_bytes());
+                        avcc.extend_from_slice(nal);
+                    }
+                }
+            }
+            // Neue Parametersätze (Auflösung geändert, neuer Strom): Sitzung neu aufbauen.
+            let changed = sps.is_some_and(|s| s != self.sps) || pps.is_some_and(|p| p != self.pps);
+            if changed || self.session.is_none() {
+                if let Some(s) = sps {
+                    self.sps = s.to_vec();
+                }
+                if let Some(p) = pps {
+                    self.pps = p.to_vec();
+                }
+                if self.sps.is_empty() || self.pps.is_empty() {
+                    return Err(DecoderError::msg("H.264: kein SPS/PPS"));
+                }
+                self.open()?;
+            }
+            if avcc.is_empty() {
+                return Err(DecoderError::msg("H.264: kein Bild"));
+            }
+            let (nv12, w, h, stride, rows) = self.frame(&avcc)?.ok_or_else(|| DecoderError::msg("H.264: kein Bild"))?;
+            nv12_to_yuv420(&nv12, w, h, stride, rows)
+        }
+
+        fn supports_yuv420(&self) -> bool {
+            true
+        }
+
+        fn wait_until_ready(&mut self) -> bool {
+            true // VideoToolbox gibt es auf jedem unterstützten Mac
+        }
+
+        fn reset(&mut self) {
+            self.close();
+        }
+    }
+
+    impl Drop for VtDecoder {
+        fn drop(&mut self) {
+            self.close();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,7 +502,7 @@ mod tests {
     }
 
     /// Kleinster gültiger H.264-Strom: SPS, PPS und ein IDR-Bild nur aus I_PCM-Makroblöcken (Rohwerte, verlustfrei).
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn ipcm_stream(mbs_w: u32, mbs_h: u32, idr_id: u32, (y, u, v): (u8, u8, u8)) -> Vec<u8> {
         #[derive(Default)]
         struct Bits(Vec<u8>, u32);
@@ -362,6 +612,27 @@ mod tests {
             eprintln!("Media Foundation ohne H.264 (z. B. Windows N): Test übersprungen");
             return;
         }
+        for (i, px) in [(100, 110, 120), (50, 60, 70)].into_iter().enumerate() {
+            let f = d.decode_yuv420(&ipcm_stream(4, 4, i as u32, px)).unwrap();
+            let rgba = f.to_rgba();
+            assert_eq!((rgba.width(), rgba.height()), (64, 64));
+            let reference = Yuv420Frame::new(1, 1, vec![px.0], 1, vec![px.1], vec![px.2], 1).unwrap().to_rgba();
+            assert_eq!(&rgba.data()[..4], reference.data(), "Bild {i}");
+            assert_eq!(&rgba.data()[rgba.data().len() - 4..], reference.data(), "Bild {i}");
+        }
+    }
+
+    #[test]
+    fn nal_units_split() {
+        let s = [0, 0, 0, 1, 0x67, 1, 0, 0, 1, 0x68, 2, 0, 0, 0, 1, 0x65, 3, 0];
+        assert_eq!(nal_units(&s), vec![&[0x67, 1][..], &[0x68, 2][..], &[0x65, 3][..]]);
+    }
+
+    /// VideoToolbox: dieselben zwei I_PCM-Bilder wie unter Windows, Werte exakt.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn videotoolbox_decodes_ipcm() {
+        let mut d = super::vt::VtDecoder::default();
         for (i, px) in [(100, 110, 120), (50, 60, 70)].into_iter().enumerate() {
             let f = d.decode_yuv420(&ipcm_stream(4, 4, i as u32, px)).unwrap();
             let rgba = f.to_rgba();

@@ -140,7 +140,7 @@ die Anzeige (`desktop.ts`) ist für beide Protokolle dieselbe.
   Monitore ein; die Anzeige skaliert die Gesamtfläche deckungsgleich. Bei gemischter Skalierung der
   Monitore kann das Bild leicht unscharf werden (ein Fenster, eine Pixeldichte).
 
-Noch offen: H.264 unter macOS (VideoToolbox), Zwischenablage unter macOS, Drucker. Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
+Noch offen: Bilder und Dateien in der Zwischenablage unter macOS (Text geht, `rdpclip.rs`), Drucker. Ein Ende-zu-Ende-Test gegen `ironrdp-server` ist vorbereitet,
 braucht aber den Server aus dem IronRDP-Git-Repository (die veröffentlichte Version passt nicht zu den
 Client-Crates).
 
@@ -210,8 +210,9 @@ AVC444-Kombination macht ironrdp-egfx. Ohne Decoder (Windows N ohne Media Featur
 `wait_until_ready` false, und der Server bekommt kein AVC angeboten. Dekodiert wird in Software auf dem
 Sitzungs-Thread (ohne D3D11-Manager); für 4K mit hoher Bildrate wäre DXVA der nächste Schritt.
 Getestet mit einem im Test erzeugten H.264-Strom aus I_PCM-Makroblöcken (zwei IDR-Bilder, Werte exakt);
-gegen einen echten Server ungetestet. macOS: VideoToolbox (`VTDecompressionSession`) nach demselben
-Muster, noch offen.
+gegen einen echten Server ungetestet. macOS: VideoToolbox (`VTDecompressionSession`, synchron, NV12 im
+Videobereich) über die C-Schnittstelle ohne zusätzliche Pakete; Parametersätze (SPS/PPS) bauen die Sitzung
+neu auf. Derselbe I_PCM-Test läuft auf dem Mac, Werte exakt; gegen einen echten Server ebenfalls ungetestet.
 
 **Lizenz und Patente (GPL-3.0-or-later):**
 
