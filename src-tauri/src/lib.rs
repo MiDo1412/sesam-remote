@@ -12,6 +12,8 @@ mod profiles;
 mod rdp;
 mod relay;
 mod rdp_redir;
+#[cfg(not(windows))]
+mod rdpclip;
 mod rdstls;
 mod scp;
 #[cfg(target_os = "macos")]
@@ -1266,10 +1268,10 @@ async fn rdp_clipboard(app: &AppHandle, key: String, tx: tokio::sync::mpsc::Unbo
     orx.await.ok().flatten().map(|f| Arc::new(Mutex::new(f)))
 }
 
-// shortcut: Zwischenablage über RDP nur unter Windows; für macOS fehlt ein natives cliprdr-Backend.
+/// macOS und Linux: Text über die Zwischenablage des Systems (rdpclip).
 #[cfg(not(windows))]
-async fn rdp_clipboard(_: &AppHandle, _: String, _: tokio::sync::mpsc::UnboundedSender<rdp::Input>) -> Option<rdp::ClipFactory> {
-    None
+async fn rdp_clipboard(_: &AppHandle, _: String, tx: tokio::sync::mpsc::UnboundedSender<rdp::Input>) -> Option<rdp::ClipFactory> {
+    Some(Arc::new(Mutex::new(Box::new(rdpclip::Factory(tx)))))
 }
 
 fn rdp_clipboard_drop(app: &AppHandle, key: String) {
