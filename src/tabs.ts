@@ -736,8 +736,10 @@ export function runTool(label: string) {
     const j = active ? open.indexOf(active) : -1;
     return activate(open[(j + (label === "Nächster Tab" ? 1 : open.length - 1) + open.length) % open.length]!);
   }
-  if (!active || $("session").hidden) return;
-  active.ctx.toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(label)}"]:not(:disabled)`)?.click();
+  if (!active || $("session").hidden) return false;
+  const b = active.ctx.toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(label)}"]:not(:disabled)`);
+  b?.click();
+  return !!b;
 }
 
 /** Werkzeugknopf mit Icon; Tooltip mit Tastenkürzel. */

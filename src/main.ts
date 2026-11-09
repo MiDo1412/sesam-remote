@@ -1001,7 +1001,17 @@ const command = (cmd: string) => {
   else if (cmd === "terminal") void openTerminal();
   else if (cmd === "new") edit(null);
   else if (cmd === "quick") quick.open();
+  else if (cmd === "close") closeCommand();
 };
+/** ⌘W: Hat das Remote-Bild die Tastatur, gehört ⌘W dem Remotecomputer (⌘ ist schon gedrückt und dort angekommen);
+ *  sonst aktive Sitzung trennen bzw. schliessen, in der Bibliothek das Fenster schliessen. */
+function closeCommand() {
+  const canvas = (document.activeElement as HTMLElement | null)?.closest(".desktop")?.querySelector("canvas");
+  if (canvas) {
+    for (const type of ["keydown", "keyup"]) canvas.dispatchEvent(new KeyboardEvent(type, { code: "KeyW", key: "w", metaKey: true, bubbles: true }));
+  } else if (!$("session").hidden) runTool("Trennen") || runTool("Schliessen");
+  else void import("@tauri-apps/api/window").then((w) => w.getCurrentWindow().close());
+}
 addEventListener("sesam:save-quick", (e) => quick.saveAs((e as CustomEvent<Connection>).detail));
 // Menübefehle gehen an alle Fenster; nur das aktive reagiert.
 listen<string>("cmd", (e) => document.hasFocus() && (!detachedWindow || e.payload === "settings") && command(e.payload));

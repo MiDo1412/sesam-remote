@@ -1491,7 +1491,8 @@ pub fn run() {
                     .item(&MenuItemBuilder::with_id("cmd:terminal", "Neues Terminal").accelerator("CmdOrCtrl+T").build(app)?)
                     .text("cmd:addubuntu", "Ubuntu-PC hinzufügen …")
                     .separator()
-                    .item(&P::close_window(app, Some("Fenster schliessen"))?)
+                    // ⌘W wie in Safari: aktiven Tab schliessen, in der Bibliothek das Fenster (src/main.ts «close»)
+                    .item(&MenuItemBuilder::with_id("cmd:close", "Schliessen").accelerator("CmdOrCtrl+W").build(app)?)
                     .build()?;
                 let edit = SubmenuBuilder::new(app, "Bearbeiten")
                     .item(&P::undo(app, Some("Widerrufen"))?)
