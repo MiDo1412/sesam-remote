@@ -284,6 +284,9 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   canvas.addEventListener("pointerleave", () => ((hover = false), syncHook()));
   window.addEventListener("blur", syncHook);
   window.addEventListener("focus", syncHook);
+  const unlistenPerm = listen("sesam-hook-permission", () => {
+    if (ctx.isActive()) hint("⌘Tab & Co. bleiben vorerst auf dem Mac: Sesam braucht dafür die Freigabe unter Systemeinstellungen › Datenschutz & Sicherheit. Danach erneut ins Remote-Bild klicken.", 12000);
+  });
   const unlistenHook = listen<{ code: string; down: boolean }>("sesam-hook-key", (ev) => {
     if (!imageActive() || !ctx.isActive()) return;
     const { code, down } = ev.payload;
@@ -508,6 +511,7 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
     window.removeEventListener("blur", syncHook);
     window.removeEventListener("focus", syncHook);
     unlistenHook.then((u) => u());
+    unlistenPerm.then((u) => u());
     invoke("kbhook_set", { active: false }).catch(() => {});
     clearTimeout(barTimer);
     clearInterval(qTimer);

@@ -82,10 +82,13 @@ ironrdp-cliprdr-native = "0.9"
 # H.264 (EGFX AVC) über Media Foundation; dieselbe Version wie bei cpal/ironrdp im Baum
 windows = { version = "0.62", features = ["Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Win32_System_Threading"] }
 
-# SF Symbols für die Oberfläche (src/sfsymbol.rs); dieselben Versionen, die Tauri schon mitbringt
+# SF Symbols (src/sfsymbol.rs) und Tastatur-Tap; dieselben Pakete und Versionen, die Tauri schon mitbringt
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSFontDescriptor", "objc2-core-foundation"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSDictionary", "NSData"] }
+# Tastatur-Tap für ⌘Tab & Co. am Remotecomputer (src/kbhook.rs)
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGEvent", "CGEventTypes", "CGRemoteOperation"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFMachPort", "CFRunLoop"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

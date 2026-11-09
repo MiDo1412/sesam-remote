@@ -296,11 +296,138 @@ mod imp {
 pub use imp::{calls, helper, init, selftest, set_active};
 
 // shortcut: auf macOS/Linux noch kein Abfangen (macOS bräuchte einen CGEventTap mit Bedienungshilfen-Freigabe), die Kombinationen bleiben beim System.
-#[cfg(not(windows))]
+/// macOS: ein Ereignis-Tap im Sesam-Prozess fängt ⌘Tab, ⌘Leertaste, ⌃Pfeile usw. ab, solange Sesam vorne ist und
+/// das Remote-Bild aktiv ist. Der Tap entsteht erst beim ersten Bedarf, damit die Freigabe-Abfrage von macOS
+/// («Bedienungshilfen» bzw. «Gerätesteuerung») nur kommt, wenn jemand ein Remote-Bild benutzt.
+#[cfg(target_os = "macos")]
+mod mac {
+    use objc2_core_foundation::{kCFRunLoopCommonModes, CFMachPort, CFRunLoop};
+    use objc2_core_graphics::{
+        CGEvent, CGEventField, CGEventFlags, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy, CGEventType,
+    };
+    use std::ptr::NonNull;
+    use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+    use std::sync::OnceLock;
+    use tauri::{AppHandle, Emitter};
+
+    static APP: OnceLock<AppHandle> = OnceLock::new();
+    static ACTIVE: AtomicBool = AtomicBool::new(false);
+    static STARTED: AtomicBool = AtomicBool::new(false);
+    static ASKED: AtomicBool = AtomicBool::new(false);
+    static TAP: AtomicPtr<CFMachPort> = AtomicPtr::new(std::ptr::null_mut());
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    /// Tasten (Mac-Tastencode), deren Drücken abgefangen wurde: ihr Loslassen gehört auch nach drüben.
+    static HELD: [AtomicBool; 128] = [const { AtomicBool::new(false) }; 128];
+
+    #[derive(Clone, serde::Serialize)]
+    struct HookKey {
+        code: &'static str,
+        down: bool,
+    }
+
+    /// DOM-`code` der abzufangenden Taste (Mac-Tastencode), `None` = an macOS weiterreichen.
+    /// ⌘ geht drüben als Win-Taste an (wie bisher über die Webansicht), ⌘Q, ⌘H, ⌘M und ⌘⌥Esc bleiben beim Mac.
+    pub(super) fn grab(key: u16, cmd: bool, ctrl: bool) -> Option<&'static str> {
+        match key {
+            48 if cmd => Some("Tab"),            // ⌘Tab, ⌘⇧Tab: App-Umschalter
+            50 if cmd => Some("Backquote"),      // ⌘`: Fenster der App
+            49 if cmd || ctrl => Some("Space"),  // ⌘Leertaste: Spotlight, ⌃Leertaste: Eingabequelle
+            20 if cmd => Some("Digit3"),         // ⌘⇧3/4/5: Bildschirmfoto (ohne ⇧ landen sie ohnehin drüben)
+            21 if cmd => Some("Digit4"),
+            23 if cmd => Some("Digit5"),
+            123 if ctrl => Some("ArrowLeft"),    // ⌃Pfeile: Spaces und Mission Control
+            124 if ctrl => Some("ArrowRight"),
+            125 if ctrl => Some("ArrowDown"),
+            126 if ctrl => Some("ArrowUp"),
+            _ => None,
+        }
+    }
+
+    unsafe extern "C-unwind" fn tap(_proxy: CGEventTapProxy, ty: CGEventType, ev: NonNull<CGEvent>, _info: *mut std::ffi::c_void) -> *mut CGEvent {
+        if ty == CGEventType::TapDisabledByTimeout || ty == CGEventType::TapDisabledByUserInput {
+            if let Some(t) = unsafe { TAP.load(Ordering::Relaxed).as_ref() } {
+                CGEvent::tap_enable(t, true);
+            }
+            return ev.as_ptr();
+        }
+        CALLS.fetch_add(1, Ordering::Relaxed);
+        let e = unsafe { ev.as_ref() };
+        let key = CGEvent::integer_value_field(Some(e), CGEventField::KeyboardEventKeycode) as usize & 127;
+        let down = ty == CGEventType::KeyDown;
+        let flags = CGEvent::flags(Some(e));
+        let held = !down && HELD[key].swap(false, Ordering::Relaxed);
+        // Nur Tastenereignisse, die an Sesam gehen (Sesam ist vorne), nicht die anderer Apps.
+        let ours = CGEvent::integer_value_field(Some(e), CGEventField::EventTargetUnixProcessID) == std::process::id() as i64;
+        let caught = if held {
+            grab(key as u16, true, true)
+        } else if ACTIVE.load(Ordering::Relaxed) && ours {
+            grab(key as u16, flags.contains(CGEventFlags::MaskCommand), flags.contains(CGEventFlags::MaskControl))
+        } else {
+            None
+        };
+        let Some(code) = caught else { return ev.as_ptr() };
+        if down {
+            HELD[key].store(true, Ordering::Relaxed);
+        }
+        if let Some(app) = APP.get() {
+            let _ = app.emit("sesam-hook-key", HookKey { code, down });
+        }
+        std::ptr::null_mut() // nicht an macOS (kein App-Umschalter, kein Spotlight, kein Space-Wechsel)
+    }
+
+    /// Tap in einem eigenen Thread mit eigener Run-Loop; meldet, ob macOS ihn zugelassen hat.
+    fn start() -> bool {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mask = (1u64 << CGEventType::KeyDown.0) | (1u64 << CGEventType::KeyUp.0);
+            let port = unsafe {
+                CGEvent::tap_create(CGEventTapLocation::SessionEventTap, CGEventTapPlacement::HeadInsertEventTap, CGEventTapOptions::Default, mask, Some(tap), std::ptr::null_mut())
+            };
+            let (Some(port), Some(rl)) = (port, CFRunLoop::current()) else { return };
+            let Some(src) = CFMachPort::new_run_loop_source(None, Some(&port), 0) else { return };
+            rl.add_source(Some(&src), unsafe { kCFRunLoopCommonModes });
+            TAP.store(objc2_core_foundation::CFRetained::as_ptr(&port).as_ptr(), Ordering::Relaxed);
+            tracing::info!("Tastatur-Tap gestartet");
+            let _ = tx.send(true);
+            CFRunLoop::run(); // läuft bis zum Ende von Sesam; `port` bleibt so lange am Leben
+        });
+        rx.recv().unwrap_or(false)
+    }
+
+    pub fn init(app: AppHandle) {
+        let _ = APP.set(app);
+    }
+
+    pub fn set_active(on: bool) {
+        ACTIVE.store(on, Ordering::Relaxed);
+        if !on || STARTED.load(Ordering::Relaxed) {
+            return;
+        }
+        if start() {
+            STARTED.store(true, Ordering::Relaxed);
+        } else if !ASKED.swap(true, Ordering::Relaxed) {
+            // Ohne Freigabe gibt macOS keinen Tap; einmal je Start nachfragen und in der App erklären.
+            tracing::warn!("Tastatur-Tap: keine Freigabe von macOS");
+            objc2_core_graphics::CGRequestPostEventAccess();
+            if let Some(app) = APP.get() {
+                let _ = app.emit("sesam-hook-permission", ());
+            }
+        }
+    }
+
+    pub fn calls() -> usize {
+        CALLS.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub use mac::{calls, init, set_active};
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn init(_app: tauri::AppHandle) {}
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn set_active(_on: bool) {}
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn calls() -> usize {
     0
 }
@@ -309,6 +436,24 @@ pub fn helper(_owner: u32) {}
 #[cfg(not(windows))]
 pub fn selftest() -> String {
     "Nur unter Windows.".into()
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod mac_tests {
+    use super::mac::grab;
+
+    #[test]
+    fn faengt_nur_systemkuerzel() {
+        assert_eq!(grab(48, true, false), Some("Tab")); // ⌘Tab
+        assert_eq!(grab(48, false, false), None); // Tab allein bleibt in der Webansicht
+        assert_eq!(grab(49, true, false), Some("Space")); // ⌘Leertaste
+        assert_eq!(grab(49, false, true), Some("Space")); // ⌃Leertaste
+        assert_eq!(grab(49, false, false), None);
+        assert_eq!(grab(123, false, true), Some("ArrowLeft")); // ⌃←
+        assert_eq!(grab(123, false, false), None);
+        assert_eq!(grab(12, true, false), None); // ⌘Q bleibt beim Mac
+        assert_eq!(grab(13, true, false), None); // ⌘W geht übers Menü
+    }
 }
 
 #[cfg(all(test, windows))]

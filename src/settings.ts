@@ -75,10 +75,15 @@ export async function openSettings(tab = "general") {
   keysMenu ??= enhanceSelect(keys);
   keysMenu.sync();
   keys.onchange = () => localStorage.setItem(KEY, JSON.stringify({ ...appSettings(), systemKeys: keys.value }));
-  // shortcut: nur Windows fängt die Kombinationen ab (kbhook.rs); auf macOS fehlt der Ereignis-Tap noch.
-  const onWin = navigator.userAgent.includes("Windows");
-  $("system-keys-row").hidden = !onWin;
-  ($("system-keys-row").nextElementSibling as HTMLElement).hidden = !onWin;
+  // Windows und macOS fangen die Kombinationen ab (kbhook.rs), Linux noch nicht.
+  const row = $("system-keys-row");
+  const note = row.nextElementSibling as HTMLElement;
+  row.hidden = note.hidden = !/Windows|Mac/.test(navigator.userAgent);
+  if (navigator.userAgent.includes("Mac")) {
+    row.querySelector("span")!.textContent = "Mac-Tastenkürzel an den Remotecomputer";
+    note.textContent =
+      "Gilt für ⌘Tab, ⌘`, ⌘Leertaste, ⌃Leertaste, ⌃Pfeiltasten und ⌘⇧3/4/5; ⌘ kommt drüben als Windows-Taste an. ⌘Q, ⌘H, ⌘W und ⌘⌥Esc bleiben beim Mac. «Aktiv» heisst: Sesam ist vorne und das Remote-Bild hat den Fokus oder die Maus ist darüber. Dafür braucht Sesam einmal die Freigabe von macOS (Datenschutz & Sicherheit).";
+  }
   for (const r of dlg.querySelectorAll<HTMLInputElement>("[name=appearance]")) {
     r.checked = r.value === appSettings().appearance;
     r.onchange = () => {
