@@ -1,6 +1,6 @@
 /** Zentrale Symbol-Schicht: ein Name je Aktion (ICON.refresh …), Quelle je Plattform.
- *  Windows (und vorerst überall): Fluent System Icons von Microsoft (MIT, @fluentui/svg-icons), Regular 20 px,
- *  als Inline-SVG mit currentColor; nur die gebrauchten Dateien kommen ins Bundle.
+ *  Windows und Linux: Fluent System Icons von Microsoft (MIT, @fluentui/svg-icons), Regular 20 px,
+ *  als Inline-SVG mit currentColor; nur die gebrauchten Dateien kommen ins Bundle. macOS: SF Symbols (unten).
  *  Betriebssystem-Logos: siehe unten. Lizenzen: docs/lizenzen/README.md. */
 import fAdd from "@fluentui/svg-icons/icons/add_20_regular.svg?raw";
 import fArrowClockwise from "@fluentui/svg-icons/icons/arrow_clockwise_20_regular.svg?raw";
@@ -109,7 +109,7 @@ export const ICON = {
   osGeneric: fl(desktopTower, 40),
 };
 
-/** Für macOS/iPadOS vorbereitet: dieselben Namen als SF-Symbol-Namen (nur auf Apple-Geräten erlaubt, ungetestet). */
+/** macOS/iPadOS: dieselben Namen als SF-Symbol-Namen (nur auf Apple-Geräten erlaubt). */
 export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
   refresh: "arrow.clockwise", back: "chevron.backward", forward: "chevron.forward", up: "arrow.up", compare: "arrow.left.arrow.right",
   home: "house", detach: "macwindow.on.rectangle", span: "rectangle.split.3x1", screenshot: "camera", typeClipboard: "doc.on.clipboard",
@@ -120,3 +120,10 @@ export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
   splitDown: "rectangle.split.1x2", screencast: "rectangle.on.rectangle", question: "questionmark.circle", viewGrid: "square.grid.2x2",
   viewList: "list.bullet", settings: "gearshape", pin: "pin", windowed: "arrow.down.right.and.arrow.up.left", more: "ellipsis",
 };
+
+/** macOS: SF Symbols statt Fluent. Das System zeichnet sie (src-tauri/src/sfsymbol.rs); als leeres <svg> mit Maske,
+ *  damit Grössen- und Farbregeln für «svg» in styles.css weiter greifen. */
+export const onApple = navigator.userAgent.includes("Mac");
+export const sf = (name: string, n: number | string = 16) =>
+  `<svg class="sf" xmlns="http://www.w3.org/2000/svg" width="${n}" height="${n}" style="--sf:url('sfsymbol://localhost/${name}?${n}')" aria-hidden="true" focusable="false"></svg>`;
+if (onApple) for (const [k, name] of Object.entries(SF_SYMBOL) as [keyof typeof ICON, string][]) ICON[k] = sf(name, /width="(\d+)"/.exec(ICON[k])?.[1]);

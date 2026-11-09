@@ -14,6 +14,8 @@ mod relay;
 mod rdp_redir;
 mod rdstls;
 mod scp;
+#[cfg(target_os = "macos")]
+mod sfsymbol;
 mod sftp;
 mod ssh;
 mod vault;
@@ -1437,7 +1439,22 @@ pub fn run() {
     if std::env::args().nth(1).as_deref() == Some("--kbhook-helper") {
         return kbhook::helper(std::env::args().nth(2).and_then(|p| p.parse().ok()).unwrap_or(0));
     }
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = builder.register_uri_scheme_protocol("sfsymbol", |_ctx, req| {
+        // sfsymbol://localhost/<name>?<pt>
+        let name = req.uri().path().trim_start_matches('/');
+        let pt = req.uri().query().and_then(|q| q.parse().ok()).filter(|p| (8.0..=64.0).contains(p)).unwrap_or(16.0);
+        let ok = name.len() < 64 && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '.');
+        match ok.then(|| sfsymbol::png(name, pt)).flatten() {
+            Some(png) => tauri::http::Response::builder().header("Content-Type", "image/png").header("Cache-Control", "max-age=31536000")
+                // CSS-Masken laden im CORS-Modus, ohne diese Freigabe bleibt das Symbol leer
+                .header("Access-Control-Allow-Origin", "*").body(png),
+            None => tauri::http::Response::builder().status(404).body(Vec::new()),
+        }
+        .unwrap()
+    });
+    builder
         // Zweiter Start (z. B. Klick auf eine Verknüpfung): Link an die laufende App, Fenster nach vorne.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
@@ -1527,6 +1544,18 @@ pub fn run() {
             } else if let Some(w) = app.get_webview_window("main") {
                 w.set_decorations(false)?;
                 let _ = w.set_shadow(true);
+            }
+            // Nur Debug-Build: Testskript aus $SESAM_DIAG_JS (Datei) im Hauptfenster ausführen, dann löschen; für Tests ohne Maus/Tastatur.
+            #[cfg(debug_assertions)]
+            if let Ok(path) = std::env::var("SESAM_DIAG_JS") {
+                let h = app.handle().clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    if let (Ok(js), Some(w)) = (std::fs::read_to_string(&path), h.get_webview_window("main")) {
+                        let _ = std::fs::remove_file(&path);
+                        let _ = w.eval(&js);
+                    }
+                });
             }
             app.on_menu_event(|app, e| {
                 if let Some(topic) = e.id().as_ref().strip_prefix("help:") {

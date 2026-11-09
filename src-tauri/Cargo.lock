@@ -5854,6 +5854,8 @@ dependencies = [
  "keyring",
  "md5",
  "num-bigint 0.5.1",
+ "objc2-app-kit",
+ "objc2-foundation",
  "png",
  "portable-pty",
  "russh",

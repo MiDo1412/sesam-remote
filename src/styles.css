@@ -676,3 +676,6 @@ dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; paddin
 .win-btn.more { width: 40px; margin: 4px 0; height: auto; border-radius: 6px; }
 .win-btn.more:hover, .win-btn.more[aria-expanded="true"] { background: var(--hover); }
 .win-sep { width: 1px; margin: 9px 12px 9px 12px; background: var(--line, rgba(128, 128, 128, 0.3)); }
+
+/* SF Symbols (macOS, src/icons.ts): Farbe aus currentColor, Form aus der vom System gezeichneten Maske */
+svg.sf { background-color: currentColor; -webkit-mask: var(--sf) center / contain no-repeat; mask: var(--sf) center / contain no-repeat; }

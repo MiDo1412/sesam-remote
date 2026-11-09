@@ -20,5 +20,5 @@ Die OFL erlaubt das Bündeln mit Software, auch unter GPL-3.0; die Schriften sel
 
 Ins Programm kommen nur die tatsächlich benutzten SVG-Dateien (als Inline-SVG). Das Windows-Zeichen (vier Felder)
 ist selbst gezeichnet, weil Simple Icons es nicht mehr führt. Die Logos stehen nur zur Kennzeichnung des
-Betriebssystems eines Zielrechners; die Marken gehören ihren Inhabern. Auf macOS und iPadOS sind
-SF Symbols von Apple vorgesehen; sie werden nicht mitgeliefert und dürfen nur auf Apple-Geräten verwendet werden.
+Betriebssystems eines Zielrechners; die Marken gehören ihren Inhabern. Auf macOS zeigt Sesam
+für Werkzeug- und Menüsymbole statt Fluent die SF Symbols von Apple; das System zeichnet sie zur Laufzeit (`src-tauri/src/sfsymbol.rs`), sie werden nicht mitgeliefert und dürfen nur auf Apple-Geräten verwendet werden.

@@ -1,4 +1,4 @@
-import { fl } from "./icons";
+import { fl, onApple, sf } from "./icons";
 import chevronDown from "@fluentui/svg-icons/icons/chevron_down_20_regular.svg?raw";
 import checkmark from "@fluentui/svg-icons/icons/checkmark_20_regular.svg?raw";
 /** Menüs im Stil von macOS: Pull-down (Aktionen) und Pop-up mit Häkchen (Auswahlwerte).
@@ -19,8 +19,8 @@ export interface MenuItem {
   separator?: boolean;
 }
 
-export const ICON_CHEVRON = fl(chevronDown, 12);
-export const ICON_CHECK = fl(checkmark, 14);
+export const ICON_CHEVRON = onApple ? sf("chevron.down", 12) : fl(chevronDown, 12);
+export const ICON_CHECK = onApple ? sf("checkmark", 14) : fl(checkmark, 14);
 
 let current: { close: (value: string | null) => void } | null = null;
 

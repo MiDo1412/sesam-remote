@@ -43,6 +43,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Bleibt verbunden:** RDP verbindet nach einem kurzen Netzabbruch selbst wieder.
 - **Klare Hinweise:** lehnt ein Rechner die Verbindung ab, sagt Sesam warum und was zu tun ist, passend zum Servertyp.
 - **Ruhige Oberfläche:** eigene Titelleiste unter Windows, kurzes App-Menü (Symbol mit drei Linien oder Alt), Symbole im Stil des Systems.
+- **Symbole wie in macOS:** Auf dem Mac zeigt Sesam die Symbole von Apple (SF Symbols), gezeichnet vom System selbst; unter Windows und Linux bleiben die Fluent-Symbole.
 
 ### Betrieb
 
