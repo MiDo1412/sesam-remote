@@ -453,20 +453,20 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   const spanBtn = toolButton(ICON.span, "Alle Monitore", () => toggleSpan(), { shortcut: "nur RDP", secondary: true });
   spanBtn.hidden = !rdp;
   // Verbindungsqualität: Bildrate, Datenmenge (dekodiert) und Latenz (TCP-Verbindungsaufbau), alle 2 s.
-  const stats = { rects: 0, bytes: 0, ms: null as number | null, tick: 0 };
+  const stats = { frames: 0, bytes: 0, ms: null as number | null, tick: 0 };
   const quality = Object.assign(document.createElement("span"), { className: "quality" });
   quality.setAttribute("aria-live", "off");
   const qTimer = window.setInterval(async () => {
     if (!sid || !ctx.isActive()) return;
     if (stats.tick++ % 5 === 0 && !c.id.startsWith("quick")) stats.ms = await api.connReach(c.id).catch(() => null);
-    const fps = Math.round(stats.rects / 2);
+    const fps = Math.round(stats.frames / 2);
     const mb = stats.bytes / 2 / 1e6;
     quality.textContent = `${fps} fps · ${mb < 1 ? `${Math.round(mb * 1000)} KB/s` : `${mb.toFixed(1)} MB/s`}${stats.ms != null ? ` · ${stats.ms} ms` : ""}`;
     quality.title = `Verbindungsqualität (${rdp ? "RDP" : "VNC"})
-Bildaktualisierungen pro Sekunde: ${fps}
+Bilder pro Sekunde: ${fps}
 Bilddaten (entpackt): ${mb.toFixed(2)} MB/s${stats.ms != null ? `
 Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
-    stats.rects = stats.bytes = 0;
+    stats.frames = stats.bytes = 0;
   }, 2000);
   ctx.toolbar.prepend(quality, orientBtn, toolSep());
   ctx.toolbar.append(
@@ -525,14 +525,20 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
   // ---------- Bild vom Server ----------
   const onFrame = (buf: ArrayBuffer) => {
     const v = new DataView(buf);
-    if (v.getUint8(0) === 0) (stats.rects++, (stats.bytes += buf.byteLength));
     const text = () => new TextDecoder().decode(new Uint8Array(buf, 1));
     switch (v.getUint8(0)) {
-      case 0: {
+      case 7: {
+        // Ein Bild: alle geänderten Rechtecke, danach bestätigen, damit das nächste kommt.
         if (!gotImage && status.textContent?.startsWith(NO_IMAGE)) status.textContent = "";
         gotImage = true;
-        const [x, y, w, h] = [v.getUint16(1), v.getUint16(3), v.getUint16(5), v.getUint16(7)];
-        g.putImageData(new ImageData(new Uint8ClampedArray(buf, 9, w * h * 4), w, h), x, y);
+        stats.frames++;
+        stats.bytes += buf.byteLength;
+        for (let i = 0, at = 3, n = v.getUint16(1); i < n; i++) {
+          const [x, y, w, h] = [v.getUint16(at), v.getUint16(at + 2), v.getUint16(at + 4), v.getUint16(at + 6)];
+          g.putImageData(new ImageData(new Uint8ClampedArray(buf, at + 8, w * h * 4), w, h), x, y);
+          at += 8 + w * h * 4;
+        }
+        if (sid) api.desktopAck(sid).catch(() => {});
         break;
       }
       case 1:

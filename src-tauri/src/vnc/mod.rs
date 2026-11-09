@@ -6,7 +6,7 @@ pub mod clipboard;
 pub mod decode;
 pub mod tls;
 
-use decode::{Framebuffer, Rect, Zrle};
+use decode::{Framebuffer, Rect, Zrle, add_dirty};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
@@ -26,7 +26,8 @@ const MAX_LEN: u32 = 64 << 20;
 #[derive(Debug, PartialEq)]
 pub enum Event {
     Resize { width: u16, height: u16 },
-    Rect { rect: Rect, rgba: Vec<u8> },
+    /// Alle geänderten Rechtecke eines Bilds in einer Nachricht; die Oberfläche bestätigt es mit `ack`.
+    Frame(Vec<(Rect, Vec<u8>)>),
     Clipboard(String),
     Bell,
     /// Lokaler Mauszeiger: Hotspot, Grösse, RGBA (0×0 = unsichtbar).
@@ -304,14 +305,22 @@ fn set_desktop_size(w: u16, h: u16, screen: Option<Screen>) -> Vec<u8> {
 struct Shared {
     /// Server kann SetDesktopSize (hat ExtendedDesktopSize geschickt).
     resizable: bool,
+    /// Server hat eine Grössenänderung abgelehnt: nicht weiter fragen.
+    refused: bool,
     screen: Option<Screen>,
     ext_clipboard: bool,
     /// Zuletzt lokal kopierter Text, für Request vom Server.
     clip_text: String,
 }
 
+/// Bilder, die die Oberfläche noch zeichnen darf: so viele gehen gleichzeitig über den Kanal, dann wartet
+/// Sesam mit der nächsten Anfrage, bis eines bestätigt ist. Ohne Grenze stauen sich auf dem Mac die
+/// Nachrichten in der Webansicht (jede kostet dort einen eigenen Abruf) und das Bild läuft immer weiter hinterher.
+pub const FRAMES_IN_FLIGHT: usize = 2;
+
 pub struct Session {
     out: UnboundedSender<Vec<u8>>,
+    credit: Arc<tokio::sync::Semaphore>,
     shared: Arc<Mutex<Shared>>,
     reader: tokio::task::JoinHandle<()>,
 }
@@ -332,10 +341,11 @@ impl Session {
             }
         });
         let shared = Arc::new(Mutex::new(Shared::default()));
-        let (o, sh) = (out.clone(), shared.clone());
+        let credit = Arc::new(tokio::sync::Semaphore::new(FRAMES_IN_FLIGHT));
+        let (o, sh, cr) = (out.clone(), shared.clone(), credit.clone());
         let reader = tokio::spawn(async move {
             emit(Event::Resize { width: init.width, height: init.height });
-            let mut st = Reader { rd: BufReader::with_capacity(1 << 16, rd), fb: Framebuffer::new(init.width, init.height), zrle: Zrle::default(), out: o, shared: sh };
+            let mut st = Reader { rd: BufReader::with_capacity(1 << 16, rd), fb: Framebuffer::new(init.width, init.height), zrle: Zrle::default(), out: o, shared: sh, credit: cr };
             let _ = st.out.send(update_request(false, init.width, init.height));
             let reason = loop {
                 match st.message(&emit).await {
@@ -346,7 +356,14 @@ impl Session {
             };
             emit(Event::Closed(reason));
         });
-        Session { out, shared, reader }
+        Session { out, credit, shared, reader }
+    }
+
+    /// Die Oberfläche hat ein Bild gezeichnet.
+    pub fn ack(&self) {
+        if self.credit.available_permits() < FRAMES_IN_FLIGHT {
+            self.credit.add_permits(1);
+        }
     }
 
     pub fn send(&self, msg: Vec<u8>) {
@@ -384,6 +401,7 @@ struct Reader<R> {
     zrle: Zrle,
     out: UnboundedSender<Vec<u8>>,
     shared: Arc<Mutex<Shared>>,
+    credit: Arc<tokio::sync::Semaphore>,
 }
 
 impl<R: AsyncRead + Unpin> Reader<R> {
@@ -417,18 +435,18 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                         ENC_RAW => {
                             let px = self.bytes(r.w as u32 * r.h as u32 * 4).await?;
                             self.fb.raw(r, &px)?;
-                            dirty.push(r);
+                            add_dirty(&mut dirty, r);
                         }
                         ENC_COPYRECT => {
                             let (sx, sy) = (self.rd.read_u16().await.map_err(io)?, self.rd.read_u16().await.map_err(io)?);
                             self.fb.copy_rect(r, sx, sy)?;
-                            dirty.push(r);
+                            add_dirty(&mut dirty, r);
                         }
                         ENC_ZRLE => {
                             let len = self.rd.read_u32().await.map_err(io)?;
                             let data = self.bytes(len).await?;
                             self.zrle.decode(&mut self.fb, r, &data)?;
-                            dirty.push(r);
+                            add_dirty(&mut dirty, r);
                         }
                         ENC_DESKTOP_SIZE => new_size = Some((r.w, r.h)),
                         ENC_EXT_DESKTOP_SIZE => {
@@ -441,21 +459,31 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                                 let flags = self.rd.read_u32().await.map_err(io)?;
                                 first.get_or_insert(Screen { id, flags });
                             }
-                            {
+                            // x = Grund (1 = Antwort auf unsere Anfrage), y = Status (0 = ok, 1–3 abgelehnt, 4 = weitergeleitet).
+                            let refused = r.x == 1 && matches!(r.y, 1..=3);
+                            let first_refusal = {
                                 let mut sh = self.shared.lock().unwrap();
-                                sh.resizable = true;
                                 sh.screen = first.or(sh.screen);
-                            }
-                            // x = Grund (1 = unsere Anfrage), y = Status (0 = ok).
-                            if r.x == 1 && r.y != 0 {
-                                let why = match r.y {
-                                    1 => "vom Server nicht erlaubt",
-                                    2 => "keine Ressourcen",
-                                    3 => "ungültige Grösse",
-                                    _ => "unbekannter Fehler",
-                                };
-                                if !emit(Event::Info(format!("Auflösung nicht geändert: {why}"))) {
-                                    return Ok(false);
+                                let was = !sh.refused;
+                                if refused {
+                                    // Nicht bei jeder Fenstergrösse neu fragen: ab jetzt skalieren.
+                                    sh.resizable = false;
+                                    sh.refused = true;
+                                } else if !sh.refused {
+                                    sh.resizable = true;
+                                }
+                                refused && was
+                            };
+                            if refused {
+                                if first_refusal {
+                                    let why = match r.y {
+                                        1 => "nicht erlaubt",
+                                        2 => "keine Ressourcen frei",
+                                        _ => "Grösse passt nicht",
+                                    };
+                                    if !emit(Event::Info(format!("Der Server ändert seine Auflösung nicht ({why}); die Anzeige wird skaliert."))) {
+                                        return Ok(false);
+                                    }
                                 }
                                 continue;
                             }
@@ -484,8 +512,13 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                         }
                     }
                 }
-                for rect in dirty {
-                    if rect.w > 0 && rect.h > 0 && !emit(Event::Rect { rect, rgba: self.fb.crop(rect) }) {
+                if !dirty.is_empty() {
+                    // Warten, bis die Oberfläche ein Bild abgearbeitet hat (höchstens 1 s, falls eine Bestätigung verloren ging).
+                    if let Ok(Ok(p)) = tokio::time::timeout(std::time::Duration::from_secs(1), self.credit.acquire()).await {
+                        p.forget();
+                    }
+                    let frame = dirty.into_iter().map(|r| (r, self.fb.crop(r))).collect();
+                    if !emit(Event::Frame(frame)) {
                         return Ok(false);
                     }
                 }
@@ -680,7 +713,7 @@ mod tests {
         m.extend([1, 2, 3, 0]);
         s.write_all(&m).await.unwrap();
         let ev = rx.recv().await.unwrap();
-        assert_eq!(ev, Event::Rect { rect: Rect { x: 0, y: 0, w: 1, h: 1 }, rgba: vec![1, 2, 3, 255] });
+        assert_eq!(ev, Event::Frame(vec![(Rect { x: 0, y: 0, w: 1, h: 1 }, vec![1, 2, 3, 255])]));
         s.read_exact(&mut req).await.unwrap();
         assert_eq!(req[1], 1, "danach inkrementell");
 
@@ -689,6 +722,18 @@ mod tests {
         s.read_exact(&mut sds).await.unwrap();
         assert_eq!(&sds[..6], &[251, 0, 0x07, 0x80, 0x04, 0x38]);
         assert_eq!(&sds[8..12], &7u32.to_be_bytes());
+
+        // Server lehnt ab (Status 1): einmal ruhig melden, danach nicht mehr fragen.
+        let mut no = vec![0, 0, 0, 1, 0, 1, 0, 1, 0x07, 0x80, 0x04, 0x38];
+        no.extend(ENC_EXT_DESKTOP_SIZE.to_be_bytes());
+        no.extend([1, 0, 0, 0]);
+        no.extend(7u32.to_be_bytes());
+        no.extend([0, 0, 0, 0, 0, 2, 0, 1]);
+        no.extend(0u32.to_be_bytes());
+        s.write_all(&no).await.unwrap();
+        assert!(matches!(rx.recv().await, Some(Event::Info(t)) if t.contains("nicht erlaubt") && t.contains("skaliert")));
+        s.read_exact(&mut req).await.unwrap();
+        assert!(!session.set_size(1280, 720), "nach Ablehnung nicht mehr fragen");
 
         // Alte ServerCutText-Nachricht (Latin-1).
         s.write_all(&[3, 0, 0, 0, 0, 0, 0, 2, 0xE4, b'!']).await.unwrap();

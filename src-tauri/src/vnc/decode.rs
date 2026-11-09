@@ -11,6 +11,38 @@ pub struct Rect {
     pub h: u16,
 }
 
+impl Rect {
+    fn right(&self) -> u32 {
+        u32::from(self.x) + u32::from(self.w)
+    }
+    fn bottom(&self) -> u32 {
+        u32::from(self.y) + u32::from(self.h)
+    }
+    fn union(&self, o: &Rect) -> Rect {
+        let (x, y) = (self.x.min(o.x), self.y.min(o.y));
+        Rect { x, y, w: (self.right().max(o.right()) - u32::from(x)) as u16, h: (self.bottom().max(o.bottom()) - u32::from(y)) as u16 }
+    }
+    fn touches(&self, o: &Rect) -> bool {
+        u32::from(self.x) <= o.right() && u32::from(o.x) <= self.right() && u32::from(self.y) <= o.bottom() && u32::from(o.y) <= self.bottom()
+    }
+}
+
+/// Geänderte Fläche sammeln, bis die Oberfläche das nächste Bild abholt: Überlappendes wird vereint,
+/// ab 32 Stücken alles zu einem Rechteck (weniger Kopien und Nachrichten als viele kleine).
+pub fn add_dirty(list: &mut Vec<Rect>, mut r: Rect) {
+    if r.w == 0 || r.h == 0 {
+        return;
+    }
+    while let Some(i) = list.iter().position(|d| d.touches(&r)) {
+        r = r.union(&list.swap_remove(i));
+    }
+    list.push(r);
+    if list.len() > 32 {
+        let all = list.iter().fold(list[0], |a, b| a.union(b));
+        *list = vec![all];
+    }
+}
+
 pub struct Framebuffer {
     pub width: u16,
     pub height: u16,
@@ -227,6 +259,22 @@ impl Reader<'_> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dirty_vereint_ueberlappende_und_begrenzt_die_anzahl() {
+        use super::{add_dirty, Rect};
+        let mut l = Vec::new();
+        add_dirty(&mut l, Rect { x: 0, y: 0, w: 10, h: 10 });
+        add_dirty(&mut l, Rect { x: 5, y: 5, w: 10, h: 10 });
+        assert_eq!(l, vec![Rect { x: 0, y: 0, w: 15, h: 15 }]);
+        add_dirty(&mut l, Rect { x: 100, y: 100, w: 1, h: 1 });
+        add_dirty(&mut l, Rect { x: 0, y: 0, w: 0, h: 5 });
+        assert_eq!(l.len(), 2);
+        for i in 0..40 {
+            add_dirty(&mut l, Rect { x: 200 + i * 3, y: 300, w: 1, h: 1 });
+        }
+        assert!(l.len() <= 32, "zusammengefasst: {}", l.len());
+        assert!(l.iter().any(|r| r.x == 0 && r.y == 0 && r.w >= 200 && r.h == 301), "eines umfasst alles Frühere");
+    }
     use super::*;
     use flate2::{Compress, Compression, FlushCompress};
 

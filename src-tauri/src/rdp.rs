@@ -5,7 +5,8 @@
 use crate::diag;
 use crate::rdp_redir::{self, Redir};
 use crate::vnc::Event;
-use crate::vnc::decode::Rect;
+use crate::vnc::decode::{Rect, add_dirty};
+use crate::vnc::FRAMES_IN_FLIGHT;
 use crate::vnc::tls::{CERT_CHANGED, CERT_UNKNOWN, fingerprint};
 use ironrdp_cliprdr::backend::{ClipboardMessage, ClipboardMessageProxy, CliprdrBackendFactory};
 use ironrdp_cliprdr::CliprdrClient;
@@ -93,6 +94,8 @@ pub enum Input {
     Disconnect,
     /// Vom Zwischenablage-Backend.
     Clipboard(ClipboardMessage),
+    /// Die Oberfläche hat ein Bild gezeichnet.
+    Ack,
 }
 
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
@@ -1096,6 +1099,10 @@ async fn active(
     let mut first_image = false;
     let mut shown_scale = scale;
     let mut grey_ticks = 0;
+    // Geändertes sammeln und als ein Bild schicken, sobald die Oberfläche bereit ist (siehe vnc::FRAMES_IN_FLIGHT).
+    let mut dirty: Vec<Rect> = Vec::new();
+    let mut credit = FRAMES_IN_FLIGHT;
+    let mut last_frame = std::time::Instant::now();
 
     loop {
         let outputs = tokio::select! {
@@ -1175,6 +1182,10 @@ async fn active(
                         }
                         continue;
                     }
+                    Input::Ack => {
+                        credit = (credit + 1).min(FRAMES_IN_FLIGHT);
+                        Vec::new()
+                    }
                     Input::Disconnect => continue, // oben behandelt
                     Input::ReleaseAll => {
                         let events = input.release_all();
@@ -1207,8 +1218,12 @@ async fn active(
                         continue;
                     }
                 };
-                let events = input.apply(ops);
-                stage.process_fastpath_input(&mut image, &events).map_err(err)?
+                if ops.is_empty() {
+                    Vec::new()
+                } else {
+                    let events = input.apply(ops);
+                    stage.process_fastpath_input(&mut image, &events).map_err(err)?
+                }
             }
         };
 
@@ -1229,6 +1244,7 @@ async fn active(
                     if (image.width(), image.height()) != shown {
                         shown = (image.width(), image.height());
                         tracing::info!(width = shown.0, height = shown.1, "RDP: neue Bildgrösse");
+                        dirty.clear();
                         if !emit(Event::Resize { width: shown.0, height: shown.1 }) {
                             return Ok(Flow::Closed("Fenster geschlossen".into()));
                         }
@@ -1238,9 +1254,7 @@ async fn active(
                             first_image = true;
                             tracing::info!(ms = started.elapsed().as_millis() as u64, "RDP: erstes Bild nach dem Verbindungsaufbau");
                         }
-                        if !emit(Event::Rect { rect, rgba: crop(&image, rect) }) {
-                            return Ok(Flow::Closed("Fenster geschlossen".into()));
-                        }
+                        add_dirty(&mut dirty, rect);
                     }
                 }
                 ActiveStageOutput::PointerDefault => {
@@ -1302,6 +1316,7 @@ async fn active(
                                 ) {
                                     return Err("Ungültige Kanalgrösse bei der Reaktivierung".into());
                                 }
+                                dirty.clear();
                                 if !emit(Event::Resize { width: desktop_size.width, height: desktop_size.height }) {
                                     return Ok(Flow::Closed("Fenster geschlossen".into()));
                                 }
@@ -1314,6 +1329,20 @@ async fn active(
                 ActiveStageOutput::ServerRedirection(r) => return Ok(Flow::Redirect(Redir::from(&*r))),
                 ActiveStageOutput::Terminate(reason) => return Ok(Flow::Closed(reason.to_string())),
                 _ => {}
+            }
+        }
+        // Bild schicken, wenn die Oberfläche bereit ist (oder eine Bestätigung seit 1 s fehlt).
+        if !dirty.is_empty() && (credit > 0 || last_frame.elapsed() > std::time::Duration::from_secs(1)) {
+            let (w, h) = (u32::from(image.width()), u32::from(image.height()));
+            let frame: Vec<_> = dirty
+                .drain(..)
+                .filter(|r| u32::from(r.x) + u32::from(r.w) <= w && u32::from(r.y) + u32::from(r.h) <= h)
+                .map(|r| (r, crop(&image, r)))
+                .collect();
+            credit = credit.saturating_sub(1);
+            last_frame = std::time::Instant::now();
+            if !frame.is_empty() && !emit(Event::Frame(frame)) {
+                return Ok(Flow::Closed("Fenster geschlossen".into()));
             }
         }
     }
@@ -1578,17 +1607,19 @@ mod probe {
         let emit = move |e: Event| {
             match e {
                 Event::Resize { width, height } => *fb2.lock().unwrap() = (width, height, vec![0; width as usize * height as usize * 4]),
-                Event::Rect { rect, rgba } => {
+                Event::Frame(list) => {
                     let mut g = fb2.lock().unwrap();
                     let w = g.0 as usize;
-                    for row in 0..rect.h as usize {
-                        let dst = ((rect.y as usize + row) * w + rect.x as usize) * 4;
-                        let src = row * rect.w as usize * 4;
-                        if dst + rect.w as usize * 4 <= g.2.len() {
-                            g.2[dst..dst + rect.w as usize * 4].copy_from_slice(&rgba[src..src + rect.w as usize * 4]);
+                    for (rect, rgba) in list {
+                        for row in 0..rect.h as usize {
+                            let dst = ((rect.y as usize + row) * w + rect.x as usize) * 4;
+                            let src = row * rect.w as usize * 4;
+                            if dst + rect.w as usize * 4 <= g.2.len() {
+                                g.2[dst..dst + rect.w as usize * 4].copy_from_slice(&rgba[src..src + rect.w as usize * 4]);
+                            }
                         }
+                        rects2.fetch_add(1, Ordering::Relaxed);
                     }
-                    rects2.fetch_add(1, Ordering::Relaxed);
                 }
                 Event::Info(i) if !i.is_empty() => println!("Hinweis: {i}"),
                 Event::Closed(why) => println!("Beendet: {why}"),

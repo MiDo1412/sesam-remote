@@ -1053,6 +1053,18 @@ fn load_pins(path: &std::path::Path) -> HashMap<String, String> {
 }
 
 /// Binärrahmen ans Frontend (Big Endian): 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis, 6 Mauszeiger.
+/// Ein Bild mit allen geänderten Rechtecken (Art 7): Anzahl, dann je x, y, b, h und RGBA.
+fn frame_rects(list: &[(vnc::decode::Rect, Vec<u8>)]) -> InvokeResponseBody {
+    let mut b = Vec::with_capacity(3 + list.iter().map(|(_, p)| 8 + p.len()).sum::<usize>());
+    b.push(7);
+    b.extend((list.len() as u16).to_be_bytes());
+    for (r, px) in list {
+        [r.x, r.y, r.w, r.h].iter().for_each(|n| b.extend(n.to_be_bytes()));
+        b.extend_from_slice(px);
+    }
+    InvokeResponseBody::Raw(b)
+}
+
 fn frame(kind: u8, nums: &[u16], tail: &[u8]) -> InvokeResponseBody {
     let mut b = Vec::with_capacity(1 + nums.len() * 2 + tail.len());
     b.push(kind);
@@ -1110,7 +1122,7 @@ async fn vnc_open(
     let (sh, events) = (share.clone(), on_event.clone());
     let session = vnc::Session::start(stream, init, move |e| {
         let f = match e {
-            vnc::Event::Rect { rect: r, rgba } => frame(0, &[r.x, r.y, r.w, r.h], &rgba),
+            vnc::Event::Frame(list) => frame_rects(&list),
             vnc::Event::Resize { width, height } => frame(1, &[width, height], &[]),
             vnc::Event::Closed(why) => frame(3, &[], why.as_bytes()),
             vnc::Event::Bell => frame(4, &[], &[]),
@@ -1150,6 +1162,16 @@ async fn vnc_open(
 
 fn with_desktop<T>(d: &Desktops, sid: &str, f: impl FnOnce(&Desktop) -> T) -> Result<T, String> {
     d.0.lock().unwrap().get(sid).map(f).ok_or_else(|| "Desktop-Sitzung geschlossen".into())
+}
+
+/// Die Oberfläche hat ein Bild gezeichnet (VNC oder RDP): das nächste darf kommen.
+#[tauri::command]
+fn desktop_ack(desktops: State<Desktops>, sessions: State<RdpSessions>, sid: String) {
+    if let Some(d) = desktops.0.lock().unwrap().get(&sid) {
+        d.session.ack();
+    } else if let Some(s) = sessions.0.lock().unwrap().get(&sid) {
+        s.send(rdp::Input::Ack);
+    }
 }
 
 #[tauri::command]
@@ -1285,7 +1307,7 @@ fn rdp_clipboard_drop(app: &AppHandle, key: String) {
 
 fn screen_frame(e: vnc::Event) -> Option<InvokeResponseBody> {
     Some(match e {
-        vnc::Event::Rect { rect: r, rgba } => frame(0, &[r.x, r.y, r.w, r.h], &rgba),
+        vnc::Event::Frame(list) => frame_rects(&list),
         vnc::Event::Resize { width, height } => frame(1, &[width, height], &[]),
         vnc::Event::Closed(why) => frame(3, &[], why.as_bytes()),
         vnc::Event::Bell => frame(4, &[], &[]),
@@ -1602,6 +1624,7 @@ pub fn run() {
             shell_resize,
             shell_close,
             vnc_open,
+            desktop_ack,
             vnc_pointer,
             vnc_key,
             vnc_set_size,

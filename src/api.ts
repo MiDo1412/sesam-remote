@@ -200,6 +200,7 @@ export const api = {
     ch.onmessage = (m) => onFrame(asArrayBuffer(m));
     return invoke<string>("vnc_open", { id, trust, remember, onEvent: ch });
   },
+  desktopAck: (sid: string) => invoke<void>("desktop_ack", { sid }),
   vncPointer: (sid: string, mask: number, x: number, y: number) => invoke<void>("vnc_pointer", { sid, mask, x, y }),
   vncKey: (sid: string, down: boolean, keysym: number) => invoke<void>("vnc_key", { sid, down, keysym }),
   vncSetSize: (sid: string, width: number, height: number) => invoke<boolean>("vnc_set_size", { sid, width, height }),
