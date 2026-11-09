@@ -1502,7 +1502,10 @@ pub fn run() {
                     .item(&P::paste(app, Some("Einsetzen"))?)
                     .item(&P::select_all(app, Some("Alles auswählen"))?)
                     .build()?;
+                // Befehlspalette ohne Kürzel im Menü: ⌘⇧P bleibt beim Remote-Bild, wenn es die Tastatur hat (src/palette.ts).
                 let view = SubmenuBuilder::new(app, "Darstellung")
+                    .text("cmd:palette", "Befehlspalette …")
+                    .separator()
                     .text("tool:Bibliothek", "Bibliothek anzeigen")
                     .text("tool:Vorheriger Tab", "Vorheriger Tab")
                     .text("tool:Nächster Tab", "Nächster Tab")
