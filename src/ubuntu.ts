@@ -43,9 +43,41 @@ export function rejectedHint(msg: string, c: Pick<Connection, "rdpTarget" | "rdp
   };
 }
 
+/** Adresse im eigenen Netz: private oder link-lokale IP, `.local` oder ein Name ohne Punkt (z. B. «nas»). */
+export function isLocalAddress(host: string) {
+  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(h);
+  if (m) {
+    const [a, b] = [+m[1], +m[2]];
+    return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+  }
+  if (h.includes(":")) return /^(fe[89ab]|f[cd])/.test(h);
+  return h.endsWith(".local") || !h.includes(".");
+}
+
+/** macOS sperrt Apps ohne Freigabe «Lokales Netzwerk» mit EHOSTUNREACH (os error 65), obwohl der Rechner erreichbar ist. */
+export function localNetworkHint(msg: string, host: string, mac = navigator.userAgent.includes("Mac")): Hint | null {
+  if (!mac || !/os error 65\b/.test(msg) || !isLocalAddress(host)) return null;
+  return {
+    title: "macOS blockiert den Zugriff aufs lokale Netzwerk",
+    text: `${host} ist im eigenen Netz; macOS lässt Sesam Remote nur mit Freigabe dorthin verbinden.`,
+    steps: [
+      "Systemeinstellungen › Datenschutz & Sicherheit › Lokales Netzwerk öffnen.",
+      "«Sesam Remote» einschalten.",
+      "Erneut verbinden.",
+    ],
+  };
+}
+
+/** Derselbe Hinweis als eine Zeile für Statuszeilen (Shell, Dateien). */
+export function localNetworkText(msg: string, host: string) {
+  const h = localNetworkHint(msg, host);
+  return h && `${h.title}. ${h.steps.join(" ")}`;
+}
+
 /** «Anmeldung abgelehnt» je nach Ziel klar benennen. */
-export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "rdpSessionUser" | "os">) {
-  const h = rejectedHint(msg, c);
+export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "rdpSessionUser" | "os" | "address">) {
+  const h = localNetworkHint(msg, c.address) ?? rejectedHint(msg, c);
   if (h) return `${h.title}. ${h.text}`;
   if (!msg.includes("Anmeldung abgelehnt")) return msg;
   if (c.rdpTarget === "login") return "Der Anmeldebildschirm hat die Zugangsdaten abgelehnt. Gefragt sind die Zugangsdaten der Systemfreigabe von GNOME Remote Desktop (Sesam-Setup-Script oder «sudo grdctl --system»), nicht unbedingt die des Ubuntu-Kontos.";
@@ -158,4 +190,14 @@ export function initUbuntu(blank: () => Connection, reload: () => void) {
       dlg.showModal();
     },
   };
+}
+
+/** Selbstprüfung: lokales Netz erkennen und den macOS-Hinweis nur bei os error 65 zeigen. */
+if (import.meta.env.DEV) {
+  for (const h of ["172.16.1.31", "10.0.0.5", "192.168.1.153", "169.254.3.4", "nas", "doerig-02", "mac.local", "[fe80::1]", "fd00::2"]) console.assert(isLocalAddress(h), "lokal", h);
+  for (const h of ["172.32.0.1", "8.8.8.8", "example.com", "2a02::1"]) console.assert(!isLocalAddress(h), "nicht lokal", h);
+  const err = "No route to host (os error 65)";
+  console.assert(localNetworkHint(err, "172.16.1.31", true)?.steps[0].includes("Lokales Netzwerk"), "Hinweis");
+  console.assert(localNetworkHint(err, "example.com", true) === null && localNetworkHint(err, "10.0.0.1", false) === null, "kein Hinweis");
+  console.assert(localNetworkHint("Connection refused (os error 61)", "10.0.0.1", true) === null, "anderer Fehler");
 }

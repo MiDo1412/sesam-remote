@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Text der macOS-Abfrage «Lokales Netzwerk» (Tauri übernimmt diese Datei ins App-Bundle) -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Sesam verbindet sich mit Rechnern in deinem Netzwerk (SSH, RDP, VNC und Dateien).</string>
+</dict>
+</plist>

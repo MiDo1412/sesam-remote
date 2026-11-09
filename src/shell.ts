@@ -15,6 +15,7 @@ import { createKeyboard, isTouch, termSequence } from "./osk";
 import { resolveTheme, saveTermSettings, termSettings, themeFont } from "./termthemes";
 import { schemeGallery } from "./schemegallery";
 import { localProfile, profileTheme, setProfileTheme } from "./terminal";
+import { localNetworkText } from "./ubuntu";
 
 const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
 
@@ -258,7 +259,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
           trust = await askHostKey(c.address, msg);
           if (trust) continue;
           status.textContent = "Verbindung abgebrochen: Server nicht bestätigt.";
-        } else status.textContent = `Keine Verbindung: ${msg}`;
+        } else status.textContent = localNetworkText(msg, c.address) ?? `Keine Verbindung: ${msg}`;
         ctx.setState("closed");
       }
       break;

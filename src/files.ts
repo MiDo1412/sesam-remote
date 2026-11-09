@@ -5,6 +5,7 @@ import { compareDirs, type Mark } from "./compare";
 import { openMenu, type MenuItem } from "./menu";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
+import { localNetworkText } from "./ubuntu";
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
   const e = document.createElement(tag);
@@ -1024,7 +1025,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         trust = await askHostKey(c.address, msg);
         if (trust) continue;
         status.textContent = "Verbindung abgebrochen: Server nicht bestätigt.";
-      } else status.textContent = `Keine Verbindung: ${msg}`;
+      } else status.textContent = localNetworkText(msg, c.address) ?? `Keine Verbindung: ${msg}`;
       ctx.setState("closed");
     }
     break;
