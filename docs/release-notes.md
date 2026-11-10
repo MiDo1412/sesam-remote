@@ -51,6 +51,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **RDP-Zwischenablage auf dem Mac:** Kopierter Text geht in beide Richtungen zwischen Mac und Remotecomputer (Option «Gemeinsame Zwischenablage» der Verbindung); Bilder und Dateien vorerst nur unter Windows.
 - **Flüssiges RDP-Bild auf dem Mac:** H.264 (AVC420/AVC444) dekodiert jetzt auch auf dem Mac, mit VideoToolbox von macOS; der Server schickt damit wie unter Windows Video statt Einzelbilder.
 - **Fenster überall ziehen:** an allen freien Stellen der Titel-, Tab- und Sitzungsleiste; Doppelklick zoomt bzw. maximiert.
+- **Tabs:** Minimieren und Schliessen sitzen am rechten Rand des Tabs, auch bei kurzen Namen.
 
 ### Behoben
 
