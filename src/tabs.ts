@@ -1,5 +1,6 @@
 /** Sitzungen als Tabs. «Bibliothek» und «Minimieren» lassen sie im Hintergrund weiterlaufen; erst «Trennen» beendet sie. */
-import type { Connection } from "./api";
+import { desktopProtocol, filesProtocol, type Connection } from "./api";
+import type { Command } from "./palette";
 import { ICON } from "./icons";
 import { openMenu } from "./menu";
 import { ask, askText, choose, tell } from "./ui";
@@ -164,6 +165,33 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
 export const hasTabs = () => tabs.length > 0;
 
 /** Tab öffnen oder vorhandenen gleicher Art zeigen (`fresh` erzwingt einen neuen, z. B. weitere Shell). */
+// ---------- Derselbe Rechner: Desktop, Shell, Dateien ----------
+let library: () => Connection[] = () => [];
+/** Bibliothek für `sameHost` (main.ts). */
+export const setLibrary = (f: () => Connection[]) => (library = f);
+const KIND_LABEL: Record<Kind, string> = { desktop: "Desktop", shell: "Shell", files: "Dateien" };
+
+/** Verbindung für `kind` zum selben Rechner: diese, wenn sie es kann, sonst ein Eintrag der Bibliothek mit derselben Adresse. */
+export function sameHost(conn: Connection, kind: Kind, all: Connection[] = library()): Connection | null {
+  if (conn.id.startsWith("local:")) return null;
+  const can = (c: Connection) => (kind === "desktop" ? !!desktopProtocol(c) : kind === "files" ? !!filesProtocol(c) : !!c.sshPort);
+  if (can(conn)) return conn;
+  const host = conn.address.trim().toLowerCase();
+  return all.find((c) => c.id !== conn.id && c.address.trim().toLowerCase() === host && can(c)) ?? null;
+}
+
+/** Befehlspalette: von der aktiven Sitzung zu den anderen Ansichten desselben Rechners. */
+export function jumpCommands(): Command[] {
+  const t = active;
+  if (!t) return [];
+  return (["desktop", "shell", "files"] as Kind[])
+    .filter((k) => k !== t.kind)
+    .flatMap((k) => {
+      const c = sameHost(t.ctx.conn, k);
+      return c ? [{ label: `${KIND_LABEL[k]} dieses Rechners`, hint: c.name, keywords: "gleicher rechner wechseln", run: () => openTab(c, k) }] : [];
+    });
+}
+
 export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: TabCtx["extra"]) {
   const existing = !fresh && tabs.find((t) => t.ctx.conn.id === conn.id && t.kind === kind && t.state !== "closed");
   if (existing) return activate(existing);
@@ -316,6 +344,13 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   if (!detachedWindow) extraBtns.push(toolButton(ICON.minimize, "Minimieren", () => minimizeTab(tab), { shortcut: "läuft weiter", secondary: true }));
   const last = toolbar.lastElementChild;
   for (const b of extraBtns) last ? toolbar.insertBefore(b, last) : toolbar.append(b);
+  // Vorne: dieselbe Maschine als Desktop, Shell oder Dateien (wie in der Bibliothek).
+  const icons: Record<Kind, string> = { desktop: ICON.desktop, shell: ICON.shell, files: ICON.folder };
+  const jumps = (["desktop", "shell", "files"] as Kind[]).filter((k) => k !== kind).flatMap((k) => {
+    const c = sameHost(conn, k);
+    return c ? [toolButton(icons[k], KIND_LABEL[k], () => openTab(c, k), { shortcut: c === conn ? "dieser Rechner" : c.name })] : [];
+  });
+  if (jumps.length) toolbar.prepend(...jumps, toolSep());
   overflowMenu(toolbar, last);
 }
 
@@ -853,3 +888,12 @@ export function toolButton(icon: string, label: string, onClick: () => void, opt
 }
 
 export const toolSep = () => Object.assign(document.createElement("span"), { className: "tool-sep" });
+
+/** Selbstprüfung: derselbe Rechner über die eigene Verbindung oder einen Bibliothekseintrag mit gleicher Adresse. */
+if (import.meta.env?.DEV) {
+  const c = (id: string, address: string, p: Partial<Connection>) => ({ id, address, ...p }) as Connection;
+  const ssh = c("a", "Darts.local", { sshPort: 22 });
+  const rdp = c("b", "darts.local ", { rdpPort: 3389 });
+  console.assert(sameHost(ssh, "shell", [rdp]) === ssh && sameHost(ssh, "desktop", [ssh, rdp]) === rdp, "sameHost");
+  console.assert(sameHost(ssh, "desktop", [c("x", "anderer", { vncPort: 5900 })]) === null && sameHost(c("local:1", "", {}), "shell") === null, "sameHost leer");
+}

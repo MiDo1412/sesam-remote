@@ -35,6 +35,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Bildschirmtastatur:** mit Esc, Tab, Strg, Alt, Win, Pfeilen und F-Tasten für Touch-Geräte.
 - **Hilfe:** Anleitungen je Servertyp, mit Suche.
 - **Neu verbinden im Tab:** Nach einem Unterbruch bleibt der Tab mit seinem Inhalt stehen, eine Leiste bietet «Neu verbinden» an (Enter, ⌘R bzw. Strg+R, Tab-Menü). Shell und VNC versuchen es nach einem Abbruch zuerst selbst (nach 2, 5 und 15 s), RDP wie bisher im Hintergrund.
+- **Derselbe Rechner mit einem Klick:** Im Sitzungskopf und in der Befehlspalette geht es von der Shell zum Desktop und zu den Dateien desselben Rechners und umgekehrt; fehlt der Dienst in der Verbindung, nimmt Sesam einen Eintrag der Bibliothek mit derselben Adresse.
 
 ### Verbessert
 

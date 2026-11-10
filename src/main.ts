@@ -4,7 +4,7 @@ import { groupDot, groupMenu, initGroups, moveGroupBefore } from "./groups";
 import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
-import { detachedWindow, detachToken, initTabs, openTab, runTool, takeOver } from "./tabs";
+import { detachedWindow, detachToken, initTabs, jumpCommands, openTab, runTool, setLibrary, takeOver } from "./tabs";
 import { ask, choose, tell } from "./ui";
 import { openHelp, topics } from "./help";
 import { connectionCommands, initPalette } from "./palette";
@@ -955,7 +955,9 @@ const quick = initQuick((c) => edit({ ...c, id: crypto.randomUUID(), name: c.add
 $("empty-new").onclick = () => edit(null);
 const ubuntu = initUbuntu(blank, () => reload());
 initTerminal();
+setLibrary(() => items);
 const palette = initPalette(() => [
+  ...jumpCommands(),
   ...items.flatMap((c) => connectionCommands(c, open, { desktop: !!desktopProtocol(c), files: !!filesProtocol(c) })),
   { label: "Neue Verbindung …", keywords: "hinzufügen anlegen", run: () => $("new").click() },
   { label: "Schnelle Verbindung …", hint: keyLabel("Strg+K"), keywords: "einmalig quick", run: () => $("quick").click() },
