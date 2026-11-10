@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Sesam Remote Dev",
+  "identifier": "ch.sesam.remote.dev",
+  "app": {
+    "windows": [
+      {
+        "title": "Sesam Remote (Entwicklung)",
+        "width": 1200,
+        "height": 760,
+        "minWidth": 720,
+        "minHeight": 480,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["sesam-dev"]
+      }
+    }
+  }
+}

@@ -3,7 +3,8 @@
 
 use keyring::{Entry, Error};
 
-const SERVICE: &str = "ch.sesam.remote";
+/// Debug-Build mit eigenem Dienstnamen: läuft neben der installierten App, ohne deren Geheimnisse zu berühren.
+const SERVICE: &str = if cfg!(debug_assertions) { "ch.sesam.remote.dev" } else { "ch.sesam.remote" };
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Kind {

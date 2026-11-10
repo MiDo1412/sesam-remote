@@ -802,3 +802,6 @@ body.one-bar #session-back { flex-shrink: 0; white-space: nowrap; padding: 0 8px
 .card-wrap .card-name, .card-wrap .card-sub { margin-right: 100px; }
 .card-wrap .card-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .probe-note { display: block; min-height: 1em; margin-top: 4px; color: var(--muted); font-size: 11px; }
+/* Titel nie abschneiden: bei wenig Platz rutschen die Knöpfe in eine zweite Zeile */
+.list-head { flex-wrap: wrap; row-gap: 10px; }
+.list-head h1 { flex: 1 0 auto; }
