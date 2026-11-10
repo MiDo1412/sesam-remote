@@ -202,6 +202,41 @@ impl Sftp {
         Ok(p)
     }
 
+    /// Shell-Befehl auf dem Server, auf Wunsch mit `sudo`. `password`: nur über stdin an sudo, nie als Argument;
+    /// ohne Passwort `sudo -n` (klappt, wo sudo ohne Passwort erlaubt ist), sonst Fehler `SUDO_PASSWORD`.
+    pub async fn exec(&self, script: &str, sudo: bool, password: Option<&str>) -> Result<String, String> {
+        use russh::ChannelMsg;
+        let h = self.ssh.as_ref().ok_or("Nur über SSH möglich")?;
+        let q = crate::scp::quote(script)?;
+        let cmd = match (sudo, password) {
+            (false, _) => format!("sh -c {q}"),
+            (true, None) => format!("sudo -n -- sh -c {q}"),
+            (true, Some(_)) => format!("sudo -S -p '' -- sh -c {q}"),
+        };
+        let mut ch = h.channel_open_session().await.map_err(err)?;
+        ch.exec(true, cmd).await.map_err(err)?;
+        if let (true, Some(pw)) = (sudo, password) {
+            crate::diag::add_secret(pw);
+            ch.data(format!("{pw}\n").as_bytes()).await.map_err(err)?;
+        }
+        ch.eof().await.map_err(err)?;
+        let (mut code, mut out, mut e) = (255u32, Vec::new(), Vec::new());
+        while let Some(msg) = ch.wait().await {
+            match msg {
+                ChannelMsg::Data { data } => out.extend_from_slice(&data),
+                ChannelMsg::ExtendedData { data, .. } => e.extend_from_slice(&data),
+                ChannelMsg::ExitStatus { exit_status } => code = exit_status,
+                ChannelMsg::Failure => return Err("Der Server lehnt Befehle ab (exec)".into()),
+                _ => {}
+            }
+        }
+        let e = String::from_utf8_lossy(&e).trim().to_string();
+        match code {
+            0 => Ok(String::from_utf8_lossy(&out).trim().to_string()),
+            _ => Err(sudo_error(&e, code)),
+        }
+    }
+
     /// SHA-256 einer Datei auf dem Server, über einen exec-Kanal derselben Verbindung.
     pub async fn sha256(&self, path: &str) -> Result<String, String> {
         match &self.ssh {
@@ -219,6 +254,57 @@ impl Sftp {
         }
         Ok(p)
     }
+}
+
+/// Fehler von `sudo` in verständlichen Text; `SUDO_PASSWORD` = Passwort nötig (Oberfläche fragt einmal nach).
+pub const SUDO_PASSWORD: &str = "SUDO_PASSWORD";
+fn sudo_error(e: &str, code: u32) -> String {
+    let l = e.to_lowercase();
+    if l.contains("a password is required") || l.contains("no tty present") || l.contains("terminal is required") {
+        SUDO_PASSWORD.into()
+    } else if l.contains("incorrect password") || l.contains("sorry, try again") {
+        "Das Passwort für sudo stimmt nicht.".into()
+    } else if l.contains("not in the sudoers") || l.contains("not allowed to run sudo") {
+        "Dieser Benutzer darf auf dem Server kein sudo verwenden.".into()
+    } else if l.contains("sudo: command not found") || l.contains("sudo: not found") {
+        "Auf dem Server gibt es kein sudo.".into()
+    } else if e.is_empty() {
+        format!("Befehl fehlgeschlagen (Code {code})")
+    } else {
+        e.to_string()
+    }
+}
+
+/// Rechte und Besitzer als ein Skript: `chmod`/`chown`, auf Wunsch rekursiv. Besitzer als «benutzer», «benutzer:gruppe» oder «:gruppe».
+pub fn perms_script(path: &str, mode: Option<u32>, owner: Option<&str>, recursive: bool) -> Result<String, String> {
+    let q = crate::scp::quote(path)?;
+    let r = if recursive { "-R " } else { "" };
+    let mut parts = Vec::new();
+    if let Some(m) = mode {
+        if m > 0o7777 {
+            return Err("Ungültige Rechte".into());
+        }
+        parts.push(format!("chmod {r}{m:o} -- {q}"));
+    }
+    if let Some(o) = owner.map(str::trim).filter(|o| !o.is_empty()) {
+        if !o.chars().all(|c| c.is_ascii_alphanumeric() || "._-:".contains(c)) || o.matches(':').count() > 1 {
+            return Err(format!("Ungültiger Besitzer: {o}"));
+        }
+        parts.push(format!("chown {r}{o} -- {q}"));
+    }
+    if parts.is_empty() {
+        return Err("Nichts zu ändern".into());
+    }
+    Ok(parts.join(" && "))
+}
+
+/// Datei aus einem temporären Ordner an ihren Zielort verschieben (nie überschreiben), danach den Ordner entfernen.
+pub fn move_script(from: &str, dest_dir: &str) -> Result<String, String> {
+    let name = from.rsplit('/').next().filter(|n| !n.is_empty()).ok_or("Ungültige Quelle")?;
+    let (f, d, t) = (crate::scp::quote(from)?, crate::scp::quote(dest_dir)?, crate::scp::quote(&rjoin(dest_dir, name))?);
+    let tmp = crate::scp::quote(&rparent(from).ok_or("Ungültige Quelle")?)?;
+    // rmdir statt rm -rf: entfernt nur den leeren temporären Ordner, nie mehr.
+    Ok(format!("if [ -e {t} ]; then echo \"«{name}» gibt es dort schon\" >&2; exit 3; fi; mv -- {f} {d}/ && rmdir -- {tmp}"))
 }
 
 /// Lokal: Ordner anlegen.
@@ -791,5 +877,17 @@ mod tests {
         assert_eq!(local_unique(&dir, "b.txt", false), dir.join("b (2).txt"));
         assert_eq!(local_unique(&dir, "neu.txt", false), dir.join("neu.txt"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn skripte_fuer_rechte_und_verschieben() {
+        assert_eq!(super::perms_script("/opt/a b", Some(0o755), Some("root:wheel"), true).unwrap(), "chmod -R 755 -- '/opt/a b' && chown -R root:wheel -- '/opt/a b'");
+        assert_eq!(super::perms_script("/x", Some(0o644), None, false).unwrap(), "chmod 644 -- '/x'");
+        assert!(super::perms_script("/x", None, Some("root; rm -rf /"), false).is_err());
+        assert!(super::perms_script("/x", None, None, false).is_err());
+        let m = super::move_script("/tmp/tmp.ab12/install.sh", "/opt").unwrap();
+        assert!(m.contains("mv -- '/tmp/tmp.ab12/install.sh' '/opt'/") && m.contains("rmdir -- '/tmp/tmp.ab12'") && m.contains("[ -e '/opt/install.sh' ]"));
+        assert_eq!(super::sudo_error("sudo: a password is required", 1), super::SUDO_PASSWORD);
+        assert!(super::sudo_error("Sorry, try again.\nsudo: 1 incorrect password attempt", 1).contains("stimmt nicht"));
     }
 }

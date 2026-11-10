@@ -229,6 +229,11 @@ export const api = {
   sftpClose: (sid: string) => invoke<void>("sftp_close", { sid }),
   sftpChmod: (sid: string, path: string, mode: number) => invoke<void>("sftp_chmod", { sid, path, mode }),
   sftpTouch: (sid: string, dir: string, name: string) => invoke<string>("sftp_touch", { sid, dir, name }),
+  sftpOwner: (sid: string, path: string) => invoke<string>("sftp_owner", { sid, path }),
+  sftpSetPerms: (sid: string, path: string, mode: number | null, owner: string | null, recursive: boolean, sudo: boolean, password?: string) =>
+    invoke<void>("sftp_set_perms", { sid, path, mode, owner, recursive, sudo, password }),
+  sftpTempdir: (sid: string) => invoke<string>("sftp_tempdir", { sid }),
+  sftpSudoMove: (sid: string, from: string, destDir: string, password?: string) => invoke<void>("sftp_sudo_move", { sid, from, destDir, password }),
   /** SHA-256 auf dem Server (sha256sum über SSH). */
   sftpSha256: (sid: string, path: string) => invoke<string>("sftp_sha256", { sid, path }),
   localSha256: (path: string) => invoke<string>("local_sha256", { path }),

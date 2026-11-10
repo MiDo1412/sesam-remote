@@ -65,6 +65,22 @@ export async function askText(title: string, text: string, ok: string, value = "
   return confirmed ? input.value.trim() : null;
 }
 
+/** Passwort abfragen (verdeckt); wird nirgends gespeichert. */
+export async function askPassword(title: string, text: string, ok: string): Promise<string | null> {
+  const input = byId<HTMLInputElement>("ask-input");
+  input.type = "password";
+  input.hidden = false;
+  input.value = "";
+  input.onkeydown = (e) => e.key === "Enter" && (e.preventDefault(), byId<HTMLDialogElement>("ask").close("ok"));
+  try {
+    return (await ask(title, text, ok)) && input.value ? input.value : null; // nicht kürzen: Leerzeichen gehören zum Passwort
+  } finally {
+    input.hidden = true;
+    input.type = "text";
+    input.value = "";
+  }
+}
+
 /** Fingerabdruck eines unbekannten SSH-Servers bestätigen lassen. `msg` beginnt mit HOSTKEY_UNKNOWN. */
 export async function askHostKey(address: string, msg: string): Promise<string | null> {
   const [alg, fp] = msg.slice(HOSTKEY_UNKNOWN.length).split("|");

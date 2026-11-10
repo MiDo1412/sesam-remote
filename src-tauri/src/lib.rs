@@ -651,6 +651,41 @@ async fn sftp_chmod(files: State<'_, Files>, sid: String, path: String, mode: u3
     }
 }
 
+fn ssh_files(files: &Files, sid: &str) -> Result<Arc<sftp::Sftp>, String> {
+    match files_get(files, sid)? {
+        FileSession::Sftp(s) => Ok(s),
+        _ => Err("Nur bei Dateien über SSH möglich".into()),
+    }
+}
+
+/// Besitzer und Gruppe («benutzer:gruppe») für den Rechte-Dialog; Linux `stat -c`, BSD/macOS `stat -f`.
+#[tauri::command]
+async fn sftp_owner(files: State<'_, Files>, sid: String, path: String) -> Result<String, String> {
+    let q = scp::quote(&path)?;
+    ssh_files(&files, &sid)?.exec(&format!("stat -c '%U:%G' -- {q} 2>/dev/null || stat -f '%Su:%Sg' -- {q}"), false, None).await
+}
+
+/// Rechte und Besitzer setzen, auf Wunsch rekursiv und mit sudo (nur nach Bestätigung in der Oberfläche).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn sftp_set_perms(files: State<'_, Files>, sid: String, path: String, mode: Option<u32>, owner: Option<String>, recursive: bool, sudo: bool, password: Option<String>) -> Result<(), String> {
+    let script = sftp::perms_script(&path, mode, owner.as_deref(), recursive)?;
+    ssh_files(&files, &sid)?.exec(&script, sudo, password.as_deref()).await.map(|_| ())
+}
+
+/// Temporärer Ordner auf dem Server (für Hochladen mit Administratorrechten).
+#[tauri::command]
+async fn sftp_tempdir(files: State<'_, Files>, sid: String) -> Result<String, String> {
+    ssh_files(&files, &sid)?.exec("mktemp -d", false, None).await
+}
+
+/// Hochgeladenes aus dem temporären Ordner mit sudo an den Zielort verschieben (nie überschreiben).
+#[tauri::command]
+async fn sftp_sudo_move(files: State<'_, Files>, sid: String, from: String, dest_dir: String, password: Option<String>) -> Result<(), String> {
+    let script = sftp::move_script(&from, &dest_dir)?;
+    ssh_files(&files, &sid)?.exec(&script, true, password.as_deref()).await.map(|_| ())
+}
+
 #[tauri::command]
 async fn sftp_touch(files: State<'_, Files>, sid: String, dir: String, name: String) -> Result<String, String> {
     match files_get(&files, &sid)? {
@@ -1655,6 +1690,10 @@ pub fn run() {
             open_detached,
             sftp_chmod,
             sftp_touch,
+            sftp_owner,
+            sftp_set_perms,
+            sftp_tempdir,
+            sftp_sudo_move,
             sftp_sha256,
             local_sha256,
             local_mkdir,

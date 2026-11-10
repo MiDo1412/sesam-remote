@@ -1,6 +1,6 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
-import { ask, askHostKey, askText, choose, tell } from "./ui";
+import { ask, askHostKey, askPassword, askText, choose, tell } from "./ui";
 import { compareDirs, type Mark } from "./compare";
 import { openMenu, type MenuItem } from "./menu";
 import { ICON } from "./icons";
@@ -278,7 +278,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
     } catch (e) {
       status.textContent = String(e);
       // SSH-Verbindung weg (Schlaf, Netzwechsel): Tab bietet «Neu verbinden» an.
-      if (p.side === "remote" && /closed|reset|broken pipe|eof|timeout|timed out|not connected|getrennt|beendet/i.test(String(e))) ctx.setState("closed");
+      if (p.side === "remote" && /closed|geschlossen|reset|broken pipe|eof|timeout|timed out|not connected|getrennt|beendet/i.test(String(e))) ctx.setState("closed");
     }
   }
   function step(p: Pane, dir: "back" | "fwd") {
@@ -730,7 +730,30 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     for (const name of names) start(from.side === "local", join(from, name), to.listing.path, name);
   }
 
-  function start(upload: boolean, src: string, destDir: string, name: string, replace = false) {
+  /** Hochladen ohne Schreibrecht im Ziel: in einen temporären Ordner laden, dann mit sudo an den Zielort verschieben. */
+  async function uploadAsAdmin(src: string, destDir: string, name: string) {
+    const s = sid;
+    if (!s) return;
+    const okd = await ask("Mit Administratorrechten hochladen?", `Dein Benutzer darf nicht in ${destDir} schreiben. Sesam lädt «${name}» zuerst in einen temporären Ordner auf ${c.name} und verschiebt es dann mit sudo dorthin. Bestehendes wird nicht überschrieben.`, "Mit sudo hochladen");
+    if (!okd) return;
+    try {
+      const tmp = await api.sftpTempdir(s);
+      start(true, src, tmp, name, false, async () => {
+        try {
+          if (await withSudo("Verschieben", (_, pw) => api.sftpSudoMove(s, `${tmp}/${name}`, destDir, pw), true)) {
+            status.textContent = `«${name}» liegt jetzt in ${destDir}.`;
+            if (panes.remote.listing?.path === destDir) load(panes.remote, destDir);
+          }
+        } catch (e) {
+          tell("Nicht verschoben", `${e}\n\nDie Datei liegt noch in ${tmp} auf dem Server.`);
+        }
+      });
+    } catch (e) {
+      tell("Nicht hochgeladen", String(e));
+    }
+  }
+
+  function start(upload: boolean, src: string, destDir: string, name: string, replace = false, then?: () => void) {
     const row = el("div", "transfer");
     const label = el("span", "transfer-name", `${upload ? "↑" : "↓"} ${name} → ${upload ? c.name : "Dieser Computer"}${replace ? " (ersetzt)" : ""}`);
     const bar = el("progress");
@@ -766,10 +789,22 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         } else if (p.state === "done") {
           bar.value = 1;
           finish("Fertig");
+          if (then) return then();
           const to = upload ? panes.remote : panes.local;
           if (comparing) refreshCompareSoon();
           else if (to.listing?.path === destDir) load(to, destDir);
-        } else finish(`Fehler: ${p.error}`);
+        } else {
+          finish(`Fehler: ${p.error}`);
+          state.classList.add("error");
+          state.title = p.error;
+          // Kein Schreibrecht im Ziel (z. B. /opt): Hochladen mit sudo anbieten.
+          if (upload && !ftp && !then && DENIED.test(p.error)) {
+            const again = el("button", "plain", "Mit Administratorrechten wiederholen");
+            again.type = "button";
+            again.onclick = () => (again.remove(), uploadAsAdmin(src, destDir, name));
+            row.append(again);
+          }
+        }
       }, replace)
       .then((id) => {
         tid = id;
@@ -818,9 +853,108 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     }
   }
 
+  /** Fehlende Rechte auf dem Server? Dann (nur nach Bestätigung) mit sudo wiederholen; Passwort höchstens einmal fragen,
+   *  nur über stdin an sudo. Gibt `false` zurück, wenn der Benutzer abbricht. */
+  const DENIED = /permission denied|operation not permitted|eacces|eperm|keine berechtigung|zugriff verweigert/i;
+  async function withSudo(what: string, run: (sudo: boolean, password?: string) => Promise<void>, confirmed = false): Promise<boolean> {
+    if (!confirmed) {
+      try {
+        await run(false);
+        return true;
+      } catch (e) {
+        if (!DENIED.test(String(e)) || ftp) throw e;
+        if (!(await ask("Keine Berechtigung", `${String(e)}\n\n${what} mit Administratorrechten (sudo) wiederholen?`, "Mit sudo wiederholen"))) return false;
+      }
+    }
+    try {
+      await run(true);
+      return true;
+    } catch (e) {
+      if (String(e) !== "SUDO_PASSWORD") throw e;
+    }
+    for (let i = 0; i < 2; i++) {
+      const pw = await askPassword("Passwort für sudo", `sudo auf ${c.name} braucht das Passwort von ${c.user || "diesem Benutzer"}. Es wird nicht gespeichert.`, "Ausführen");
+      if (!pw) return false;
+      try {
+        await run(true, pw);
+        return true;
+      } catch (e) {
+        if (i === 1 || !String(e).includes("stimmt nicht")) throw e;
+      }
+    }
+    return false;
+  }
+
+  /** Rechte-Dialog: rwx für Besitzer, Gruppe, Andere, als Zahl, Besitzer:Gruppe, rekursiv; über SSH mit sudo, wenn nötig. */
+  async function permsDialog(e: Entry) {
+    const p = panes.remote;
+    if (!sid || !p.listing) return;
+    const path = join(p, e.name);
+    const s = sid;
+    const owner = await api.sftpOwner(s, path).catch(() => "");
+    const dlg = document.createElement("dialog");
+    dlg.className = "perms-dlg";
+    dlg.setAttribute("aria-labelledby", "perms-title");
+    const who = ["Besitzer", "Gruppe", "Andere"];
+    dlg.innerHTML = `<form class="sheet" method="dialog">
+        <h2 id="perms-title">Berechtigungen</h2>
+        <p class="note perms-path mono"></p>
+        <table class="perms-grid"><thead><tr><th></th><th>Lesen</th><th>Schreiben</th><th>Ausführen</th></tr></thead><tbody>${who
+          .map((w, i) => `<tr><th scope="row">${w}</th>${[4, 2, 1].map((b) => `<td><input type="checkbox" data-bit="${b << (3 * (2 - i))}" aria-label="${w}: ${b === 4 ? "Lesen" : b === 2 ? "Schreiben" : "Ausführen"}" /></td>`).join("")}</tr>`)
+          .join("")}</tbody></table>
+        <label class="row">Als Zahl<input name="octal" class="mono" inputmode="numeric" maxlength="4" size="5" /></label>
+        <label class="row">Besitzer:Gruppe<input name="owner" class="mono" autocomplete="off" spellcheck="false" placeholder="benutzer:gruppe" /></label>
+        <label class="row check"><input type="checkbox" name="recursive" />Auch für alles darin (rekursiv)</label>
+        <p class="note">Wo dein Benutzer keine Rechte hat, fragt Sesam, ob es mit Administratorrechten (sudo) wiederholen soll.</p>
+        <div class="row actions"><span></span><button type="button" class="perms-cancel">Abbrechen</button><button type="submit" class="primary">Übernehmen</button></div>
+      </form>`;
+    document.body.append(dlg);
+    dlg.querySelector(".perms-path")!.textContent = path;
+    const f = dlg.querySelector("form")!;
+    const bits = [...dlg.querySelectorAll<HTMLInputElement>("[data-bit]")];
+    const octal = f.elements.namedItem("octal") as HTMLInputElement;
+    const own = f.elements.namedItem("owner") as HTMLInputElement;
+    const rec = f.elements.namedItem("recursive") as HTMLInputElement;
+    rec.closest("label")!.hidden = !e.dir;
+    const start = e.perm ?? (e.dir ? 0o755 : 0o644);
+    const special = start & 0o7000;
+    const fromBits = () => bits.reduce((m, b) => m | (b.checked ? +b.dataset.bit! : 0), special);
+    const show = (m: number) => {
+      bits.forEach((b) => (b.checked = (m & +b.dataset.bit!) !== 0));
+      octal.value = m.toString(8).padStart(3, "0");
+    };
+    show(start);
+    own.value = owner;
+    bits.forEach((b) => (b.onchange = () => (octal.value = fromBits().toString(8).padStart(3, "0"))));
+    octal.oninput = () => /^[0-7]{3,4}$/.test(octal.value) && bits.forEach((b) => (b.checked = (parseInt(octal.value, 8) & +b.dataset.bit!) !== 0));
+    const ok = await new Promise<boolean>((resolve) => {
+      dlg.querySelector<HTMLButtonElement>(".perms-cancel")!.onclick = () => dlg.close();
+      f.onsubmit = (ev) => {
+        ev.preventDefault();
+        if (!/^[0-7]{3,4}$/.test(octal.value)) return octal.setCustomValidity("Drei oder vier Ziffern von 0 bis 7, z. B. 644"), f.reportValidity(), octal.setCustomValidity("");
+        resolve(true);
+        dlg.close();
+      };
+      dlg.onclose = () => resolve(false);
+      dlg.showModal();
+    });
+    dlg.remove();
+    if (!ok) return;
+    const mode = parseInt(octal.value, 8);
+    const newOwner = own.value.trim() && own.value.trim() !== owner ? own.value.trim() : null;
+    const recursive = e.dir && rec.checked;
+    if (mode === start && !newOwner && !recursive) return;
+    try {
+      if (await withSudo("Rechte ändern", (sudo, pw) => api.sftpSetPerms(s, path, mode, newOwner, recursive, sudo, pw))) await load(p, p.listing!.path);
+    } catch (err) {
+      tell("Berechtigungen nicht geändert", String(err));
+    }
+  }
+
   async function chmod(e: Entry) {
     const p = panes.remote;
     if (!sid || !p.listing) return;
+    if (!ftp) return permsDialog(e);
     const cur = (e.perm ?? (e.dir ? 0o755 : 0o644)).toString(8).padStart(3, "0");
     const v = await askText("Rechte ändern", `Für «${e.name}», als Zahl wie bei chmod: 644 = Datei lesbar, 755 = Ordner oder Programm, 600 = nur für dich.`, "Ändern", cur);
     if (!v || v === cur) return;
@@ -843,7 +977,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         { value: "transfer", label: remote ? "Herunterladen" : "Hochladen", icon: remote ? ICON.download : ICON.upload, disabled: !sid },
         { value: "rename", label: "Umbenennen …", icon: ICON.rename, shortcut: remote ? "F2" : undefined, disabled: !one || (remote && scp) },
       );
-      if (remote) items.push({ value: "chmod", label: "Rechte ändern …", disabled: !one || scp });
+      if (remote) items.push({ value: "chmod", label: ftp ? "Rechte ändern …" : "Berechtigungen …", disabled: !one || scp });
       items.push({ value: "copy", label: "Pfad kopieren", icon: ICON.copy });
       if (remote) items.push({ value: "delete", label: "Löschen", icon: ICON.trash, shortcut: "Entf", disabled: scp, separator: true });
     }
