@@ -433,16 +433,28 @@ button.tool.danger { color: var(--chrome-danger); }
 .settings-pane .pair label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .schemes { display: block; }
 /* Farbschema-Galerie (Einstellungen und Aufklappfeld im Shell-Tab) */
-.scheme-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 10px; }
-.scheme-card { display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); text-align: left; cursor: pointer; height: auto; }
+.scheme-wrap { display: grid; gap: 12px; }
+.scheme-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.scheme-tools input[type=search] { flex: 1 1 160px; min-width: 120px; }
+.scheme-tools button { height: 30px; }
+.scheme-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.scheme-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 6px 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); text-align: left; cursor: pointer; height: auto; transition: border-color 120ms ease, box-shadow 120ms ease; }
 .scheme-card:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
 .scheme-card[aria-checked=true] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .scheme-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .scheme-shot { padding: 8px 10px 6px; border-radius: 6px; font: 11px/1.5 "JetBrains Mono Variable", "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.25); }
-.scheme-bar { display: flex; gap: 3px; margin-top: 6px; }
-.scheme-bar i { flex: 1; height: 5px; border-radius: 2px; }
 .scheme-name { font-size: 12px; font-weight: 600; padding: 0 2px 2px; }
-.scheme-card[aria-checked=true] .scheme-name::before { content: "✓ "; color: var(--accent); }
+.scheme-card[aria-checked=true]::after { content: "✓"; position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font: 700 12px/20px var(--font-ui); text-align: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.scheme-dots { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; padding: 0 2px; }
+.scheme-dots i { height: 8px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.25); }
+.scheme-cursor { display: inline-block; width: 0.6em; animation: scheme-blink 1.1s steps(1) infinite; }
+@keyframes scheme-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .scheme-cursor { animation: none; } }
+.theme-edit .sheet { width: min(620px, calc(100vw - 48px)); box-sizing: border-box; }
+.theme-edit .sheet > * { grid-column: 1 / -1; }
+.theme-edit-colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 12px; }
+.theme-edit-colors label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.theme-edit-colors input[type=color] { width: 32px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
 .scheme-pop { position: fixed; z-index: 50; width: min(660px, calc(100vw - 24px)); max-height: min(520px, calc(100vh - 120px)); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22); }
 .scheme-pop-head { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
 .scheme-pop-head h3 { flex: 1; margin: 0; font-size: 13px; }
@@ -777,7 +789,8 @@ svg.sf { background-color: currentColor; -webkit-mask: var(--sf) center / contai
 @media (prefers-reduced-motion: reduce) { .status:not(:empty) { animation: none; } }
 
 /* Eigenes Einstellungsfenster (macOS): nur die Einstellungen, ohne Sheet-Rahmen */
-body.settings-window > :not(dialog#settings):not(script) { display: none !important; }
+/* Nur Bibliothek und Sitzungen ausblenden; Rückfragen, Hilfe und Design-Editor müssen sichtbar bleiben. */
+body.settings-window > #library, body.settings-window > #session { display: none !important; }
 body.settings-window dialog#settings { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border-radius: 0; box-shadow: none; }
 body.settings-window dialog#settings::backdrop { background: transparent; }
 body.settings-window dialog#settings .settings { width: 100% !important; height: 100% !important; resize: none; }

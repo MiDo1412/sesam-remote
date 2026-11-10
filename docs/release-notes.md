@@ -44,6 +44,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Zugangsdaten:** Suche, «zuletzt verwendet», Hinweis bei unbenutzten Einträgen und «Zugang testen» (Anmeldung über SSH an einer Verbindung, die sie nutzt).
 - **Raspberry Pi erkennen:** Nach dem Verbinden der Shell liest Sesam Modell und System aus und setzt das Symbol in der Bibliothek (Raspberry Pi bzw. Ubuntu), wenn noch keins gewählt ist. Auf Raspberry Pi OS zeigt der Sitzungskopf Modell, Temperatur und eine Warnung bei Unterspannung, jede Minute aktualisiert.
 - **Ein Gerät, drei Türen:** Karten zeigen Desktop, Shell und Dateien als Knöpfe und Benutzer@Adresse; bei einer neuen Verbindung erkennt Sesam die erreichbaren Dienste selbst; in der Sitzung lässt sich ein fehlender Dienst einrichten; zwei Einträge desselben Geräts lassen sich zusammenführen (mit Sicherung der Bibliothek).
+- **Mehr und schönere Terminal-Designs:** Raster mit echter Vorschau (Prompt, farbige Ausgabe, Fehler, Auswahl, blinkender Cursor, alle 16 Farben), Suche und Filter hell/dunkel. Neu: One Light, Gruvbox Hell, Tokyo Night (Day), Catppuccin Latte/Mocha, GitHub hell/dunkel und «automatische» Paare, die dem Erscheinungsbild folgen. Eigene Designs: duplizieren und mit Farbwählern anpassen (wirkt sofort auf offene Shells), .itermcolors und Windows-Terminal-Schemata importieren, als Windows-Terminal-Schema exportieren.
 
 ### Verbessert
 

@@ -1534,6 +1534,12 @@ fn with_desktop<T>(d: &Desktops, sid: &str, f: impl FnOnce(&Desktop) -> T) -> Re
     d.0.lock().unwrap().get(sid).map(f).ok_or_else(|| "Desktop-Sitzung geschlossen".into())
 }
 
+/// Textdatei an einen im Speichern-Dialog gewählten Ort schreiben (z. B. exportiertes Terminal-Design).
+#[tauri::command]
+fn save_text_file(path: String, text: String) -> Result<(), String> {
+    std::fs::write(&path, text).map_err(|e| format!("{path}: {e}"))
+}
+
 /// Freigaben des Betriebssystems mit Status (Einstellungen › «Berechtigungen einrichten …»).
 #[tauri::command]
 fn perm_list() -> Vec<perms::Perm> {
@@ -1971,9 +1977,16 @@ pub fn run() {
                 let h = app.handle().clone();
                 std::thread::spawn(move || loop {
                     std::thread::sleep(std::time::Duration::from_millis(500));
-                    if let (Ok(js), Some(w)) = (std::fs::read_to_string(&path), h.get_webview_window("main")) {
-                        let _ = std::fs::remove_file(&path);
-                        let _ = w.eval(&js);
+                    // Erste Zeile «@fenster» wählt ein anderes Fenster (z. B. @settings), sonst das Hauptfenster.
+                    if let Ok(js) = std::fs::read_to_string(&path) {
+                        let (label, code) = match js.strip_prefix('@').and_then(|r| r.split_once('\n')) {
+                            Some((l, c)) => (l.trim().to_string(), c.to_string()),
+                            None => ("main".to_string(), js),
+                        };
+                        if let Some(w) = h.get_webview_window(&label) {
+                            let _ = std::fs::remove_file(&path);
+                            let _ = w.eval(&code);
+                        }
                     }
                 });
             }
@@ -2020,6 +2033,7 @@ pub fn run() {
             vnc_open,
             desktop_ack,
             open_settings_window,
+            save_text_file,
             perm_list,
             library_merge,
             probe_services,

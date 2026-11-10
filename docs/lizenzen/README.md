@@ -22,3 +22,21 @@ Ins Programm kommen nur die tatsächlich benutzten SVG-Dateien (als Inline-SVG).
 ist selbst gezeichnet, weil Simple Icons es nicht mehr führt. Die Logos stehen nur zur Kennzeichnung des
 Betriebssystems eines Zielrechners; die Marken gehören ihren Inhabern. Auf macOS zeigt Sesam
 für Werkzeug- und Menüsymbole statt Fluent die SF Symbols von Apple; das System zeichnet sie zur Laufzeit (`src-tauri/src/sfsymbol.rs`), sie werden nicht mitgeliefert und dürfen nur auf Apple-Geräten verwendet werden.
+
+## Farbschemata der Shell
+
+Nur die Farbwerte (16 Farben, Hinter-/Vordergrund, Cursor, Auswahl) sind übernommen, keine Dateien. Die
+Systemdesigns (macOS Terminal, Windows Terminal Campbell, PowerShell, Ubuntu, GNOME, Konsole) geben die
+Standardfarben dieser Programme wieder, damit sich die Shell vertraut anfühlt.
+
+| Schema | Quelle | Lizenz |
+|---|---|---|
+| Solarized (hell/dunkel) | Ethan Schoonover, github.com/altercation/solarized | MIT |
+| One Dark / One Light | Atom, github.com/atom/atom (one-dark-syntax, one-light-syntax) | MIT |
+| Gruvbox (hell/dunkel) | Pavel Pertsev, github.com/morhetz/gruvbox | MIT |
+| Nord | Arctic Ice Studio, github.com/nordtheme/nord | MIT |
+| Dracula | Dracula Theme, github.com/dracula/dracula-theme | MIT |
+| Tokyo Night / Day | Folke Lemaitre, github.com/folke/tokyonight.nvim | Apache-2.0 |
+| Catppuccin Latte / Mocha | Catppuccin, github.com/catppuccin/catppuccin | MIT |
+| GitHub (hell/dunkel) | GitHub Primer, github.com/primer/github-vscode-theme | MIT |
+| Tango | Tango Desktop Project | gemeinfrei |
