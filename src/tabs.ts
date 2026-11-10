@@ -401,6 +401,18 @@ if (detachedWindow) {
   });
 }
 
+/** macOS-Hauptfenster: Schliessen (rot, ⌘W in der Bibliothek) blendet nur das Fenster aus, Sesam bleibt im Dock wie
+ *  Terminal; ein Klick aufs Dock-Symbol holt es zurück (lib.rs, Reopen). Offene Sitzungen erst nach Rückfrage trennen. */
+if (!detachedWindow && navigator.userAgent.includes("Mac")) {
+  getCurrentWindow().onCloseRequested(async (e) => {
+    e.preventDefault();
+    const open = tabs.filter((t) => t.state !== "closed");
+    if (open.length && !(await ask("Fenster schliessen?", `${open.length === 1 ? "Die offene Sitzung wird" : `${open.length} offene Sitzungen werden`} getrennt.`, "Schliessen"))) return;
+    for (const t of [...tabs]) await closeTab(t, true);
+    await getCurrentWindow().hide();
+  });
+}
+
 /** Für die Tab-Fabriken: nach erfolgreichem Anhängen das abgebende Fenster benachrichtigen. */
 export const handoffDone = (token: string) => emit("sesam:handoff-done", token);
 

@@ -1482,6 +1482,7 @@ pub fn run() {
         // Zweiter Start (z. B. Klick auf eine Verknüpfung): Link an die laufende App, Fenster nach vorne.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
                 let _ = w.unminimize();
                 let _ = w.set_focus();
             }
@@ -1684,8 +1685,18 @@ pub fn run() {
             rdp_set_size,
             rdp_close
         ])
-        .run(tauri::generate_context!())
-        .expect("Sesam Remote konnte nicht starten");
+        .build(tauri::generate_context!())
+        .expect("Sesam Remote konnte nicht starten")
+        .run(|_app, _e| {
+            // macOS: Klick aufs Dock-Symbol bei ausgeblendetem Hauptfenster (rotes Schliessen) holt es zurück.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = _e {
+                if let Some(w) = _app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+        });
 }
 
 #[cfg(test)]
