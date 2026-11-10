@@ -919,6 +919,8 @@ fn create_shortcut(app: AppHandle, path: State<LibraryPath>, id: String, view: S
         (desk.join(format!("{safe} ({label}).url")), format!("[InternetShortcut]\r\nURL={url}\r\nIconFile={exe}\r\nIconIndex=0\r\n"))
     };
     std::fs::write(&file, body).map_err(|e| format!("{}: {e}", file.display()))?;
+    #[cfg(target_os = "macos")]
+    sfsymbol::set_app_icon(&file);
     Ok(file.display().to_string())
 }
 
