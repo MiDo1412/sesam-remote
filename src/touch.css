@@ -16,6 +16,8 @@
 .osk-key.on { background: #157a5a; color: #fff; }
 .osk-key.locked { box-shadow: inset 0 -3px 0 #4cd08f; }
 .osk-key.fn { min-width: 40px; color: #c7c7cc; }
+.osk-key[hidden] { display: none; }
+.osk-key.sym { min-width: 40px; font-family: ui-monospace, Menlo, monospace; }
 .osk-key.close { margin-left: auto; }
 
 @media (prefers-reduced-motion: no-preference) {

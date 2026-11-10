@@ -54,6 +54,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Verbessert
 
+- **Zusatztasten für Touch:** Die Leiste über der Bildschirmtastatur hat jetzt auch Pos1, Ende, Bild auf/ab, die Zeichen | ~ / - und ausklappbare F1–F12.
 - **Tastentest:** Befehlspalette › «Diagnose: Tastentest» drückt Win, Win+R und Alt+Tab und zeigt, ob sie drüben ankamen und lokal nichts aufging.
 - **Windows-Tasten am richtigen Ort:** Win, Alt+Tab, Alt+F4 und Druck gehen an den Remotecomputer, solange das Remote-Bild aktiv ist, im Fenster wie im Vollbild. Strg+Alt+Ende sendet Strg+Alt+Entf.
 - **Scharfes Bild:** auch auf hochauflösenden Bildschirmen; das Remote-Bild passt sich der Fenstergrösse an.

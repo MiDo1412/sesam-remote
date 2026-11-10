@@ -17,7 +17,10 @@ const MODS: [Key, string][] = [
 ];
 const NAV: [string, string, string][] = [
   ["ArrowLeft", "←", "Pfeil links"], ["ArrowUp", "↑", "Pfeil hoch"], ["ArrowDown", "↓", "Pfeil runter"], ["ArrowRight", "→", "Pfeil rechts"],
+  ["Home", "Pos1", "Pos1"], ["End", "Ende", "Ende"], ["PageUp", "Bild↑", "Bild auf"], ["PageDown", "Bild↓", "Bild ab"],
 ];
+/** Zeichen, die auf der Touch-Tastatur tief in Untermenüs liegen. */
+const SYMBOLS: [string, string][] = [["|", "Senkrechter Strich"], ["~", "Tilde"], ["/", "Schrägstrich"], ["-", "Bindestrich"]];
 /** Tasten, die das Eingabefeld nicht selbst als Text liefert. */
 const SPECIAL = /^(Backspace|Enter|Tab|Escape|Delete|Insert|Home|End|PageUp|PageDown|Arrow\w+|F\d{1,2})$/;
 
@@ -100,7 +103,17 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
     state.set(k, s);
   }
   for (const [code, label, aria] of NAV) keyBtn(label, aria, () => press({ code, key: code }));
-  for (let i = 1; i <= 12; i++) keyBtn(`F${i}`, `F${i}`, () => press({ code: `F${i}`, key: `F${i}` }), "fn");
+  for (const [ch, aria] of SYMBOLS) keyBtn(ch, aria, () => press(charKey(ch, mods().length > 0)), "sym");
+  // F1–F12 ausklappbar, damit die Leiste auf dem iPad im Hochformat nicht zu lang wird.
+  const fns: HTMLButtonElement[] = [];
+  const fnToggle = keyBtn("F1–F12", "Funktionstasten F1 bis F12 zeigen", () => {
+    const show = fns[0].hidden === true;
+    for (const b of fns) b.hidden = !show;
+    fnToggle.setAttribute("aria-expanded", String(show));
+    fnToggle.classList.toggle("on", show);
+  }, "fn");
+  fnToggle.setAttribute("aria-expanded", "false");
+  for (let i = 1; i <= 12; i++) fns.push(Object.assign(keyBtn(`F${i}`, `F${i}`, () => press({ code: `F${i}`, key: `F${i}` }), "fn"), { hidden: true }));
   if (o.desktop) keyBtn("Strg+Alt+Entf", "Strg+Alt+Entf", () => o.press({ code: "Delete", key: "Delete" }, [MODS[0][0], MODS[1][0]]), "wide");
   const closeBtn = keyBtn("", "Tastatur ausblenden", () => hide(), "close");
   closeBtn.innerHTML = ICON.close;
