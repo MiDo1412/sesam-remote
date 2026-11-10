@@ -313,16 +313,93 @@ fn creds_path(path: &LibraryPath) -> PathBuf {
     path.0.with_file_name("credentials.json")
 }
 
+/// Zugangsdaten mit den Namen der Verbindungen, die sie nutzen.
 #[tauri::command]
-fn creds_list(path: State<LibraryPath>) -> Result<Vec<(creds::Cred, usize)>, String> {
+fn creds_list(path: State<LibraryPath>) -> Result<Vec<(creds::Cred, Vec<String>)>, String> {
     let lib = library::load(&path.0)?;
     Ok(creds::load(&creds_path(&path))?
         .into_iter()
         .map(|c| {
-            let uses = lib.iter().filter(|x| x.cred_ids().contains(&Some(c.id.as_str()))).count();
-            (c, uses)
+            let users = lib.iter().filter(|x| x.cred_ids().contains(&Some(c.id.as_str()))).map(|x| x.name.clone()).collect();
+            (c, users)
         })
         .collect())
+}
+
+/// Neuen Ed25519-Schlüssel für diese Zugangsdaten erzeugen (ersetzt einen vorhandenen); liefert den öffentlichen Schlüssel.
+#[tauri::command]
+fn cred_generate_key(path: State<LibraryPath>, id: String) -> Result<String, String> {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let p = creds_path(&path);
+    let mut all = creds::load(&p)?;
+    let c = all.iter_mut().find(|x| x.id == id).ok_or("Zugangsdaten nicht gefunden")?;
+    let comment = format!("{}@sesam", if c.user.is_empty() { "sesam" } else { &c.user });
+    let (private, public) = ssh::generate_ed25519(&comment)?;
+    vault::set(&creds::vault_id(&id), Kind::SshKey, &private)?;
+    c.has_key = true;
+    creds::save(&p, &all)?;
+    Ok(public)
+}
+
+/// Öffentlicher Schlüssel (für authorized_keys) zum gespeicherten privaten Schlüssel.
+#[tauri::command]
+fn cred_public_key(id: String) -> Result<String, String> {
+    let k = vault::get(&creds::vault_id(&id), Kind::SshKey)?.ok_or("Diese Zugangsdaten haben keinen SSH-Schlüssel")?;
+    ssh::public_key_of(&k)
+}
+
+/// Öffentlichen Schlüssel auf einem Server eintragen (wie ssh-copy-id), angemeldet mit den bisherigen Zugangsdaten der Verbindung.
+#[tauri::command]
+async fn cred_install_key(path: State<'_, LibraryPath>, id: String, connection: String, trust: Option<String>) -> Result<String, String> {
+    let public = cred_public_key(id)?;
+    let script = ssh::install_key_script(&public)?;
+    let c = find(&path, &connection)?;
+    let h = ssh::connect(&ssh_target(&c, trust)?).await?;
+    let o = scp::Remote::run(&h, script).await?;
+    let out = String::from_utf8_lossy(&o.out).trim().to_string();
+    match (o.code, out.as_str()) {
+        (0, "vorhanden") => Ok(format!("Der Schlüssel war auf {} schon eingetragen.", c.name)),
+        (0, _) => Ok(format!("Schlüssel auf {} eingetragen (~/.ssh/authorized_keys).", c.name)),
+        (code, _) => Err(format!("Nicht eingetragen (Code {code}): {}", String::from_utf8_lossy(&o.err).trim())),
+    }
+}
+
+/// Gespeichertes Passwort anzeigen bzw. kopieren: nur nach Touch ID bzw. Mac-Passwort.
+#[tauri::command]
+async fn cred_reveal(path: State<'_, LibraryPath>, id: String) -> Result<String, String> {
+    let cred = creds::load(&creds_path(&path))?.into_iter().find(|x| x.id == id).ok_or("Zugangsdaten nicht gefunden")?;
+    #[cfg(target_os = "macos")]
+    {
+        let reason = format!("das Passwort von «{}» anzeigen", cred.name);
+        tauri::async_runtime::spawn_blocking(move || sfsymbol::authenticate(&reason)).await.map_err(|e| e.to_string())??;
+    }
+    // shortcut: unter Windows noch ohne Windows Hello, darum dort gesperrt; mit Hello (UserConsentVerifier) freigeben.
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = &cred;
+        return Err("Anzeigen ist auf diesem System noch nicht möglich".into());
+    }
+    #[allow(unreachable_code)]
+    vault::get(&creds::vault_id(&id), Kind::Password)?.ok_or_else(|| "Kein Passwort gespeichert".into())
+}
+
+/// Kopie mit eigenem Namen, samt Geheimnissen.
+#[tauri::command]
+fn cred_duplicate(path: State<LibraryPath>, id: String, new_id: String, name: String) -> Result<creds::Cred, String> {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let p = creds_path(&path);
+    let mut all = creds::load(&p)?;
+    let src = all.iter().find(|x| x.id == id).cloned().ok_or("Zugangsdaten nicht gefunden")?;
+    let copy = creds::Cred { id: new_id, name, ..src.clone() };
+    creds::validate(&copy)?;
+    for kind in [Kind::Password, Kind::SshKey] {
+        if let Some(sec) = vault::get(&creds::vault_id(&src.id), kind)? {
+            vault::set(&creds::vault_id(&copy.id), kind, &sec)?;
+        }
+    }
+    all.push(copy.clone());
+    creds::save(&p, &all)?;
+    Ok(copy)
 }
 
 /// Anlegen/ändern. `password`/`ssh_key`: None = unverändert, "" = löschen.
@@ -1565,6 +1642,7 @@ pub fn run() {
                     .item(&P::about(app, Some("Über Sesam Remote"), Some(about))?)
                     .separator()
                     .item(&MenuItemBuilder::with_id("cmd:settings", "Einstellungen …").accelerator("CmdOrCtrl+,").build(app)?)
+                    .text("cmd:credentials", "Zugangsdaten …")
                     .text("cmd:permissions", "Berechtigungen einrichten …")
                     .separator()
                     .item(&P::services(app, Some("Dienste"))?)
@@ -1735,6 +1813,11 @@ pub fn run() {
             certs_list,
             quick_register,
             creds_list,
+            cred_generate_key,
+            cred_public_key,
+            cred_install_key,
+            cred_reveal,
+            cred_duplicate,
             cred_save,
             cred_delete,
             cred_from_connection,

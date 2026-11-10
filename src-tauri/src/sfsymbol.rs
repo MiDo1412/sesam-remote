@@ -26,6 +26,29 @@ pub fn set_app_icon(file: &std::path::Path) -> bool {
     ws.setIcon_forFile_options(Some(&icon), &NSString::from_str(&file.to_string_lossy()), NSWorkspaceIconCreationOptions::empty())
 }
 
+/// Touch ID (oder das Mac-Passwort, wo es keinen Sensor gibt) bestätigen lassen; `reason` steht im Systemdialog.
+/// Blockiert bis zur Antwort, darum nur ausserhalb des Hauptthreads aufrufen.
+pub fn authenticate(reason: &str) -> Result<(), String> {
+    use objc2::runtime::{AnyObject, Bool};
+    use objc2::{class, msg_send, rc::Retained};
+    #[link(name = "LocalAuthentication", kind = "framework")]
+    unsafe extern "C" {}
+    let (tx, rx) = std::sync::mpsc::channel::<bool>();
+    let block = block2::RcBlock::new(move |ok: Bool, _err: *mut AnyObject| {
+        let _ = tx.send(ok.as_bool());
+    });
+    // LAPolicyDeviceOwnerAuthentication = 2: Touch ID, Watch oder Passwort des Macs.
+    unsafe {
+        let ctx: Retained<AnyObject> = msg_send![class!(LAContext), new];
+        let reason = NSString::from_str(reason);
+        let _: () = msg_send![&*ctx, evaluatePolicy: 2isize, localizedReason: &*reason, reply: &*block];
+    }
+    match rx.recv_timeout(std::time::Duration::from_secs(120)) {
+        Ok(true) => Ok(()),
+        _ => Err("Nicht bestätigt".into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

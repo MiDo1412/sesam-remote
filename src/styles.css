@@ -705,3 +705,4 @@ svg.sf { background-color: currentColor; -webkit-mask: var(--sf) center / contai
 .perms-setup .sheet > *, .perms-dlg .sheet > * { grid-column: 1 / -1; }
 .perms-setup, .perms-dlg { overflow-x: hidden; overflow-y: auto; }
 .perms-dlg .sheet { width: min(480px, calc(100vw - 48px)); box-sizing: border-box; }
+.cred-users { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }

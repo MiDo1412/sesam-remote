@@ -964,6 +964,7 @@ const palette = initPalette(() => [
   { label: "Schnelle Verbindung …", hint: keyLabel("Strg+K"), keywords: "einmalig quick", run: () => $("quick").click() },
   { label: "Neues Terminal", hint: keyLabel("Strg+T"), keywords: "shell konsole powershell", run: () => void openTerminal() },
   { label: "Einstellungen", hint: keyLabel("Strg+,"), keywords: "optionen", run: () => void openSettings() },
+  { label: "Zugangsdaten …", keywords: "passwort schlüssel ssh-key verwaltung anmeldung", run: () => void openSettings("creds") },
   { label: "Berechtigungen einrichten …", keywords: "freigabe datenschutz lokales netzwerk bedienungshilfen eingabeüberwachung", run: () => void openPermissions() },
   { label: "Ubuntu-PC hinzufügen …", keywords: "gnome assistent neue verbindung", run: () => ubuntu.open() },
   { label: "Bibliothek anzeigen", keywords: "übersicht verbindungen", run: () => runTool("Bibliothek") },
@@ -1001,6 +1002,7 @@ const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
   else if (cmd === "about") openSettings("about");
   else if (cmd === "permissions") void openPermissions();
+  else if (cmd === "credentials") openSettings("creds");
   else if (cmd === "palette") palette.open();
   else if (cmd === "addubuntu") ubuntu.open();
   else if (cmd === "terminal") void openTerminal();
