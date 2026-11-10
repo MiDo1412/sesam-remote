@@ -716,6 +716,7 @@ const blank = (): Connection => ({
   sharedFolder: "",
   skipCertCheck: false,
   sshTunnel: false,
+  persistShell: "",
   rdpNoNtlm: false,
   rdpKdc: "",
   rdpGateway: "",
@@ -822,6 +823,7 @@ function edit(c: Connection | null, asNew = false) {
   f.sharedFolder.value = editing.sharedFolder;
   f.skipCertCheck.checked = editing.skipCertCheck;
   f.sshTunnel.checked = !!editing.sshTunnel;
+  f.persistShell.checked = editing.persistShell === "tmux";
   (form.elements.namedItem("os") as HTMLSelectElement).value = editing.os ?? "";
   fillCreds(editing.credentialId ?? null);
   for (const p of svcPickers) void p.fill(editing[p.name] ?? null);
@@ -961,6 +963,7 @@ form.onsubmit = async (ev) => {
     sharedFolder: s("sharedFolder"),
     skipCertCheck: fd.get("skipCertCheck") !== null,
     sshTunnel: fd.get("sshTunnel") !== null,
+    persistShell: fd.get("persistShell") !== null ? "tmux" : "",
     os: s("os") as Connection["os"],
     credentialId: s("credentialId") || null,
     customThumb: pendingThumb ? true : clearThumb ? false : editing.customThumb,

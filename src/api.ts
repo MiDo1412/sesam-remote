@@ -71,6 +71,8 @@ export interface Connection {
   mac: string;
   /** Desktop durch einen SSH-Tunnel. */
   sshTunnel: boolean;
+  /** "" = aus, "tmux" = Shell auf dem Server halten. */
+  persistShell?: string;
 }
 
 export interface Cred {
@@ -175,11 +177,14 @@ export const api = {
   credDelete: (id: string) => invoke<void>("cred_delete", { id }),
   credFromConnection: (id: string, credId: string, name: string) => invoke<Cred>("cred_from_connection", { id, credId, name }),
   quickRegister: (connection: Connection, password?: string, keyFile?: string) => invoke<string>("quick_register", { connection, password, keyFile }),
-  shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void) => {
+  shellOpen: (id: string, cols: number, rows: number, trust: string | null, onEvent: (e: ShellEvent) => void, slot = 0) => {
     const ch = new Channel<ShellEvent>();
     ch.onmessage = onEvent;
-    return invoke<string>("shell_open", { id, cols, rows, trust, onEvent: ch });
+    return invoke<string>("shell_open", { id, cols, rows, trust, slot, onEvent: ch });
   },
+  shellHeldList: (sid: string) => invoke<[string, boolean, number][]>("shell_held_list", { sid }),
+  shellHeldKill: (sid: string, name: string) => invoke<void>("shell_held_kill", { sid, name }),
+  connSetPersist: (id: string, on: boolean) => invoke<void>("conn_set_persist", { id, on }),
   /** Laufende Shell an dieses Fenster hängen (Tab abkoppeln/andocken). */
   shellAttach: (sid: string, onEvent: (e: ShellEvent) => void) => {
     const ch = new Channel<ShellEvent>();

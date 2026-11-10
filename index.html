@@ -200,6 +200,7 @@
             <label data-tip="Standard 22.">Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
           </div>
         </fieldset>
+        <label class="option"><span><b>Shell auf dem Server halten (tmux)</b><small>Die Shell läuft in einer tmux-Sitzung weiter, wenn die Verbindung abbricht (Ruhezustand, Netzwechsel); beim Neuverbinden hängt Sesam sie wieder an, laufende Befehle laufen weiter. Braucht tmux auf dem Server, Sesam installiert nichts.</small></span><input type="checkbox" name="persistShell" /></label>
         <fieldset class="span svc">
           <legend>Dateien über FTP <small>FTPS, FTP</small> <button type="button" class="help-btn" data-help="ftp" aria-label="Hilfe zu FTP">?</button></legend>
           <label class="switch"><input type="checkbox" name="ftpOn" /> Ein</label>

@@ -30,6 +30,8 @@ export interface TabCtx {
   setState(s: "connecting" | "connected" | "closed"): void;
   /** Weitere Shell usw. als neuen Tab öffnen. */
   openTab(kind: Kind, fresh?: boolean): void;
+  /** Nummer unter den offenen Tabs derselben Verbindung und Art (für gehaltene Shells). */
+  slot(): number;
   /** Zusatzangaben beim Öffnen, z. B. ein Befehl, den die Shell nach dem Verbinden tippt,
    *  oder eine laufende Sitzung aus einem anderen Fenster (`attach`). */
   extra?: { command?: string; attach?: Attach };
@@ -290,6 +292,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
         reconnectBar(tab, was);
       },
       openTab: (k, f) => openTab(conn, k, f),
+      slot: () => tab.slot,
       extra,
       closeSelf: () => closeTab(tab),
     },

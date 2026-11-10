@@ -748,13 +748,16 @@ async fn shell_open(
     cols: u32,
     rows: u32,
     trust: Option<String>,
+    slot: Option<u32>,
     on_event: Channel<ssh::ShellEvent>,
 ) -> Result<String, String> {
     let c = find(&path, &id)?;
     let mut t = ssh_target(&c, trust)?;
     t.forwards = c.forwards.iter().map(|l| forward::parse(l)).collect::<Result<_, _>>()?;
     let relay = relay::Relay::new(on_event);
-    let shell = ssh::open(t, cols, rows, relay.clone()).await?;
+    // Gehaltene Shell: je Verbindung und Tab-Nummer eine tmux-Sitzung, beim Neuverbinden wieder angehängt.
+    let hold = (c.persist_shell == "tmux").then(|| format!("sesam-{}-{}", c.id.chars().filter(char::is_ascii_alphanumeric).take(8).collect::<String>(), slot.unwrap_or(0)));
+    let shell = ssh::open_with(t, cols, rows, relay.clone(), hold.as_deref()).await?;
     let sid = new_sid(&c.id);
     touch(&path, &c.id);
     shells.0.lock().await.insert(sid.clone(), shell);
@@ -801,6 +804,29 @@ fn conn_set_os(path: State<LibraryPath>, id: String, os: String) -> Result<bool,
     c.os = os;
     library::save(&path.0, &lib)?;
     Ok(true)
+}
+
+/// Gehaltene Sesam-Shells (tmux) auf dem Server dieser Shell.
+#[tauri::command]
+async fn shell_held_list(shells: State<'_, ssh::Shells>, sid: String) -> Result<Vec<(String, bool, u64)>, String> {
+    let h = shells.0.lock().await.get(&sid).ok_or("Shell geschlossen")?.handle();
+    ssh::tmux_list(&h).await
+}
+
+#[tauri::command]
+async fn shell_held_kill(shells: State<'_, ssh::Shells>, sid: String, name: String) -> Result<(), String> {
+    let h = shells.0.lock().await.get(&sid).ok_or("Shell geschlossen")?.handle();
+    ssh::tmux_kill(&h, &name).await
+}
+
+/// Shell dieser Verbindung künftig halten (tmux) bzw. nicht mehr.
+#[tauri::command]
+fn conn_set_persist(path: State<LibraryPath>, id: String, on: bool) -> Result<(), String> {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let mut lib = library::load(&path.0)?;
+    let c = lib.iter_mut().find(|c| c.id == id).ok_or("Verbindung nicht gefunden")?;
+    c.persist_shell = if on { "tmux".into() } else { String::new() };
+    library::save(&path.0, &lib)
 }
 
 /// Rechner der Shell befragen (Raspberry-Pi-Erkennung, Temperatur, Unterspannung).
@@ -2028,6 +2054,9 @@ pub fn run() {
             shell_write,
             shell_resize,
             shell_probe,
+            shell_held_list,
+            shell_held_kill,
+            conn_set_persist,
             conn_set_os,
             shell_close,
             vnc_open,

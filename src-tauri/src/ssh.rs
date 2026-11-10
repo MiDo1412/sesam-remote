@@ -444,7 +444,47 @@ pub fn parse_ports(text: &str) -> Vec<(String, u16)> {
         .collect()
 }
 
+/// Befehl für eine gehaltene Shell: in der tmux-Sitzung `name` (anhängen oder neu), so eingestellt, dass sie sich
+/// wie ein normales Terminal anfühlt: keine Statuszeile, kein Präfix-Kürzel, Mausrad scrollt, kein Esc-Verzug.
+/// Fehlt tmux: Hinweis und eine normale Login-Shell.
+pub fn tmux_command(name: &str) -> Result<String, String> {
+    if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err("Ungültiger Sitzungsname".into());
+    }
+    Ok(format!(
+        "if command -v tmux >/dev/null 2>&1; then exec tmux new-session -A -s {name} \\; set-option status off \\; set-option prefix None \\; set-option mouse on \\; set-option -s escape-time 0; \
+else printf '\\033[2m[Sesam] tmux fehlt auf diesem Server; die Shell läuft ohne Halten weiter.\\033[0m\\r\\n'; exec \"${{SHELL:-/bin/sh}}\" -l; fi"
+    ))
+}
+
+/// Gehaltene Sesam-Sitzungen (tmux, Name beginnt mit «sesam-»): Name, angehängt ja/nein, gestartet (Unix-Zeit).
+pub async fn tmux_list(h: &Handle<Client>) -> Result<Vec<(String, bool, u64)>, String> {
+    let o = crate::scp::Remote::run(h, "tmux ls -F '#{session_name} #{session_attached} #{session_created}' 2>/dev/null".into()).await?;
+    Ok(String::from_utf8_lossy(&o.out)
+        .lines()
+        .filter_map(|l| {
+            let mut it = l.split(' ');
+            let (n, a, c) = (it.next()?, it.next()?, it.next()?);
+            n.starts_with("sesam-").then(|| (n.to_string(), a != "0", c.parse().unwrap_or(0)))
+        })
+        .collect())
+}
+
+pub async fn tmux_kill(h: &Handle<Client>, name: &str) -> Result<(), String> {
+    tmux_command(name)?; // prüft den Namen
+    if !name.starts_with("sesam-") {
+        return Err("Nur Sitzungen von Sesam".into());
+    }
+    let o = crate::scp::Remote::run(h, format!("tmux kill-session -t {name}")).await?;
+    if o.code == 0 { Ok(()) } else { Err(String::from_utf8_lossy(&o.err).trim().to_string()) }
+}
+
 pub async fn open(t: Target, cols: u32, rows: u32, on_event: crate::relay::Relay<ShellEvent>) -> Result<Shell, String> {
+    open_with(t, cols, rows, on_event, None).await
+}
+
+/// Wie `open`, mit `hold` = Name einer tmux-Sitzung, in der die Shell läuft (übersteht Unterbrüche).
+pub async fn open_with(t: Target, cols: u32, rows: u32, on_event: crate::relay::Relay<ShellEvent>, hold: Option<&str>) -> Result<Shell, String> {
     let handle = Arc::new(connect(&t).await?);
     let note = on_event.clone();
     let forwards = forward::start(&handle, &t.forwards, move |m| {
@@ -456,7 +496,10 @@ pub async fn open(t: Target, cols: u32, rows: u32, on_event: crate::relay::Relay
     if t.opts.agent && t.opts.agent_forward {
         channel.agent_forward(false).await.map_err(|e| e.to_string())?;
     }
-    channel.request_shell(false).await.map_err(|e| e.to_string())?;
+    match hold {
+        Some(name) => channel.exec(false, tmux_command(name)?).await.map_err(|e| e.to_string())?,
+        None => channel.request_shell(false).await.map_err(|e| e.to_string())?,
+    }
     let (mut reader, writer) = channel.split();
 
     tauri::async_runtime::spawn(async move {
@@ -501,6 +544,14 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tmux_befehl_und_namen() {
+        let c = tmux_command("sesam-ab12-0").unwrap();
+        assert!(c.contains("new-session -A -s sesam-ab12-0") && c.contains("status off") && c.contains("prefix None") && c.contains("mouse on"));
+        assert!(c.contains("tmux fehlt"));
+        assert!(tmux_command("x; rm -rf ~").is_err() && tmux_command("").is_err());
+    }
 
     #[test]
     fn raspberry_erkennen() {

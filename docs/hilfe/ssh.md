@@ -68,3 +68,13 @@ Im Sheet unter «Erweitert»:
   `R9000 localhost:3000` macht Port 3000 dieses Computers auf dem Server unter Port 9000 erreichbar,
   `D1080` ist ein SOCKS5-Proxy auf `localhost:1080`.
 - **Keepalive, Kompression, veraltete Algorithmen:** für instabile Leitungen und alte Server.
+
+## Shell auf dem Server halten (tmux)
+
+Unter *Bearbeiten › Dienste › Shell auf dem Server halten* läuft die Shell in einer tmux-Sitzung auf dem Server. Bricht die Verbindung ab (Ruhezustand, WLAN-Wechsel, VPN), läuft dort alles weiter; Sesam verbindet neu und hängt dieselbe Sitzung wieder an. Jeder Shell-Tab einer Verbindung hat seine eigene Sitzung (`sesam-…-0`, `-1` …).
+
+Sesam stellt tmux so ein, dass es sich wie ein normales Terminal anfühlt: keine Statuszeile, keine tmux-Tastenkürzel, das Mausrad blättert im Verlauf. Text markierst du dann mit gedrückter Wahltaste (⌥) bzw. Umschalttaste.
+
+Fehlt tmux auf dem Server, startet eine normale Shell mit einem Hinweis; Sesam installiert nichts. Unter *… › Gehaltene Sitzungen* siehst du die Sesam-Sitzungen auf diesem Server, auch verwaiste, und kannst sie beenden.
+
+Nach dem ersten Abbruch einer Shell fragt Sesam einmal, ob es sie künftig halten soll.

@@ -91,6 +91,8 @@ pub struct Connection {
     pub mac: String,
     /// Desktop (RDP/VNC) durch einen SSH-Tunnel: der Dienst muss nicht offen im Netz stehen.
     pub ssh_tunnel: bool,
+    /// Shell auf dem Server halten: "" = aus, "tmux" = in einer tmux-Sitzung (übersteht Unterbrüche).
+    pub persist_shell: String,
 }
 
 impl Default for Connection {
@@ -146,6 +148,7 @@ impl Default for Connection {
             last_used: None,
             mac: String::new(),
             ssh_tunnel: false,
+            persist_shell: String::new(),
         }
     }
 }
@@ -162,6 +165,9 @@ impl Connection {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        if !["", "tmux"].contains(&self.persist_shell.as_str()) {
+            return Err("Ungültige Auswahl für «Shell halten»".into());
+        }
         if !["", "login", "session"].contains(&self.rdp_target.as_str()) {
             return Err("Ungültige Auswahl für RDP".into());
         }

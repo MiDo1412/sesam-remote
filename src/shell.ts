@@ -7,7 +7,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import "@xterm/xterm/css/xterm.css";
 import { api, HOSTKEY_UNKNOWN } from "./api";
-import { askHostKey, askText } from "./ui";
+import { ask, askHostKey, askText, tell } from "./ui";
 import { openMenu } from "./menu";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
@@ -207,6 +207,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     toolButton(ICON.search, "Suchen", find, { shortcut: "Strg+Umschalt+F" }),
     broadcastBtn,
     toolButton(ICON.typeClipboard, "Textbausteine", () => void snippets(), { secondary: true }),
+    ...(local ? [] : [toolButton(ICON.shell, "Gehaltene Sitzungen", () => void heldSessions(), { secondary: true, shortcut: "tmux auf dem Server" })]),
     schemeBtn,
     ...(isTouch() ? [kb.button] : []),
     toolSep(),
@@ -245,6 +246,31 @@ export function shellTab(ctx: TabCtx): TabHandle {
     hostTimer = window.setTimeout(watchHost, 60_000);
   };
 
+  // ---------- Gehaltene Shell (tmux) ----------
+  /** Nach dem ersten Abbruch einer laufenden Shell einmal anbieten, sie künftig auf dem Server zu halten. */
+  const offerHold = async () => {
+    const key = `sesam.holdAsked.${c.id}`;
+    if (local || c.persistShell === "tmux" || c.id.startsWith("quick-") || localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    if (!(await ask("Shell auf dem Server halten?", `Die Verbindung zu ${c.name} ist abgebrochen. Mit tmux auf dem Server läuft die Shell dort weiter, und Sesam hängt sie beim Neuverbinden wieder an; laufende Befehle gehen nicht verloren. Sesam installiert dafür nichts; fehlt tmux, läuft die Shell wie bisher.`, "Künftig halten", "Nein danke"))) return;
+    await api.connSetPersist(c.id, true).catch(() => {});
+    c.persistShell = "tmux";
+    dispatchEvent(new CustomEvent("sesam:library-changed"));
+  };
+  /** Gehaltene Sesam-Sitzungen auf diesem Server auflisten und einzelne beenden. */
+  const heldSessions = async () => {
+    if (!sid) return tell("Nicht verbunden", "Die Liste kommt vom Server; bitte zuerst verbinden.");
+    const list = await api.shellHeldList(sid).catch((e) => (tell("Nicht gelesen", String(e)), null));
+    if (!list) return;
+    if (!list.length) return tell("Gehaltene Sitzungen", "Auf diesem Server läuft keine von Sesam gehaltene Sitzung (oder tmux fehlt).");
+    for (const [name, attached, created] of list) {
+      const when = created ? new Date(created * 1000).toLocaleString("de-CH") : "?";
+      if (await ask(name, `Gestartet ${when}${attached ? ", gerade angehängt" : ", nicht angehängt (verwaist)"}. Beenden schliesst die Sitzung samt laufenden Befehlen.`, "Beenden", "Weiter")) {
+        await api.shellHeldKill(sid, name).catch((e) => tell("Nicht beendet", String(e)));
+      }
+    }
+  };
+
   // ---------- Verbinden ----------
   const connect = async () => {
     refit();
@@ -253,6 +279,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
       else {
         status.textContent = e.reason;
         ctx.setState("closed");
+        void offerHold();
       }
     };
     let trust: string | null = null;
@@ -267,7 +294,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
           handoffDone(at.token);
           api.shellResize(sid, term.cols, term.rows).catch(() => {});
         } else if (local) sid = await api.termOpen(local, term.cols || 80, term.rows || 24, onEvent);
-        else sid = await api.shellOpen(c.id, term.cols || 80, term.rows || 24, trust, onEvent);
+        else sid = await api.shellOpen(c.id, term.cols || 80, term.rows || 24, trust, onEvent, ctx.slot());
         status.textContent = "";
         // Vorgegebener Befehl (z. B. Setup-Script): getippt, der Benutzer sieht und bestätigt alles im Terminal.
         if (ctx.extra?.command && !at) setTimeout(() => send(ctx.extra!.command!), 400);
