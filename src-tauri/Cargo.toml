@@ -87,6 +87,9 @@ portable-pty = "0.9"
 [target.'cfg(target_os = "ios")'.dependencies]
 keyring-core = "1"
 apple-native-keyring-store = { version = "1", features = ["protected"] }
+# Zwischenablage über UIPasteboard (src/clipshare.rs); beide bringt Tauri auf iOS schon mit
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
 
 # Windows-Zwischenablage für RDP (Text, Bilder, Dateien)
 [target.'cfg(windows)'.dependencies]

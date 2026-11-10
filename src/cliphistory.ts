@@ -19,6 +19,8 @@ export const clipHistory = () => [...history];
 
 export function initClipHistory() {
   let last = "";
+  // iPad: jedes Lesen der Zwischenablage fragt um Erlaubnis, darum dort kein laufender Verlauf.
+  if (/iPad|iPhone|Android/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1)) return;
   setInterval(async () => {
     if (!document.hasFocus()) return;
     const t = await api.clipRead().catch(() => "");

@@ -79,25 +79,55 @@ fn write_local_files(files: &[PathBuf]) -> Result<(), String> {
     clipboard(|cb| cb.set().file_list(files)).map_err(|e| e.to_string())
 }
 
-// shortcut: iPadOS/Android ohne Anbindung an die System-Zwischenablage (arboard kennt sie nicht); im Frontend
-// greift dort navigator.clipboard. Später über UIPasteboard, wenn Sesam für das iPad gebaut wird.
-#[cfg(mobile)]
+// iPadOS: Text über UIPasteboard (ohne Dateien und Bilder). Android hat noch keine Anbindung.
+#[cfg(target_os = "ios")]
+fn pasteboard<T>(f: impl FnOnce(&objc2::runtime::AnyObject) -> T) -> Result<T, String> {
+    use objc2::{class, msg_send, runtime::AnyObject};
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let pb: *mut AnyObject = unsafe { msg_send![class!(UIPasteboard), generalPasteboard] };
+    unsafe { pb.as_ref() }.map(f).ok_or_else(|| "Zwischenablage nicht verfügbar".to_string())
+}
+
+#[cfg(target_os = "ios")]
+pub fn get_text() -> Result<String, String> {
+    use objc2::{msg_send, rc::Retained};
+    use objc2_foundation::NSString;
+    pasteboard(|pb| {
+        let s: Option<Retained<NSString>> = unsafe { msg_send![pb, string] };
+        s.map(|s| s.to_string()).unwrap_or_default()
+    })
+}
+
+#[cfg(target_os = "ios")]
+pub fn set_text(t: &str) -> Result<(), String> {
+    use objc2::msg_send;
+    use objc2_foundation::NSString;
+    let s = NSString::from_str(t);
+    pasteboard(|pb| unsafe { msg_send![pb, setString: &*s] })
+}
+
+#[cfg(all(mobile, not(target_os = "ios")))]
 const NO_CLIP: &str = "Die Zwischenablage dieses Geräts ist in Sesam noch nicht angebunden.";
-#[cfg(mobile)]
+#[cfg(all(mobile, not(target_os = "ios")))]
 pub fn get_text() -> Result<String, String> {
     Err(NO_CLIP.into())
 }
-#[cfg(mobile)]
+#[cfg(all(mobile, not(target_os = "ios")))]
 pub fn set_text(_t: &str) -> Result<(), String> {
     Err(NO_CLIP.into())
 }
+/// iPad: nur Text (Dateien und Bilder aus der Zwischenablage später).
 #[cfg(mobile)]
 pub fn read_local() -> Local {
-    Local::Nothing
+    match get_text() {
+        Ok(t) if !t.is_empty() => Local::Text(t),
+        _ => Local::Nothing,
+    }
 }
 #[cfg(mobile)]
 fn write_local_files(_files: &[PathBuf]) -> Result<(), String> {
-    Err(NO_CLIP.into())
+    Err("Dateien in der Zwischenablage gehen auf diesem Gerät nicht".into())
 }
 
 pub fn write_local_text(t: &str) {

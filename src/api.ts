@@ -148,6 +148,9 @@ if (import.meta.env.DEV) {
   console.assert(new Uint8Array(asArrayBuffer(v))[0] === 1 && asArrayBuffer([0, 5]).byteLength === 2 && asArrayBuffer(new ArrayBuffer(3)).byteLength === 3, "asArrayBuffer");
 }
 
+// Wie titlebar.ts isMobile (hier ohne Import, damit api.ts unabhängig bleibt).
+const mobileDevice = /iPad|iPhone|Android/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1);
+
 export const api = {
   list: () => invoke<Connection[]>("library_list"),
   /** Geheimnisse: undefined = unverändert, "" = löschen */
@@ -202,7 +205,8 @@ export const api = {
   },
   /** Lokales Terminal (PTY) mit einem Profil starten; Schreiben/Grösse/Schliessen wie bei der SSH-Shell. */
   /** Zwischenablage über das System statt navigator.clipboard (das fragt in WebView2 nach einer Berechtigung). */
-  clipRead: () => invoke<string>("clip_read"),
+  // iPad: Lesen nur nach Bestätigung durch den Nutzer; die Webansicht zeigt dafür «Einsetzen» an (Schreiben geht direkt).
+  clipRead: () => (mobileDevice ? navigator.clipboard.readText() : invoke<string>("clip_read")),
   /** Erreichbarkeit (Latenz in ms, null = nicht erreichbar); merkt sich dabei die MAC-Adresse. */
   connReach: (id: string) => invoke<number | null>("conn_reach", { id }),
   connWake: (id: string) => invoke<void>("conn_wake", { id }),
