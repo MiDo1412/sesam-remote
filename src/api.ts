@@ -256,6 +256,10 @@ export const api = {
   sftpOwner: (sid: string, path: string) => invoke<string>("sftp_owner", { sid, path }),
   sftpSetPerms: (sid: string, path: string, mode: number | null, owner: string | null, recursive: boolean, sudo: boolean, password?: string) =>
     invoke<void>("sftp_set_perms", { sid, path, mode, owner, recursive, sudo, password }),
+  sftpTrash: (sid: string, path: string) => invoke<string>("sftp_trash", { sid, path }),
+  sftpTrashSlot: (sid: string) => invoke<string>("sftp_trash_slot", { sid }),
+  sftpRestore: (sid: string, trashed: string, original: string) => invoke<void>("sftp_restore", { sid, trashed, original }),
+  sftpTrashCleanup: (sid: string, days: number) => invoke<number>("sftp_trash_cleanup", { sid, days }),
   sftpTempdir: (sid: string) => invoke<string>("sftp_tempdir", { sid }),
   sftpSudoMove: (sid: string, from: string, destDir: string, replace: boolean, password?: string) => invoke<void>("sftp_sudo_move", { sid, from, destDir, replace, password }),
   /** `op`: remove, rename (arg = neuer Name), mkdir/touch (arg = Name), fetch (arg = temporärer Ordner). */

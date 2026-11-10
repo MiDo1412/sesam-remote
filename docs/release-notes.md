@@ -47,6 +47,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Mehr und schönere Terminal-Designs:** Raster mit echter Vorschau (Prompt, farbige Ausgabe, Fehler, Auswahl, blinkender Cursor, alle 16 Farben), Suche und Filter hell/dunkel. Neu: One Light, Gruvbox Hell, Tokyo Night (Day), Catppuccin Latte/Mocha, GitHub hell/dunkel und «automatische» Paare, die dem Erscheinungsbild folgen. Eigene Designs: duplizieren und mit Farbwählern anpassen (wirkt sofort auf offene Shells), .itermcolors und Windows-Terminal-Schemata importieren, als Windows-Terminal-Schema exportieren.
 - **Nahtlose Shell:** Auf Wunsch je Verbindung läuft die Shell in einer tmux-Sitzung auf dem Server und übersteht Unterbruch, Ruhezustand und Netzwechsel; Sesam hängt sie beim Neuverbinden wieder an. tmux ohne Statuszeile und eigene Kürzel; gehaltene und verwaiste Sitzungen lassen sich auflisten und beenden. Nach dem ersten Abbruch fragt Sesam einmal nach.
 - **Durchreiche:** Dateien auf eine SSH-Shell ziehen lädt sie in deren Ordner und setzt die Pfade in die Zeile; auf das Remote-Bild gezogen landen sie über SSH desselben Geräts in dessen Downloads; das Dateifenster kann dem Ordner der Shell folgen.
+- **Rückgängig auf dem Server:** Gelöschtes und beim Hochladen Ersetztes kommt zuerst in einen Papierkorb im Home auf dem Server (7 Tage, einstellbar, räumt selbst auf); «Rückgängig» in der Übertragungsliste und ⌘Z bzw. Strg+Z holen es zurück. Geht der Papierkorb nicht, fragt Sesam, statt still endgültig zu löschen.
 
 ### Verbessert
 

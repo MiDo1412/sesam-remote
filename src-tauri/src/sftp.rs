@@ -10,6 +10,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+/// Papierkorb von Sesam im Home des Benutzers auf dem Server (versteckt).
+pub const TRASH: &str = ".sesam-papierkorb";
+
 pub struct Sftp {
     pub s: SftpSession,
     /// Hält die SSH-Verbindung offen und dient für Befehle wie `sha256sum` (in Tests ohne SSH).
@@ -161,6 +164,75 @@ impl Sftp {
         }
         self.s.rename(path, &to).await.map_err(|e| format!("{path}: {e}"))?;
         Ok(to)
+    }
+
+    /// In den Papierkorb auf dem Server verschieben (`~/.sesam-papierkorb/<Zeitstempel>/<Name>`), statt zu löschen.
+    /// Gibt den Pfad im Papierkorb zurück; scheitert z. B. bei einem anderen Dateisystem (dann fragt die Oberfläche).
+    pub async fn to_trash(&self, path: &str) -> Result<String, String> {
+        if rparent(path).is_none() {
+            return Err("Das Wurzelverzeichnis lässt sich nicht löschen".into());
+        }
+        let name = path.trim_end_matches('/').rsplit('/').next().unwrap_or("Element").to_string();
+        let home = self.s.canonicalize(".").await.map_err(err)?;
+        let root = rjoin(&home, TRASH);
+        if path == root || path.starts_with(&format!("{root}/")) {
+            return Err("Liegt schon im Papierkorb".into());
+        }
+        let slot = self.trash_slot().await?;
+        let dest = rjoin(&slot, &name);
+        self.s.rename(path, &dest).await.map_err(|e| format!("Papierkorb: {e}"))?;
+        Ok(dest)
+    }
+
+    /// Neuer Zeitstempel-Ordner im Papierkorb (für die Erhöhung mit sudo: dorthin verschiebt root).
+    pub async fn trash_slot(&self) -> Result<String, String> {
+        let root = rjoin(&self.s.canonicalize(".").await.map_err(err)?, TRASH);
+        let slot = rjoin(&root, &chrono::Local::now().format("%Y%m%d-%H%M%S-%3f").to_string());
+        for d in [&root, &slot] {
+            if !self.s.try_exists(d).await.map_err(err)? {
+                self.s.create_dir(d).await.map_err(|e| format!("Papierkorb {d}: {e}"))?;
+            }
+        }
+        Ok(slot)
+    }
+
+    /// Aus dem Papierkorb an den alten Ort zurück (nur wenn dort nichts Neues liegt).
+    pub async fn restore(&self, trashed: &str, original: &str) -> Result<(), String> {
+        let home = self.s.canonicalize(".").await.map_err(err)?;
+        if !trashed.starts_with(&format!("{}/", rjoin(&home, TRASH))) {
+            return Err("Nur aus dem Papierkorb von Sesam".into());
+        }
+        if self.s.try_exists(original).await.map_err(err)? {
+            self.remove(original).await?; // an seiner Stelle liegt die ersetzende Fassung
+        }
+        self.s.rename(trashed, original).await.map_err(|e| format!("Zurückholen: {e}"))?;
+        if let Some(slot) = rparent(trashed) {
+            let _ = self.s.remove_dir(&slot).await; // leerer Zeitstempel-Ordner
+        }
+        Ok(())
+    }
+
+    /// Papierkorb aufräumen: Zeitstempel-Ordner älter als `days` Tage löschen. Gibt die Zahl der übrigen zurück.
+    pub async fn trash_cleanup(&self, days: u32) -> Result<usize, String> {
+        let home = self.s.canonicalize(".").await.map_err(err)?;
+        let root = rjoin(&home, TRASH);
+        if !self.s.try_exists(&root).await.map_err(err)? {
+            return Ok(0);
+        }
+        let cut = (chrono::Local::now() - chrono::Duration::days(i64::from(days))).format("%Y%m%d-%H%M%S").to_string();
+        let mut left = 0;
+        for e in self.s.read_dir(&root).await.map_err(err)? {
+            let n = e.file_name();
+            if n == "." || n == ".." {
+                continue;
+            }
+            if n.len() >= 15 && n[..15] < *cut {
+                let _ = self.remove(&rjoin(&root, &n)).await;
+            } else {
+                left += 1;
+            }
+        }
+        Ok(left)
     }
 
     /// Datei oder Ordner samt Inhalt löschen. Verknüpfungen werden gelöscht, nicht verfolgt.
@@ -360,6 +432,13 @@ pub fn sudo_op_script(op: &str, path: &str, arg: &str) -> Result<String, String>
             valid_name(arg)?;
             let t = q(&rjoin(path, arg))?;
             Ok(format!("if [ -e {t} ]; then echo \"«{arg}» gibt es dort schon\" >&2; exit 3; fi; : > {t}"))
+        }
+        // In den Papierkorb (Zeitstempel-Ordner von `trash_slot`) verschieben, statt zu löschen.
+        "trash" => {
+            if !arg.contains(&format!("/{TRASH}/")) || arg.contains("..") || path.trim_end_matches('/').is_empty() {
+                return Err("Ungültiger Papierkorb".into());
+            }
+            Ok(format!("mv -- {p} {}/", q(arg)?))
         }
         // Zum Herunterladen: Kopie in einen temporären Ordner, die dem angemeldeten Benutzer gehört.
         "fetch" => {
@@ -811,6 +890,29 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn papierkorb_und_zurueckholen() {
+        let fs = Arc::new(Mutex::new(MemFs::default()));
+        fs.lock().unwrap().nodes.insert("/home".into(), None);
+        fs.lock().unwrap().nodes.insert("/home/a.txt".into(), Some(b"alt".to_vec()));
+        let (client, server) = tokio::io::duplex(1 << 20);
+        russh_sftp::server::run(server, Server { fs: fs.clone(), listed: HashSet::new() }).await;
+        let sftp = Sftp { s: SftpSession::new(client).await.unwrap(), ssh: None };
+        let t = sftp.to_trash("/home/a.txt").await.unwrap();
+        assert!(t.starts_with("/home/.sesam-papierkorb/") && t.ends_with("/a.txt"), "{t}");
+        assert!(!fs.lock().unwrap().nodes.contains_key("/home/a.txt"));
+        // Inzwischen liegt eine neue Fassung dort: Zurückholen ersetzt sie durch die alte.
+        fs.lock().unwrap().nodes.insert("/home/a.txt".into(), Some(b"neu".to_vec()));
+        sftp.restore(&t, "/home/a.txt").await.unwrap();
+        assert_eq!(fs.lock().unwrap().nodes["/home/a.txt"].as_deref(), Some(b"alt".as_slice()));
+        assert!(sftp.restore("/etc/passwd", "/home/x").await.is_err(), "nur aus dem Papierkorb");
+        assert!(sftp.to_trash("/home/.sesam-papierkorb").await.is_err());
+        // Aufräumen: frische Einträge bleiben.
+        let _ = sftp.to_trash("/home/a.txt").await.unwrap();
+        assert_eq!(sftp.trash_cleanup(7).await.unwrap(), 1);
+        assert_eq!(sftp.trash_cleanup(0).await.unwrap(), 1, "Zeitstempel dieser Sekunde zählt noch nicht als alt");
+    }
+
+    #[tokio::test]
     async fn upload_and_download_roundtrip() {
         let fs = Arc::new(Mutex::new(MemFs::default()));
         fs.lock().unwrap().nodes.insert("/home".into(), None);

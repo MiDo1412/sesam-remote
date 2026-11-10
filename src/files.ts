@@ -774,7 +774,18 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     }
   }
 
-  function start(upload: boolean, src: string, destDir: string, name: string, replace = false, then?: () => void) {
+  function start(upload: boolean, src: string, destDir: string, name: string, replace: boolean | "force" = false, then?: () => void) {
+    // Ersetzen auf dem Server: die alte Fassung zuerst in den Papierkorb, dann normal hochladen («force» = ohne).
+    if (upload && replace === true && !ftp && sid) {
+      const target = `${destDir.replace(/\/$/, "")}/${name}`;
+      void api
+        .sftpTrash(sid, target)
+        .then((t) => (undoRow(`↺ ${name} (ersetzt)`, t, target), start(true, src, destDir, name, false, then)))
+        .catch(async (e) => {
+          if (await ask("Alte Fassung nicht gesichert", `${e}\n\n«${name}» trotzdem ersetzen, ohne Rückgängig?`, "Ersetzen")) start(true, src, destDir, name, "force", then);
+        });
+      return;
+    }
     const row = el("div", "transfer");
     const label = el("span", "transfer-name", `${upload ? "↑" : "↓"} ${name} → ${upload ? c.name : "Dieser Computer"}${replace ? " (ersetzt)" : ""}`);
     const bar = el("progress");
@@ -826,7 +837,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
             row.append(again);
           }
         }
-      }, replace)
+      }, !!replace)
       .then((id) => {
         tid = id;
         running.add(id);
@@ -1035,6 +1046,62 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     }
   }
 
+  // ---------- Papierkorb auf dem Server und Rückgängig ----------
+  // Was Sesam löscht oder ersetzt, kommt zuerst nach ~/.sesam-papierkorb (Zeitstempel-Ordner); ⌘Z bzw. Strg+Z holt es zurück.
+  const undoStack: { trashed: string; original: string; label: string; row: HTMLElement }[] = [];
+  const trashDays = () => Math.max(1, Number(localStorage.getItem("sesam.trashDays")) || 7);
+
+  /** Eintrag in der Übertragungsliste mit «Rückgängig». */
+  function undoRow(label: string, trashed: string, original: string) {
+    const row = el("div", "transfer");
+    const name = el("span", "transfer-name", label);
+    const state = el("span", "transfer-state", `im Papierkorb auf ${c.name} (${trashDays()} Tage)`);
+    state.title = trashed;
+    const btn = el("button", "plain", "Rückgängig");
+    btn.type = "button";
+    btn.title = `Rückgängig (${navigator.userAgent.includes("Mac") ? "⌘Z" : "Strg+Z"})`;
+    const entry = { trashed, original, label, row };
+    btn.onclick = () => void undo(entry);
+    row.append(name, el("span"), state, btn);
+    transferList.prepend(row);
+    undoStack.push(entry);
+  }
+
+  async function undo(entry = undoStack[undoStack.length - 1]) {
+    if (!entry || !sid) return;
+    try {
+      await api.sftpRestore(sid, entry.trashed, entry.original);
+      undoStack.splice(undoStack.indexOf(entry), 1);
+      entry.row.querySelector("button")?.remove();
+      entry.row.querySelector(".transfer-state")!.textContent = "zurückgeholt";
+      if (panes.remote.listing) await load(panes.remote, panes.remote.listing.path);
+    } catch (e) {
+      tell("Nicht zurückgeholt", `${e}\n\nDie Fassung liegt weiter unter ${entry.trashed}.`);
+    }
+  }
+  ctx.pane.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !(e.target instanceof HTMLInputElement) && undoStack.length) (e.preventDefault(), void undo());
+  });
+
+  /** Ein Element in den Papierkorb (mit sudo, wenn nötig). Kann der Papierkorb nicht geschrieben werden,
+   *  fragt Sesam, ob endgültig gelöscht werden soll. `false` = abgebrochen. */
+  async function trashOne(path: string, label: string): Promise<boolean> {
+    const s = sid!;
+    try {
+      undoRow(label, await api.sftpTrash(s, path), path);
+      return true;
+    } catch (e) {
+      if (DENIED.test(String(e)) && !ftp) {
+        const slot = await api.sftpTrashSlot(s);
+        if (!(await withSudo("In den Papierkorb legen", (_, pw) => api.sftpSudoOp(s, "trash", path, slot, pw), false).catch(() => false))) return false;
+        undoRow(label, `${slot}/${path.split("/").pop()}`, path);
+        return true;
+      }
+      if (!(await ask("Papierkorb nicht möglich", `${e}\n\n«${label}» endgültig löschen, ohne Rückgängig?`, "Endgültig löschen"))) return false;
+      return withSudo("Löschen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "remove", path, "", pw) : api.sftpRemove(s, path)));
+    }
+  }
+
   async function deleteRemote() {
     const p = panes.remote;
     const names = [...p.selected];
@@ -1043,14 +1110,18 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const what = names.length === 1 ? `«${names[0]}»` : `${names.length} Elemente`;
     const ok = await ask(
       `${what} löschen?`,
-      `Wird auf ${c.name} endgültig gelöscht, ohne Papierkorb.${dirs ? " Ordner werden samt Inhalt gelöscht." : ""}`,
+      ftp
+        ? `Wird auf ${c.name} endgültig gelöscht.${dirs ? " Ordner werden samt Inhalt gelöscht." : ""}`
+        : `Kommt in den Papierkorb auf ${c.name} und lässt sich ${trashDays()} Tage lang zurückholen (Rückgängig bzw. ${navigator.userAgent.includes("Mac") ? "⌘Z" : "Strg+Z"}).`,
       "Löschen",
     );
     if (!ok) return;
     for (const n of names) {
       try {
         const [s, path] = [sid, join(p, n)];
-        if (!(await withSudo("Löschen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "remove", path, "", pw) : api.sftpRemove(s, path))))) break;
+        if (ftp) {
+          if (!(await withSudo("Löschen", () => api.sftpRemove(s, path)))) break;
+        } else if (!(await trashOne(path, `🗑 ${n}`))) break;
       } catch (e) {
         tell("Nicht gelöscht", String(e));
         break;
@@ -1178,6 +1249,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         scp = true;
       }
       ctx.setState("connected");
+      if (!ftp && !opened.scp) void api.sftpTrashCleanup(opened.sid, trashDays()).catch(() => {}); // alte Einträge im Papierkorb
       await load(panes.remote, st?.remote ?? panes.remote.listing?.path ?? "");
     } catch (e) {
       const msg = String(e);

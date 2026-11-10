@@ -1031,6 +1031,30 @@ async fn sftp_sudo_move(files: State<'_, Files>, sid: String, from: String, dest
     ssh_files(&files, &sid)?.exec(&script, true, password.as_deref()).await.map(|_| ())
 }
 
+/// In den Papierkorb auf dem Server statt löschen; gibt den Pfad im Papierkorb zurück.
+#[tauri::command]
+async fn sftp_trash(files: State<'_, Files>, sid: String, path: String) -> Result<String, String> {
+    ssh_files(&files, &sid)?.to_trash(&path).await
+}
+
+/// Zeitstempel-Ordner im Papierkorb anlegen (für die Erhöhung mit sudo).
+#[tauri::command]
+async fn sftp_trash_slot(files: State<'_, Files>, sid: String) -> Result<String, String> {
+    ssh_files(&files, &sid)?.trash_slot().await
+}
+
+/// Rückgängig: aus dem Papierkorb an den alten Ort.
+#[tauri::command]
+async fn sftp_restore(files: State<'_, Files>, sid: String, trashed: String, original: String) -> Result<(), String> {
+    ssh_files(&files, &sid)?.restore(&trashed, &original).await
+}
+
+/// Papierkorb aufräumen (älter als `days` Tage).
+#[tauri::command]
+async fn sftp_trash_cleanup(files: State<'_, Files>, sid: String, days: u32) -> Result<usize, String> {
+    ssh_files(&files, &sid)?.trash_cleanup(days).await
+}
+
 /// Löschen, Umbenennen, Ordner/Datei anlegen oder zum Herunterladen kopieren, mit sudo (nur nach Bestätigung).
 #[tauri::command]
 async fn sftp_sudo_op(files: State<'_, Files>, sid: String, op: String, path: String, arg: String, password: Option<String>) -> Result<(), String> {
@@ -2118,6 +2142,10 @@ pub fn run() {
             sftp_tempdir,
             sftp_sudo_move,
             sftp_sudo_op,
+            sftp_trash,
+            sftp_trash_slot,
+            sftp_restore,
+            sftp_trash_cleanup,
             sftp_sha256,
             local_sha256,
             local_mkdir,

@@ -370,6 +370,8 @@
             </div>
           </div>
           <p class="note">«Automatisch» folgt der Einstellung des Betriebssystems.</p>
+          <label class="row"><span>Papierkorb auf dem Server</span><select id="settings-trash-days"><option value="1">1 Tag</option><option value="3">3 Tage</option><option value="7">7 Tage (Standard)</option><option value="14">14 Tage</option><option value="30">30 Tage</option></select></label>
+          <p class="note">Was Sesam im Dateifenster löscht oder ersetzt, kommt zuerst in einen versteckten Papierkorb im Home des Benutzers auf dem Server (<code>~/.sesam-papierkorb</code>) und lässt sich so lange zurückholen. Danach räumt Sesam beim nächsten Verbinden auf.</p>
           <label class="row" id="system-keys-row"><span>Windows-Tastenkombinationen anwenden</span>
             <select name="systemKeys">
               <option value="remote">Wenn das Remote-Bild aktiv ist (Standard)</option>

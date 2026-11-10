@@ -78,3 +78,11 @@ Sesam stellt tmux so ein, dass es sich wie ein normales Terminal anfühlt: keine
 Fehlt tmux auf dem Server, startet eine normale Shell mit einem Hinweis; Sesam installiert nichts. Unter *… › Gehaltene Sitzungen* siehst du die Sesam-Sitzungen auf diesem Server, auch verwaiste, und kannst sie beenden.
 
 Nach dem ersten Abbruch einer Shell fragt Sesam einmal, ob es sie künftig halten soll.
+
+## Papierkorb auf dem Server und Rückgängig
+
+Was du im Dateifenster löschst oder beim Hochladen ersetzt, löscht Sesam nicht sofort: es kommt in einen versteckten Papierkorb im Home des Benutzers auf dem Server (`~/.sesam-papierkorb/<Datum-Zeit>/`). In der Übertragungsliste steht dazu **Rückgängig**; ⌘Z (Mac) bzw. Strg+Z holt das zuletzt Gelöschte zurück. Nach 7 Tagen (einstellbar unter *Einstellungen › Allgemein*) räumt Sesam beim nächsten Verbinden auf.
+
+Liegt etwas auf einem anderen Dateisystem als das Home (z. B. ein eingehängtes Laufwerk), lässt es sich nicht in den Papierkorb verschieben. Dann fragt Sesam, ob es endgültig löschen soll. Mit Administratorrechten (sudo) Gelöschtes kommt ebenfalls in den Papierkorb, gehört dort aber root; zurückholen geht dann nur mit sudo.
+
+Bei FTP gibt es keinen Papierkorb; dort löscht Sesam nach Rückfrage endgültig.

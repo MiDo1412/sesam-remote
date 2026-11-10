@@ -42,6 +42,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 /** Grösse des Einstellungsfensters (vom Benutzer gezogen) merken. */
 const SIZE_KEY = "sesam.settingsSize";
+let trashMenu: ReturnType<typeof enhanceSelect> | undefined;
 let keysMenu: { sync(): void } | undefined;
 let sizeWatch: ResizeObserver | null = null;
 
@@ -75,6 +76,11 @@ export async function openSettings(tab = "general") {
   for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.onclick = () => show(b.dataset.pane!);
 
   // Allgemein
+  const trash = $<HTMLSelectElement>("settings-trash-days");
+  trash.value = localStorage.getItem("sesam.trashDays") ?? "7";
+  trash.onchange = () => localStorage.setItem("sesam.trashDays", trash.value);
+  trashMenu ??= enhanceSelect(trash);
+  trashMenu.sync();
   const keys = dlg.querySelector<HTMLSelectElement>("[name=systemKeys]")!;
   keys.value = appSettings().systemKeys;
   keysMenu ??= enhanceSelect(keys);
