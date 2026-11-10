@@ -36,7 +36,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Hilfe:** Anleitungen je Servertyp, mit Suche.
 - **Neu verbinden im Tab:** Nach einem Unterbruch bleibt der Tab mit seinem Inhalt stehen, eine Leiste bietet «Neu verbinden» an (Enter, ⌘R bzw. Strg+R, Tab-Menü). Shell und VNC versuchen es nach einem Abbruch zuerst selbst (nach 2, 5 und 15 s), RDP wie bisher im Hintergrund.
 - **Derselbe Rechner mit einem Klick:** Im Sitzungskopf und in der Befehlspalette geht es von der Shell zum Desktop und zu den Dateien desselben Rechners und umgekehrt; fehlt der Dienst in der Verbindung, nimmt Sesam einen Eintrag der Bibliothek mit derselben Adresse.
-- **Dateien mit Administratorrechten:** Fehlt das Schreibrecht (z. B. Hochladen nach /opt), bietet die Übertragungsliste «Mit Administratorrechten wiederholen» an: Sesam lädt in einen temporären Ordner und verschiebt mit sudo, ohne zu überschreiben. Fehlermeldungen sind dort ganz lesbar.
+- **Dateien mit Administratorrechten:** Fehlt das Schreibrecht (z. B. Hochladen nach /opt), bietet die Übertragungsliste «Mit Administratorrechten wiederholen» an: Sesam lädt in einen temporären Ordner und legt die Datei mit sudo an ihren Platz; eine bestehende ersetzt es erst nach Rückfrage und behält dabei deren Besitzer und Rechte. Dasselbe gilt fürs Herunterladen, Löschen, Umbenennen und Anlegen. Fehlermeldungen sind in der Liste ganz lesbar.
 - **Berechtigungen-Dialog:** Lesen/Schreiben/Ausführen für Besitzer, Gruppe und Andere, als Zahl, Besitzer:Gruppe und auf Wunsch rekursiv; wo nötig nach Rückfrage mit sudo. Das sudo-Passwort fragt Sesam höchstens einmal ab, gibt es nur über die Standardeingabe weiter und speichert es nicht.
 
 ### Verbessert

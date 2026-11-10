@@ -681,8 +681,15 @@ async fn sftp_tempdir(files: State<'_, Files>, sid: String) -> Result<String, St
 
 /// Hochgeladenes aus dem temporären Ordner mit sudo an den Zielort verschieben (nie überschreiben).
 #[tauri::command]
-async fn sftp_sudo_move(files: State<'_, Files>, sid: String, from: String, dest_dir: String, password: Option<String>) -> Result<(), String> {
-    let script = sftp::move_script(&from, &dest_dir)?;
+async fn sftp_sudo_move(files: State<'_, Files>, sid: String, from: String, dest_dir: String, replace: bool, password: Option<String>) -> Result<(), String> {
+    let script = sftp::move_script(&from, &dest_dir, replace)?;
+    ssh_files(&files, &sid)?.exec(&script, true, password.as_deref()).await.map(|_| ())
+}
+
+/// Löschen, Umbenennen, Ordner/Datei anlegen oder zum Herunterladen kopieren, mit sudo (nur nach Bestätigung).
+#[tauri::command]
+async fn sftp_sudo_op(files: State<'_, Files>, sid: String, op: String, path: String, arg: String, password: Option<String>) -> Result<(), String> {
+    let script = sftp::sudo_op_script(&op, &path, &arg)?;
     ssh_files(&files, &sid)?.exec(&script, true, password.as_deref()).await.map(|_| ())
 }
 
@@ -1694,6 +1701,7 @@ pub fn run() {
             sftp_set_perms,
             sftp_tempdir,
             sftp_sudo_move,
+            sftp_sudo_op,
             sftp_sha256,
             local_sha256,
             local_mkdir,

@@ -740,7 +740,15 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       const tmp = await api.sftpTempdir(s);
       start(true, src, tmp, name, false, async () => {
         try {
-          if (await withSudo("Verschieben", (_, pw) => api.sftpSudoMove(s, `${tmp}/${name}`, destDir, pw), true)) {
+          let replace = false;
+          const move = (pw?: string) => api.sftpSudoMove(s, `${tmp}/${name}`, destDir, replace, pw);
+          const done = await withSudo("Verschieben", (_, pw) => move(pw), true).catch(async (e) => {
+            if (!String(e).startsWith("EXISTS:")) throw e;
+            if (!(await ask(`«${name}» ersetzen?`, `In ${destDir} gibt es «${name}» schon. Ersetzen behält Besitzer und Rechte der bestehenden Datei.`, "Ersetzen"))) return false;
+            replace = true;
+            return withSudo("Ersetzen", (_, pw) => move(pw), true);
+          });
+          if (done) {
             status.textContent = `«${name}» liegt jetzt in ${destDir}.`;
             if (panes.remote.listing?.path === destDir) load(panes.remote, destDir);
           }
@@ -750,6 +758,19 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       });
     } catch (e) {
       tell("Nicht hochgeladen", String(e));
+    }
+  }
+
+  /** Herunterladen ohne Leserecht: mit sudo eine Kopie in einen temporären Ordner, die dir gehört, dann diese laden. */
+  async function downloadAsAdmin(src: string, destDir: string, name: string) {
+    const s = sid;
+    if (!s || !(await ask("Mit Administratorrechten herunterladen?", `Dein Benutzer darf «${name}» nicht lesen. Sesam kopiert es mit sudo in einen temporären Ordner auf ${c.name}, lädt die Kopie herunter und löscht sie danach.`, "Mit sudo herunterladen"))) return;
+    try {
+      const tmp = await api.sftpTempdir(s);
+      if (!(await withSudo("Kopieren", (_, pw) => api.sftpSudoOp(s, "fetch", src, tmp, pw), true))) return void api.sftpRemove(s, tmp).catch(() => {});
+      start(false, `${tmp}/${name}`, destDir, name, false, () => void api.sftpRemove(s, tmp).catch(() => {}));
+    } catch (e) {
+      tell("Nicht heruntergeladen", String(e));
     }
   }
 
@@ -797,11 +818,11 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
           finish(`Fehler: ${p.error}`);
           state.classList.add("error");
           state.title = p.error;
-          // Kein Schreibrecht im Ziel (z. B. /opt): Hochladen mit sudo anbieten.
-          if (upload && !ftp && !then && DENIED.test(p.error)) {
+          // Keine Rechte (z. B. Hochladen nach /opt, Herunterladen aus /root): mit sudo anbieten.
+          if (!ftp && !then && DENIED.test(p.error)) {
             const again = el("button", "plain", "Mit Administratorrechten wiederholen");
             again.type = "button";
-            again.onclick = () => (again.remove(), uploadAsAdmin(src, destDir, name));
+            again.onclick = () => (again.remove(), upload ? uploadAsAdmin(src, destDir, name) : downloadAsAdmin(src, destDir, name));
             row.append(again);
           }
         }
@@ -819,7 +840,9 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const name = await askText("Neuer Ordner", `In ${dir}${p.side === "remote" ? ` auf ${c.name}` : ""}`, "Anlegen", "Neuer Ordner");
     if (!name) return;
     try {
-      await (p.side === "remote" ? api.sftpMkdir(sid!, dir, name) : api.localMkdir(dir, name));
+      const s = sid!;
+      if (p.side === "local") await api.localMkdir(dir, name);
+      else if (!(await withSudo("Ordner anlegen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "mkdir", dir, name, pw) : api.sftpMkdir(s, dir, name).then(() => {}))))) return;
       await load(p, dir);
     } catch (e) {
       tell("Ordner nicht angelegt", String(e));
@@ -832,7 +855,8 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const name = await askText("Neue Datei", `Leere Datei in ${dir} auf ${c.name}`, "Anlegen", "neu.txt");
     if (!name) return;
     try {
-      await api.sftpTouch(sid, dir, name);
+      const s = sid;
+      if (!(await withSudo("Datei anlegen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "touch", dir, name, pw) : api.sftpTouch(s, dir, name).then(() => {}))))) return;
       await load(panes.remote, dir);
     } catch (e) {
       tell("Datei nicht angelegt", String(e));
@@ -1003,7 +1027,8 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const next = await askText("Umbenennen", `Neuer Name für «${name}»`, "Umbenennen", name);
     if (!next || next === name) return;
     try {
-      await api.sftpRename(sid, join(p, name), next);
+      const [s, from] = [sid, join(p, name)];
+      if (!(await withSudo("Umbenennen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "rename", from, next, pw) : api.sftpRename(s, from, next).then(() => {}))))) return;
       await load(p, p.listing.path);
     } catch (e) {
       tell("Nicht umbenannt", String(e));
@@ -1024,7 +1049,8 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     if (!ok) return;
     for (const n of names) {
       try {
-        await api.sftpRemove(sid, join(p, n));
+        const [s, path] = [sid, join(p, n)];
+        if (!(await withSudo("Löschen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "remove", path, "", pw) : api.sftpRemove(s, path))))) break;
       } catch (e) {
         tell("Nicht gelöscht", String(e));
         break;

@@ -298,13 +298,64 @@ pub fn perms_script(path: &str, mode: Option<u32>, owner: Option<&str>, recursiv
     Ok(parts.join(" && "))
 }
 
-/// Datei aus einem temporären Ordner an ihren Zielort verschieben (nie überschreiben), danach den Ordner entfernen.
-pub fn move_script(from: &str, dest_dir: &str) -> Result<String, String> {
+/// Hochgeladenes aus einem temporären Ordner (von `mktemp -d`) als root an den Zielort kopieren. Neu: gehört root
+/// wie üblich unter /opt, /etc. `replace` und das Ziel ist eine Datei: Inhalt hineinschreiben (`cat >`), so bleiben
+/// Besitzer und Rechte der bestehenden Datei. Sonst nie überschreiben.
+pub fn move_script(from: &str, dest_dir: &str, replace: bool) -> Result<String, String> {
+    let tmp = rparent(from).ok_or("Ungültige Quelle")?;
     let name = from.rsplit('/').next().filter(|n| !n.is_empty()).ok_or("Ungültige Quelle")?;
-    let (f, d, t) = (crate::scp::quote(from)?, crate::scp::quote(dest_dir)?, crate::scp::quote(&rjoin(dest_dir, name))?);
-    let tmp = crate::scp::quote(&rparent(from).ok_or("Ungültige Quelle")?)?;
-    // rmdir statt rm -rf: entfernt nur den leeren temporären Ordner, nie mehr.
-    Ok(format!("if [ -e {t} ]; then echo \"«{name}» gibt es dort schon\" >&2; exit 3; fi; mv -- {f} {d}/ && rmdir -- {tmp}"))
+    // Nur aus einem Ordner von mktemp (tmp.XXXX) und nur eine Ebene darunter: rm -rf läuft hier als root.
+    if !tmp.rsplit('/').next().is_some_and(|d| d.starts_with("tmp.")) || name.contains("..") {
+        return Err("Ungültiger temporärer Ordner".into());
+    }
+    let q = crate::scp::quote;
+    let (f, d, t, tq) = (q(from)?, q(dest_dir)?, q(&rjoin(dest_dir, name))?, q(&tmp)?);
+    let exists = if replace {
+        format!("if [ -f {t} ] && [ -f {f} ]; then cat -- {f} > {t} && rm -f -- {f} && rmdir -- {tq}; exit $?; fi; ")
+    } else {
+        String::new()
+    };
+    Ok(format!("{exists}if [ -e {t} ]; then echo \"{EXISTS}«{name}» gibt es dort schon\" >&2; exit 3; fi; cp -R -- {f} {d}/ && rm -rf -- {f} && rmdir -- {tq}"))
+}
+
+/// Fehlertext-Anfang: Ziel belegt, die Oberfläche fragt «Ersetzen?».
+pub const EXISTS: &str = "EXISTS:";
+
+/// Einzelne Dateiaktion mit sudo, wenn dem Benutzer die Rechte fehlen.
+pub fn sudo_op_script(op: &str, path: &str, arg: &str) -> Result<String, String> {
+    let q = crate::scp::quote;
+    let p = q(path)?;
+    match op {
+        "remove" => {
+            if path.trim_end_matches('/').is_empty() || !path.starts_with('/') {
+                return Err("Diesen Pfad löscht Sesam nicht".into());
+            }
+            Ok(format!("rm -rf -- {p}"))
+        }
+        "rename" => {
+            valid_name(arg)?;
+            let t = q(&rjoin(&rparent(path).ok_or("Ungültiger Pfad")?, arg))?;
+            Ok(format!("if [ -e {t} ]; then echo \"«{arg}» gibt es dort schon\" >&2; exit 3; fi; mv -- {p} {t}"))
+        }
+        "mkdir" => {
+            valid_name(arg)?;
+            Ok(format!("mkdir -- {}", q(&rjoin(path, arg))?))
+        }
+        "touch" => {
+            valid_name(arg)?;
+            let t = q(&rjoin(path, arg))?;
+            Ok(format!("if [ -e {t} ]; then echo \"«{arg}» gibt es dort schon\" >&2; exit 3; fi; : > {t}"))
+        }
+        // Zum Herunterladen: Kopie in einen temporären Ordner, die dem angemeldeten Benutzer gehört.
+        "fetch" => {
+            if !arg.rsplit('/').next().is_some_and(|d| d.starts_with("tmp.")) {
+                return Err("Ungültiger temporärer Ordner".into());
+            }
+            let t = q(arg)?;
+            Ok(format!("cp -R -- {p} {t}/ && chown -R \"$SUDO_USER\" -- {t}"))
+        }
+        _ => Err("Unbekannte Aktion".into()),
+    }
 }
 
 /// Lokal: Ordner anlegen.
@@ -885,8 +936,15 @@ mod tests {
         assert_eq!(super::perms_script("/x", Some(0o644), None, false).unwrap(), "chmod 644 -- '/x'");
         assert!(super::perms_script("/x", None, Some("root; rm -rf /"), false).is_err());
         assert!(super::perms_script("/x", None, None, false).is_err());
-        let m = super::move_script("/tmp/tmp.ab12/install.sh", "/opt").unwrap();
-        assert!(m.contains("mv -- '/tmp/tmp.ab12/install.sh' '/opt'/") && m.contains("rmdir -- '/tmp/tmp.ab12'") && m.contains("[ -e '/opt/install.sh' ]"));
+        let m = super::move_script("/tmp/tmp.ab12/install.sh", "/opt", false).unwrap();
+        assert!(m.contains("cp -R -- '/tmp/tmp.ab12/install.sh' '/opt'/") && m.contains("rmdir -- '/tmp/tmp.ab12'") && m.contains("[ -e '/opt/install.sh' ]") && !m.contains("cat"));
+        let r = super::move_script("/tmp/tmp.ab12/sshd_config", "/etc/ssh", true).unwrap();
+        assert!(r.starts_with("if [ -f '/etc/ssh/sshd_config' ] && [ -f '/tmp/tmp.ab12/sshd_config' ]; then cat -- '/tmp/tmp.ab12/sshd_config' > '/etc/ssh/sshd_config'"));
+        assert!(super::move_script("/home/mike/install.sh", "/opt", false).is_err(), "nur aus mktemp-Ordnern");
+        assert!(super::sudo_op_script("remove", "/", "").is_err() && super::sudo_op_script("remove", "rel", "").is_err());
+        assert_eq!(super::sudo_op_script("mkdir", "/opt", "app").unwrap(), "mkdir -- '/opt/app'");
+        assert!(super::sudo_op_script("rename", "/opt/a", "../b").is_err());
+        assert!(super::sudo_op_script("fetch", "/etc/x", "/home/m").is_err());
         assert_eq!(super::sudo_error("sudo: a password is required", 1), super::SUDO_PASSWORD);
         assert!(super::sudo_error("Sorry, try again.\nsudo: 1 incorrect password attempt", 1).contains("stimmt nicht"));
     }

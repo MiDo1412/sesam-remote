@@ -233,7 +233,9 @@ export const api = {
   sftpSetPerms: (sid: string, path: string, mode: number | null, owner: string | null, recursive: boolean, sudo: boolean, password?: string) =>
     invoke<void>("sftp_set_perms", { sid, path, mode, owner, recursive, sudo, password }),
   sftpTempdir: (sid: string) => invoke<string>("sftp_tempdir", { sid }),
-  sftpSudoMove: (sid: string, from: string, destDir: string, password?: string) => invoke<void>("sftp_sudo_move", { sid, from, destDir, password }),
+  sftpSudoMove: (sid: string, from: string, destDir: string, replace: boolean, password?: string) => invoke<void>("sftp_sudo_move", { sid, from, destDir, replace, password }),
+  /** `op`: remove, rename (arg = neuer Name), mkdir/touch (arg = Name), fetch (arg = temporärer Ordner). */
+  sftpSudoOp: (sid: string, op: string, path: string, arg: string, password?: string) => invoke<void>("sftp_sudo_op", { sid, op, path, arg, password }),
   /** SHA-256 auf dem Server (sha256sum über SSH). */
   sftpSha256: (sid: string, path: string) => invoke<string>("sftp_sha256", { sid, path }),
   localSha256: (path: string) => invoke<string>("local_sha256", { path }),
