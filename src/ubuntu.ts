@@ -69,6 +69,20 @@ export function localNetworkHint(msg: string, host: string, mac = navigator.user
   };
 }
 
+/** VNC-Server, der nur RealVNC RA2/RA2ne anbietet (nicht offengelegt): die zwei Auswege nennen. */
+export function vncAuthHint(msg: string): Hint | null {
+  if (!msg.includes("VNC_RA2:")) return null;
+  return {
+    title: "Anmeldeverfahren von RealVNC wird nicht unterstützt",
+    text: "Der Server meldet sich nur mit RA2 an, einem nicht offengelegten Verfahren von RealVNC. Sesam kann VNC-Passwort, VeNCrypt mit Zertifikat und die Anmeldung von macOS.",
+    steps: [
+      "In RealVNC Server: Optionen › Sicherheit › Authentifizierung auf «VNC-Passwort» stellen und dieses Passwort in Sesam hinterlegen.",
+      "Oder auf aktuellem Raspberry Pi OS den Dienst wayvnc verwenden (raspi-config › Interface Options › VNC); er meldet sich mit VeNCrypt an.",
+    ],
+    help: "vnc",
+  };
+}
+
 /** Derselbe Hinweis als eine Zeile für Statuszeilen (Shell, Dateien). */
 export function localNetworkText(msg: string, host: string) {
   const h = localNetworkHint(msg, host);

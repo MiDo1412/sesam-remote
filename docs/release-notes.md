@@ -63,6 +63,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Tabs:** Minimieren und Schliessen sitzen am rechten Rand des Tabs, auch bei kurzen Namen.
 - **Mac: Schliessen wie bei Terminal:** Das rote Schliessen (und ⌘W in der Bibliothek) blendet nur das Fenster aus, Sesam bleibt im Dock; ein Klick aufs Dock-Symbol holt es zurück. Offene Sitzungen werden erst nach Rückfrage getrennt, ⌘Q beendet.
 - **VNC mit Tight:** Sesam bevorzugt die Kodierung Tight (Füllfarbe, Palette, Gradient, zlib) und auf dem Mac auch Tight-JPEG (Qualität 8, dekodiert vom System): weniger Daten übers Netz, bei Fotos und Videos deutlich weniger. Messung mit einem Testserver: ZRLE 52 Bilder/s bei 0,9 MB/s, Tight 52 Bilder/s bei 0,4 MB/s.
+- **VNC mit RealVNC:** Bietet ein Server nur dessen eigenes Anmeldeverfahren (RA2) an, erklärt Sesam die zwei Auswege (VNC-Passwort in RealVNC oder wayvnc auf aktuellem Raspberry Pi OS) statt einer Fehlernummer.
 
 ### Behoben
 

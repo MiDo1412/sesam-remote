@@ -24,6 +24,9 @@ const ENC_EXT_DESKTOP_SIZE: i32 = -308;
 const ENC_CURSOR: i32 = -239;
 const ENC_EXT_CLIPBOARD: i32 = 0xC0A1E5CEu32 as i32;
 
+/// Fehler-Anfang: Server bietet nur RealVNC RA2/RA2ne an.
+pub const VNC_RA2: &str = "VNC_RA2:";
+
 /// Grenze für Längenangaben vom Server (Namen, Fehlertexte, Raw-Daten).
 const MAX_LEN: u32 = 64 << 20;
 
@@ -191,6 +194,9 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
             let offered = types.iter().map(|&t| security_name(t)).collect::<Vec<_>>().join(", ");
             return Err(if vpw.is_none() && (types.contains(&2) || types.contains(&30)) {
                 "Der Server verlangt ein Passwort. Bitte in der Verbindung hinterlegen.".into()
+            } else if types.iter().any(|t| matches!(t, 5 | 6)) {
+                // RealVNC RA2/RA2ne: nicht offengelegt; die Oberfläche zeigt die Auswege (ubuntu.ts vncAuthHint).
+                format!("{VNC_RA2}Kein unterstütztes Anmeldeverfahren (Server bietet: {offered})")
             } else {
                 format!("Kein unterstütztes Anmeldeverfahren (Server bietet: {offered})")
             });

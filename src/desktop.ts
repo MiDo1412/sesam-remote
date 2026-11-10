@@ -11,7 +11,7 @@ import { saveDesktopThumb } from "./thumbs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
 import { remoteSize } from "./desksize";
-import { explainRdpError, localNetworkHint, rejectedHint, type Hint } from "./ubuntu";
+import { explainRdpError, localNetworkHint, rejectedHint, vncAuthHint, type Hint } from "./ubuntu";
 import { openHelp } from "./help";
 import { listen } from "@tauri-apps/api/event";
 import { appSettings } from "./settings";
@@ -650,7 +650,7 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
         }
         status.textContent = "Verbindung abgebrochen: Zertifikat nicht bestätigt.";
       } else {
-        const h = localNetworkHint(msg, c.address) ?? rejectedHint(msg, c);
+        const h = localNetworkHint(msg, c.address) ?? vncAuthHint(msg) ?? rejectedHint(msg, c);
         if (h) showHint(h);
         else status.textContent = `Keine Verbindung: ${explainRdpError(msg, c)}`;
       }
