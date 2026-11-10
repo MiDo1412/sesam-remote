@@ -472,7 +472,7 @@ pub fn sudo_op_script(op: &str, path: &str, arg: &str) -> Result<String, String>
             let slot = rparent(path).ok_or("Ungültiger Pfad")?;
             let meta = q(&format!("{slot}/.sesam-meta"))?;
             let (o, slot) = (q(arg)?, trash_arg(&slot)?);
-            Ok(format!("cp -a -- {p} {o} && if [ -s {meta} ]; then set -- $(cat {meta}); chown \"$1\" {o} && chmod \"$2\" {o}; fi && rm -rf -- {slot}"))
+            Ok(format!("cp -a -- {p} {o} && if [ -s {meta} ]; then set -- $(cat {meta}); {{ chown \"$1\" {o} 2>/dev/null || true; }} && chmod \"$2\" {o}; fi && rm -rf -- {slot}"))
         }
         // Zum Herunterladen: Kopie in einen temporären Ordner, die dem angemeldeten Benutzer gehört.
         "fetch" => {
@@ -1079,6 +1079,57 @@ mod tests {
         assert_eq!(local_unique(&dir, "b.txt", false), dir.join("b (2).txt"));
         assert_eq!(local_unique(&dir, "neu.txt", false), dir.join("neu.txt"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Gegen einen echten SSH-Server (nur auf Wunsch): SESAM_TEST_SSH="host:port:user:schlüsseldatei:ordner".
+    /// Hochladen wie die Durchreiche, Papierkorb samt Rückgängig, Sichern/Zurückholen-Skripte über exec.
+    #[tokio::test]
+    #[ignore]
+    async fn echter_server_papierkorb_und_durchreiche() {
+        let v = std::env::var("SESAM_TEST_SSH").expect("SESAM_TEST_SSH");
+        let p: Vec<&str> = v.splitn(5, ':').collect();
+        let mut t = crate::ssh::Target {
+            host: p[0].into(),
+            port: p[1].parse().unwrap(),
+            user: p[2].into(),
+            password: None,
+            key: Some(std::fs::read_to_string(p[3]).unwrap()),
+            trusted: None,
+            opts: Default::default(),
+            forwards: Vec::new(),
+            jump: None,
+        };
+        let h = match crate::ssh::connect(&t).await {
+            Ok(h) => h,
+            Err(e) => {
+                t.trusted = Some(e.rsplit('|').next().unwrap().to_string());
+                crate::ssh::connect(&t).await.unwrap()
+            }
+        };
+        let s = std::sync::Arc::new(super::start(h).await.map_err(|e| e.1).unwrap());
+        let dir = p[4].to_string();
+        // Durchreiche: Datei hochladen, Name eindeutig.
+        let local = std::env::temp_dir().join("sesam-durchreiche.txt");
+        std::fs::write(&local, "durchgereicht").unwrap();
+        let up = super::upload(&s, &local, &dir, false, |_| {}).await.unwrap();
+        assert!(up.ends_with("sesam-durchreiche.txt"), "{up}");
+        // Papierkorb und Rückgängig.
+        let trashed = s.to_trash(&up).await.unwrap();
+        assert!(trashed.contains("/.sesam-papierkorb/") && !s.s.try_exists(&up).await.unwrap());
+        s.restore(&trashed, &up).await.unwrap();
+        assert!(s.s.try_exists(&up).await.unwrap());
+        assert!(s.size(&up).await.unwrap() == 13 && s.size(&dir).await.unwrap() > 0);
+        // Sichern vor dem Ersetzen und Zurückholen, hier ohne sudo (SUDO_USER von Hand).
+        let slot = s.trash_slot().await.unwrap();
+        let sh = |c: String| format!("SUDO_USER=$(id -un); {c}");
+        s.exec(&sh(super::sudo_op_script("backup", &up, &slot).unwrap()), false, None).await.unwrap();
+        s.exec(&format!("echo neu > {}", crate::scp::quote(&up).unwrap()), false, None).await.unwrap();
+        s.exec(&super::sudo_op_script("restore", &format!("{slot}/sesam-durchreiche.txt"), &up).unwrap(), false, None).await.unwrap();
+        let back = s.exec(&format!("cat {}", crate::scp::quote(&up).unwrap()), false, None).await.unwrap();
+        assert_eq!(back.trim(), "durchgereicht");
+        assert!(!s.s.try_exists(&slot).await.unwrap());
+        s.remove(&up).await.unwrap();
+        std::fs::remove_file(local).unwrap();
     }
 
     /// Sichern und Zurückholen laufen echt in der Shell (ohne sudo; chown auf den eigenen Benutzer).
