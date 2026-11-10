@@ -12,7 +12,7 @@ import { clipHistory, initClipHistory } from "./cliphistory";
 import { initTitlebar, isMac, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
-import { applyAppearance, openSettings } from "./settings";
+import { applyAppearance, openSettings, settingsWindow } from "./settings";
 import { openPermissions } from "./permissions";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
@@ -22,7 +22,7 @@ import { adoptFromConnection, initCreds, openCred } from "./creds";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrent as deepLinkCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { openMenu } from "./menu";
-import { listen } from "@tauri-apps/api/event";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { enhanceSelect } from "./menu";
 
@@ -945,7 +945,7 @@ form.onsubmit = async (ev) => {
 };
 
 $("new").onclick = () => edit(null);
-if (!detachedWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
+if (!detachedWindow && !settingsWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
 listen<string>("help", (e) => openHelp(e.payload));
 initTitlebar({ command: (c) => (!detachedWindow || c === "settings") && command(c), tool: runTool, help: openHelp });
@@ -1021,13 +1021,22 @@ function closeCommand() {
 }
 addEventListener("sesam:save-quick", (e) => quick.saveAs((e as CustomEvent<Connection>).detail));
 // Menübefehle gehen an alle Fenster; nur das aktive reagiert.
-listen<string>("cmd", (e) => document.hasFocus() && (!detachedWindow || e.payload === "settings") && command(e.payload));
+listen<string>("cmd", (e) => document.hasFocus() && ((!detachedWindow && !settingsWindow) || e.payload === "settings" || (settingsWindow && e.payload === "close")) && command(e.payload));
 listen<string>("tool", (e) => document.hasFocus() && runTool(e.payload));
 addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   if (e.key === ",") (e.preventDefault(), command("settings"));
-  else if (e.key.toLowerCase() === "n" && !e.shiftKey && !detachedWindow && !document.querySelector("dialog[open]")) (e.preventDefault(), command("new"));
+  else if (e.key.toLowerCase() === "n" && !e.shiftKey && !detachedWindow && !settingsWindow && !document.querySelector("dialog[open]")) (e.preventDefault(), command("new"));
 });
 $("search").addEventListener("input", render);
 addEventListener("sesam:library-changed", () => reload());
 reload();
+// Eigenes Einstellungsfenster: nur die Einstellungen zeigen; «Fertig» schliesst das Fenster. Wechsel des Bereichs von aussen.
+if (settingsWindow) {
+  document.body.classList.add("settings-window");
+  void openSettings(settingsWindow);
+  $("settings").addEventListener("close", () => void import("@tauri-apps/api/window").then((w) => w.getCurrentWindow().close()));
+  listen<string>("settings-tab", (e) => void openSettings(e.payload));
+  // Änderungen an Zugangsdaten oder Bibliothek auch im Hauptfenster nachladen.
+  for (const ev of ["sesam:creds-changed", "sesam:library-changed"]) addEventListener(ev, () => void emitTo("main", "sesam:sync", ev));
+} else if (!detachedWindow) listen<string>("sesam:sync", (e) => dispatchEvent(new CustomEvent(e.payload)));

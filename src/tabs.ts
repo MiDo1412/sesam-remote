@@ -165,6 +165,22 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
 export const hasTabs = () => tabs.length > 0;
 
 /** Tab öffnen oder vorhandenen gleicher Art zeigen (`fresh` erzwingt einen neuen, z. B. weitere Shell). */
+// ---------- Statusmeldungen ----------
+// Hinweise verschwinden nach 6 s selbst; Fehler bleiben, bis man sie anklickt (oder ein neuer Text kommt).
+const STICKY = /^(Server ohne SFTP|Keine Verbindung|Verbindung (beendet|abgebrochen|getrennt)|Fehler|Nicht |Der Server sendet noch kein Bild)/;
+function autoHide(el: HTMLElement) {
+  let timer = 0;
+  const check = () => {
+    clearTimeout(timer);
+    const t = el.textContent?.trim() ?? "";
+    el.classList.toggle("sticky", !!t && STICKY.test(t));
+    el.title = el.classList.contains("sticky") ? "Klicken zum Schliessen" : "";
+    if (t && !el.classList.contains("sticky")) timer = window.setTimeout(() => el.textContent === t && (el.textContent = ""), 6000);
+  };
+  new MutationObserver(check).observe(el, { childList: true, characterData: true, subtree: true });
+  el.addEventListener("click", () => el.classList.contains("sticky") && (el.textContent = ""));
+}
+
 // ---------- Derselbe Rechner: Desktop, Shell, Dateien ----------
 let library: () => Connection[] = () => [];
 /** Bibliothek für `sameHost` (main.ts). */
@@ -200,6 +216,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   const pane = Object.assign(document.createElement("div"), { className: `tab-pane tab-${kind}` });
   const toolbar = Object.assign(document.createElement("div"), { className: "tools tab-tools" });
   const status = Object.assign(document.createElement("div"), { className: "status" });
+  autoHide(status);
   status.setAttribute("role", "status");
   pane.append(status);
   $("session-panes").append(pane);
@@ -496,7 +513,7 @@ if (detachedWindow) {
 
 /** macOS-Hauptfenster: Schliessen (rot, ⌘W in der Bibliothek) blendet nur das Fenster aus, Sesam bleibt im Dock wie
  *  Terminal; ein Klick aufs Dock-Symbol holt es zurück (lib.rs, Reopen). Offene Sitzungen erst nach Rückfrage trennen. */
-if (!detachedWindow && navigator.userAgent.includes("Mac")) {
+if (!detachedWindow && navigator.userAgent.includes("Mac") && getCurrentWindow().label === "main") {
   getCurrentWindow().onCloseRequested(async (e) => {
     e.preventDefault();
     const open = tabs.filter((t) => t.state !== "closed");

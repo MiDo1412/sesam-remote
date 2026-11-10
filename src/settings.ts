@@ -45,7 +45,12 @@ const SIZE_KEY = "sesam.settingsSize";
 let keysMenu: { sync(): void } | undefined;
 let sizeWatch: ResizeObserver | null = null;
 
+/** Dieses Fenster ist das eigene Einstellungsfenster (macOS, lib.rs open_settings_window). */
+export const settingsWindow: string = (window as unknown as { __SESAM_SETTINGS__?: string }).__SESAM_SETTINGS__ ?? "";
+
 export async function openSettings(tab = "general") {
+  // macOS: Einstellungen in einem eigenen Fenster (HIG), sonst als Sheet über der Bibliothek.
+  if (navigator.userAgent.includes("Mac") && !settingsWindow) return void invoke("open_settings_window", { tab }).catch(() => {});
   const dlg = $<HTMLDialogElement>("settings");
   const box = dlg.querySelector<HTMLElement>(".settings")!;
   try {

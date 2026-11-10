@@ -65,6 +65,9 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **VNC mit Tight:** Sesam bevorzugt die Kodierung Tight (Füllfarbe, Palette, Gradient, zlib) und auf dem Mac auch Tight-JPEG (Qualität 8, dekodiert vom System): weniger Daten übers Netz, bei Fotos und Videos deutlich weniger. Messung mit einem Testserver: ZRLE 52 Bilder/s bei 0,9 MB/s, Tight 52 Bilder/s bei 0,4 MB/s.
 - **VNC mit RealVNC:** Bietet ein Server nur dessen eigenes Anmeldeverfahren (RA2) an, erklärt Sesam die zwei Auswege (VNC-Passwort in RealVNC oder wayvnc auf aktuellem Raspberry Pi OS) statt einer Fehlernummer.
 - **Ruhigere, plattformtypische Optik:** Seitenleiste wie eine Quellenliste (getönte Auswahl, kompakte Zeilen), klarere Titelzeile mit einer Hauptaktion, Karten mit grösserer Vorschau und dezentem Anheben, Sitzungskopf niedriger mit leiser Qualitätsanzeige, Einstellungen mit Fokus auf dem gewählten Bereich.
+- **Statusmeldungen:** Hinweise blenden sich nach 6 s aus, Fehler bleiben stehen, bis man sie anklickt.
+- **Verbindungsqualität als Signalbalken:** Ein Klick zeigt Bilder pro Sekunde, Datenmenge und Latenz in einem kleinen Fenster.
+- **Einstellungen auf dem Mac in einem eigenen Fenster** (⌘,), wie bei anderen Mac-Apps; unter Windows bleibt das Sheet.
 
 ### Behoben
 

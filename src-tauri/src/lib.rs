@@ -1087,6 +1087,27 @@ fn shell_attach(sid: String, on_event: Channel<ssh::ShellEvent>) -> Result<(), S
 }
 
 /// Sitzung in ein eigenes Fenster abkoppeln; `token` verweist auf die Übergabe im localStorage.
+/// Einstellungen als eigenes Fenster (macOS, HIG): vorhandenes nach vorne holen und den Bereich wechseln, sonst öffnen.
+#[tauri::command]
+async fn open_settings_window(app: AppHandle, tab: String) -> Result<(), String> {
+    if !tab.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err("Unbekannter Bereich".into());
+    }
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return w.emit("settings-tab", tab).map_err(|e| e.to_string());
+    }
+    tauri::WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App("index.html".into()))
+        .initialization_script(format!("window.__SESAM_SETTINGS__ = '{tab}';"))
+        .title("Einstellungen")
+        .inner_size(820.0, 600.0)
+        .min_inner_size(640.0, 440.0)
+        .build()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 /// Asynchron: ein Fenster in einem synchronen Befehl zu erzeugen, blockiert unter Windows (leeres Fenster, X reagiert nicht).
 #[tauri::command]
 async fn open_detached(app: AppHandle, token: String, title: String) -> Result<(), String> {
@@ -1927,6 +1948,7 @@ pub fn run() {
             shell_close,
             vnc_open,
             desktop_ack,
+            open_settings_window,
             perm_list,
             perm_request,
             perm_open,

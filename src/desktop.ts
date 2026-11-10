@@ -454,18 +454,40 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   spanBtn.hidden = !rdp;
   // Verbindungsqualität: Bildrate, Datenmenge (dekodiert) und Latenz (TCP-Verbindungsaufbau), alle 2 s.
   const stats = { frames: 0, bytes: 0, ms: null as number | null, tick: 0 };
-  const quality = Object.assign(document.createElement("span"), { className: "quality" });
-  quality.setAttribute("aria-live", "off");
+  // Leise Signalbalken in der Leiste; Klick zeigt die Zahlen in einem Popover (bleibt offen und aktualisiert sich).
+  const quality = Object.assign(document.createElement("button"), { type: "button", className: "tool quality-btn" });
+  quality.setAttribute("aria-label", "Verbindungsqualität");
+  quality.setAttribute("aria-expanded", "false");
+  const bars = (n: number) =>
+    `<svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true">${[0, 1, 2, 3].map((i) => `<rect x="${i * 4 + 1}" y="${10 - i * 3}" width="2.5" height="${4 + i * 3}" rx="1" fill="currentColor" opacity="${i < n ? 1 : 0.25}"/>`).join("")}</svg>`;
+  quality.innerHTML = bars(0);
+  const pop = Object.assign(document.createElement("div"), { className: "quality-pop", hidden: true });
+  pop.setAttribute("role", "status");
+  quality.onclick = (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+    quality.setAttribute("aria-expanded", String(!pop.hidden));
+    if (!pop.hidden) {
+      const r = quality.getBoundingClientRect();
+      Object.assign(pop.style, { top: `${r.bottom + 6}px`, left: `${Math.max(8, r.right - 220)}px` });
+    }
+  };
+  const closePop = () => ((pop.hidden = true), quality.setAttribute("aria-expanded", "false"));
+  addEventListener("pointerdown", (e) => !pop.hidden && !pop.contains(e.target as Node) && e.target !== quality && closePop());
+  document.body.append(pop);
   const qTimer = window.setInterval(async () => {
-    if (!sid || !ctx.isActive()) return;
+    if (!sid || !ctx.isActive()) return closePop();
     if (stats.tick++ % 5 === 0 && !c.id.startsWith("quick")) stats.ms = await api.connReach(c.id).catch(() => null);
     const fps = Math.round(stats.frames / 2);
     const mb = stats.bytes / 2 / 1e6;
-    quality.textContent = `${fps} fps · ${mb < 1 ? `${Math.round(mb * 1000)} KB/s` : `${mb.toFixed(1)} MB/s`}${stats.ms != null ? ` · ${stats.ms} ms` : ""}`;
-    quality.title = `Verbindungsqualität (${rdp ? "RDP" : "VNC"})
-Bilder pro Sekunde: ${fps}
-Bilddaten (entpackt): ${mb.toFixed(2)} MB/s${stats.ms != null ? `
-Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
+    quality.innerHTML = bars(fps >= 24 ? 4 : fps >= 12 ? 3 : fps >= 4 ? 2 : fps > 0 ? 1 : 0);
+    quality.title = `Verbindungsqualität: ${fps} Bilder/s`;
+    const row = (k: string, v: string) => `<div><span>${k}</span><b>${v}</b></div>`;
+    pop.innerHTML =
+      `<h4>Verbindung (${rdp ? "RDP" : "VNC"})</h4>` +
+      row("Bilder pro Sekunde", String(fps)) +
+      row("Bilddaten (entpackt)", mb < 1 ? `${Math.round(mb * 1000)} KB/s` : `${mb.toFixed(1)} MB/s`) +
+      (stats.ms != null ? row("Latenz (Verbindungsaufbau)", `${stats.ms} ms`) : "");
     stats.frames = stats.bytes = 0;
   }, 2000);
   ctx.toolbar.prepend(quality, orientBtn, toolSep());
@@ -515,6 +537,7 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
     invoke("kbhook_set", { active: false }).catch(() => {});
     clearTimeout(barTimer);
     clearInterval(qTimer);
+    pop.remove();
     if (sid) (rdp ? api.rdpClose(sid) : api.vncClose(sid)).catch(() => {});
     sid = null;
     if (spanned) toggleSpan();
