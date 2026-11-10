@@ -404,8 +404,10 @@
         <section class="settings-pane" id="settings-creds" hidden>
           <h2>Zugangsdaten</h2>
           <p class="note">Benutzername mit Passwort und/oder SSH-Schlüssel, einmal angelegt und mehreren Verbindungen zugewiesen. Die Geheimnisse liegen verschlüsselt im Schlüsselbund des Betriebssystems.</p>
+          <input id="cred-search" type="search" placeholder="Zugangsdaten suchen" aria-label="Zugangsdaten suchen" />
           <div id="settings-cred-list" class="certs"></div>
-          <div><button type="button" id="cred-new">Neue Zugangsdaten …</button></div>
+          <div class="cred-actions"><button type="button" id="cred-new">Neue Zugangsdaten …</button><button type="button" id="cred-export">Sichern …</button><button type="button" id="cred-import">Einlesen …</button></div>
+          <p class="note">«Sichern» schreibt Bibliothek und Zugangsdaten samt Passwörtern in eine mit deinem Passwort verschlüsselte Datei (.sesam). «Einlesen» zeigt zuerst, was dazukommt, und lässt Bestehendes unverändert.</p>
         </section>
         <section class="settings-pane" id="settings-groups" hidden>
           <h2>Gruppen</h2>

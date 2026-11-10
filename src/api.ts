@@ -79,6 +79,8 @@ export interface Cred {
   user: string;
   hasPassword: boolean;
   hasKey: boolean;
+  /** Zuletzt für eine Anmeldung benutzt (Sekunden seit 1970). */
+  lastUsed?: number | null;
 }
 
 /** Gruppe der Seitenleiste (Reihenfolge, Farbe); Mitglieder über `Connection.group`. */
@@ -163,6 +165,11 @@ export const api = {
   credPublicKey: (id: string) => invoke<string>("cred_public_key", { id }),
   credInstallKey: (id: string, connection: string, trust: string | null) => invoke<string>("cred_install_key", { id, connection, trust }),
   credReveal: (id: string) => invoke<string>("cred_reveal", { id }),
+  credTest: (connection: string, trust: string | null) => invoke<string>("cred_test", { connection, trust }),
+  backupExport: (file: string, password: string) => invoke<string>("backup_export", { file, password }),
+  backupPreview: (file: string, password: string) =>
+    invoke<{ newConnections: string[]; knownConnections: string[]; newCredentials: string[]; knownCredentials: string[] }>("backup_preview", { file, password }),
+  backupImport: (file: string, password: string) => invoke<string>("backup_import", { file, password }),
   credDuplicate: (id: string, newId: string, name: string) => invoke<Cred>("cred_duplicate", { id, newId, name }),
   credSave: (cred: Cred, password?: string, sshKey?: string) => invoke<Cred>("cred_save", { cred, password, sshKey }),
   credDelete: (id: string) => invoke<void>("cred_delete", { id }),

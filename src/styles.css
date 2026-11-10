@@ -706,3 +706,6 @@ svg.sf { background-color: currentColor; -webkit-mask: var(--sf) center / contai
 .perms-setup, .perms-dlg { overflow-x: hidden; overflow-y: auto; }
 .perms-dlg .sheet { width: min(480px, calc(100vw - 48px)); box-sizing: border-box; }
 .cred-users { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+.cred-users.unused { color: var(--danger); }
+#cred-search { width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+.cred-actions { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -1,6 +1,7 @@
 /** Gespeicherte Zugangsdaten: Liste in den Einstellungen, Bearbeiten-Dialog, Auswahl im Verbindungs-Sheet. */
-import { api, HOSTKEY_UNKNOWN, type Cred } from "./api";
-import { ask, askHostKey, tell } from "./ui";
+import { api, HOSTKEY_UNKNOWN, type Connection, type Cred } from "./api";
+import { ask, askHostKey, askPassword, tell } from "./ui";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openMenu } from "./menu";
 import { ICON } from "./icons";
 
@@ -10,8 +11,11 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 export async function renderCredList() {
   const box = $("settings-cred-list");
-  const list = await api.credsList().catch(() => []);
-  if (!list.length) return void (box.textContent = "Noch keine gespeicherten Zugangsdaten.");
+  const all = await api.credsList().catch(() => []);
+  if (!all.length) return void (box.textContent = "Noch keine gespeicherten Zugangsdaten.");
+  const q = ($<HTMLInputElement>("cred-search").value || "").trim().toLowerCase();
+  const list = all.filter(([c, users]) => !q || [c.name, c.user, ...users].some((t) => t.toLowerCase().includes(q)));
+  if (!list.length) return void (box.textContent = "Keine Zugangsdaten passen zur Suche.");
   box.replaceChildren(
     ...list.map(([c, users]) => {
       const row = document.createElement("div");
@@ -22,7 +26,10 @@ export async function renderCredList() {
         Object.assign(document.createElement("code"), {
           textContent: `${c.user || "ohne Benutzername"} · ${[c.hasPassword && "Passwort", c.hasKey && "SSH-Schlüssel"].filter(Boolean).join(", ") || "ohne Geheimnis"}`,
         }),
-        Object.assign(document.createElement("small"), { className: "cred-users", textContent: users.length ? `Verwendet von: ${users.join(", ")}` : "Von keiner Verbindung verwendet" }),
+        Object.assign(document.createElement("small"), {
+          className: `cred-users${users.length ? "" : " unused"}`,
+          textContent: `${users.length ? `Verwendet von: ${users.join(", ")}` : "Von keiner Verbindung verwendet – löschen oder einer Verbindung zuweisen"}${c.lastUsed ? ` · zuletzt ${new Date(c.lastUsed * 1000).toLocaleDateString("de-CH")}` : ""}`,
+        }),
       );
       const edit = Object.assign(document.createElement("button"), { type: "button", className: "link", textContent: "Bearbeiten" });
       edit.onclick = () => openCred(c);
@@ -47,8 +54,9 @@ async function credMenu(anchor: HTMLElement, c: Cred, users: string[]) {
     { value: "gen", label: c.hasKey ? "Neuen SSH-Schlüssel erzeugen …" : "SSH-Schlüssel erzeugen (Ed25519)", icon: ICON.plus },
     { value: "pub", label: "Öffentlichen Schlüssel kopieren", icon: ICON.copy, disabled: !c.hasKey },
     { value: "install", label: "Schlüssel auf einem Server eintragen …", icon: ICON.upload, disabled: !c.hasKey },
-    ...(mac ? [{ value: "reveal", label: "Passwort anzeigen …", disabled: !c.hasPassword, separator: true }] : []),
-    { value: "dup", label: "Duplizieren", separator: !mac },
+    { value: "test", label: "Zugang testen …", disabled: !users.length, separator: true },
+    { value: "reveal", label: "Passwort anzeigen …", disabled: !c.hasPassword },
+    { value: "dup", label: "Duplizieren" },
     { value: "del", label: "Löschen …", icon: ICON.trash, separator: true },
   ]);
   try {
@@ -62,7 +70,10 @@ async function credMenu(anchor: HTMLElement, c: Cred, users: string[]) {
       await api.clipWrite(await api.credPublicKey(c.id));
       tell("Kopiert", "Der öffentliche Schlüssel liegt in der Zwischenablage (eine Zeile für ~/.ssh/authorized_keys).");
     } else if (v === "install") await installKey(c);
+    else if (v === "test") await testCred(c);
     else if (v === "reveal") {
+      // shortcut: Windows Hello fehlt noch (docs/offene-punkte.md); bis dahin dort klar sagen statt still sperren.
+      if (!mac) return tell("Noch nicht unter Windows", "Gespeicherte Passwörter zeigt Sesam nur nach einer Bestätigung durch das System. Unter Windows kommt das mit Windows Hello; bis dahin geht es nur auf dem Mac (Touch ID).");
       const pw = await api.credReveal(c.id);
       if (await ask(`Passwort von «${c.name}»`, pw, "Kopieren", "Schliessen")) await api.clipWrite(pw);
     } else if (v === "dup") {
@@ -78,20 +89,41 @@ async function credMenu(anchor: HTMLElement, c: Cred, users: string[]) {
   }
 }
 
-/** Wie ssh-copy-id: Verbindung wählen, mit ihrer bisherigen Anmeldung verbinden und den Schlüssel eintragen. */
-async function installKey(c: Cred) {
-  const conns = (await api.list()).filter((x) => x.sshPort);
-  if (!conns.length) return tell("Keine SSH-Verbindung", "In der Bibliothek gibt es keine Verbindung mit SSH.");
+/** Verbindung wählen (nur solche, die diese Zugangsdaten nutzen), dann über SSH anmelden und gleich wieder trennen. */
+async function testCred(c: Cred) {
+  const conns = (await api.list()).filter((x) => [x.credentialId, x.rdpCredentialId, x.vncCredentialId].includes(c.id));
+  const id = await pickConnection(conns, "Zugang testen", `Sesam meldet sich mit «${c.name}» an der gewählten Verbindung an (über SSH) und trennt gleich wieder.`, "Testen");
+  if (!id) return;
+  const name = conns.find((x) => x.id === id)?.name ?? "";
+  let trust: string | null = null;
+  for (;;) {
+    try {
+      return tell("Zugang funktioniert", await api.credTest(id, trust));
+    } catch (e) {
+      if (trust === null && String(e).startsWith(HOSTKEY_UNKNOWN) && (trust = await askHostKey(name, String(e)))) continue;
+      return tell("Anmeldung fehlgeschlagen", String(e));
+    }
+  }
+}
+
+/** Auswahl einer Verbindung im Rückfrage-Dialog. */
+async function pickConnection(conns: Connection[], title: string, text: string, ok: string): Promise<string | null> {
+  if (!conns.length) return (await tell(title, "Keine passende Verbindung in der Bibliothek."), null);
   const sel = document.createElement("select");
   sel.append(...conns.map((x) => new Option(`${x.name} (${x.user ? `${x.user}@` : ""}${x.address})`, x.id)));
-  const host = byId("ask-text");
-  host.after(sel);
+  byId("ask-text").after(sel);
   try {
-    if (!(await ask("Schlüssel eintragen", `Sesam meldet sich mit der bisherigen Anmeldung der Verbindung an und ergänzt ~/.ssh/authorized_keys um den öffentlichen Schlüssel von «${c.name}». Danach kann die Verbindung diese Zugangsdaten nutzen.`, "Eintragen"))) return;
+    return (await ask(title, text, ok)) ? sel.value : null;
   } finally {
     sel.remove();
   }
-  const id = sel.value;
+}
+
+/** Wie ssh-copy-id: Verbindung wählen, mit ihrer bisherigen Anmeldung verbinden und den Schlüssel eintragen. */
+async function installKey(c: Cred) {
+  const conns = (await api.list()).filter((x) => x.sshPort);
+  const id = await pickConnection(conns, "Schlüssel eintragen", `Sesam meldet sich mit der bisherigen Anmeldung der Verbindung an und ergänzt ~/.ssh/authorized_keys um den öffentlichen Schlüssel von «${c.name}». Danach kann die Verbindung diese Zugangsdaten nutzen.`, "Eintragen");
+  if (!id) return;
   const name = conns.find((x) => x.id === id)?.name ?? "";
   let trust: string | null = null;
   for (;;) {
@@ -137,6 +169,32 @@ export function openCred(existing: Cred | null): Promise<Cred | null> {
 
 export function initCreds() {
   $("cred-new").onclick = () => openCred(null);
+  $("cred-search").oninput = () => void renderCredList();
+  $("cred-export").onclick = () => void exportBackup().catch((e) => tell("Nicht gesichert", String(e)));
+  $("cred-import").onclick = () => void importBackup().catch((e) => tell("Nicht eingelesen", String(e)));
+}
+
+async function exportBackup() {
+  const pw = await askPassword("Sicherung verschlüsseln", "Passwort für die Datei (mindestens 8 Zeichen). Ohne dieses Passwort lässt sie sich nicht öffnen.", "Weiter");
+  if (!pw) return;
+  if ((await askPassword("Passwort wiederholen", "Bitte dasselbe Passwort noch einmal.", "Weiter")) !== pw) return tell("Nicht gesichert", "Die beiden Passwörter sind nicht gleich.");
+  const file = await saveDialog({ defaultPath: `Sesam-Sicherung-${new Date().toISOString().slice(0, 10)}.sesam`, filters: [{ name: "Sesam-Sicherung", extensions: ["sesam"] }] });
+  if (file) tell("Gesichert", await api.backupExport(file, pw));
+}
+
+async function importBackup() {
+  const file = await openDialog({ multiple: false, filters: [{ name: "Sesam-Sicherung", extensions: ["sesam"] }] });
+  if (typeof file !== "string") return;
+  const pw = await askPassword("Sicherung öffnen", "Passwort der Sicherung", "Öffnen");
+  if (!pw) return;
+  const p = await api.backupPreview(file, pw);
+  const line = (label: string, l: string[]) => (l.length ? `${label} (${l.length}): ${l.join(", ")}` : `${label}: keine`);
+  const text = [line("Neue Verbindungen", p.newConnections), line("Neue Zugangsdaten", p.newCredentials), line("Schon vorhanden, bleibt unverändert", [...p.knownConnections, ...p.knownCredentials])].join("\n");
+  if (!p.newConnections.length && !p.newCredentials.length) return tell("Nichts Neues", text);
+  if (!(await ask("Einlesen?", text, "Zusammenführen"))) return;
+  tell("Eingelesen", await api.backupImport(file, pw));
+  changed();
+  dispatchEvent(new CustomEvent("sesam:library-changed"));
 }
 
 export async function adoptFromConnection(connId: string, suggested: string) {

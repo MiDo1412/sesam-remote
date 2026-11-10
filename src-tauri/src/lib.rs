@@ -1,3 +1,4 @@
+mod backup;
 mod clipshare;
 mod creds;
 mod diag;
@@ -122,6 +123,110 @@ fn groups_save(path: State<LibraryPath>, groups: Vec<library::Group>) -> Result<
     library::validate_groups(&groups)?;
     let _g = LIBRARY_LOCK.lock().unwrap();
     library::save(&groups_path(&path), &groups)
+}
+
+const SECRET_KINDS: [(Kind, &str); 5] =
+    [(Kind::Password, "password"), (Kind::VncPassword, "vnc"), (Kind::RdpPassword, "rdp"), (Kind::GatewayPassword, "gateway"), (Kind::SshKey, "sshkey")];
+
+/// Verschlüsselte Sicherung von Bibliothek, Gruppen und Zugangsdaten samt Geheimnissen in eine Datei schreiben.
+#[tauri::command]
+fn backup_export(path: State<LibraryPath>, file: String, password: String) -> Result<String, String> {
+    diag::add_secret(&password);
+    let conns = library::load(&path.0)?;
+    let creds = creds::load(&creds_path(&path))?;
+    let mut secrets = Vec::new();
+    let ids = conns.iter().map(|c| c.id.clone()).chain(creds.iter().map(|c| creds::vault_id(&c.id)));
+    for id in ids {
+        for (k, name) in SECRET_KINDS {
+            if let Some(v) = vault::get(&id, k)? {
+                secrets.push((id.clone(), name.to_string(), v));
+            }
+        }
+    }
+    let c = backup::Contents {
+        connections: conns.iter().map(|c| serde_json::to_value(c).map_err(|e| e.to_string())).collect::<Result<_, _>>()?,
+        groups: library::load_groups(&groups_path(&path))?,
+        credentials: creds,
+        secrets,
+    };
+    let text = backup::encrypt(&c, &password)?;
+    std::fs::write(&file, text).map_err(|e| format!("{file}: {e}"))?;
+    Ok(format!("{} Verbindungen und {} Zugangsdaten gesichert.", c.connections.len(), c.credentials.len()))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupPreview {
+    new_connections: Vec<String>,
+    known_connections: Vec<String>,
+    new_credentials: Vec<String>,
+    known_credentials: Vec<String>,
+}
+
+fn backup_read(file: &str, password: &str) -> Result<backup::Contents, String> {
+    diag::add_secret(password);
+    backup::decrypt(&std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?, password)
+}
+
+/// Vorschau vor dem Einlesen: was neu dazukommt, was schon da ist (gleiche ID, bleibt unverändert).
+#[tauri::command]
+fn backup_preview(path: State<LibraryPath>, file: String, password: String) -> Result<BackupPreview, String> {
+    let c = backup_read(&file, &password)?;
+    let have: std::collections::HashSet<_> = library::load(&path.0)?.into_iter().map(|x| x.id).collect();
+    let have_c: std::collections::HashSet<_> = creds::load(&creds_path(&path))?.into_iter().map(|x| x.id).collect();
+    let name = |v: &serde_json::Value| v["name"].as_str().unwrap_or("?").to_string();
+    let (kc, nc): (Vec<_>, Vec<_>) = c.connections.iter().partition(|v| have.contains(v["id"].as_str().unwrap_or("")));
+    let (kr, nr): (Vec<_>, Vec<_>) = c.credentials.iter().partition(|x| have_c.contains(&x.id));
+    Ok(BackupPreview {
+        new_connections: nc.into_iter().map(name).collect(),
+        known_connections: kc.into_iter().map(name).collect(),
+        new_credentials: nr.into_iter().map(|x| x.name.clone()).collect(),
+        known_credentials: kr.into_iter().map(|x| x.name.clone()).collect(),
+    })
+}
+
+/// Zusammenführen: nur Neues kommt dazu (samt Geheimnissen), Bestehendes bleibt wie es ist.
+#[tauri::command]
+fn backup_import(path: State<LibraryPath>, file: String, password: String) -> Result<String, String> {
+    let c = backup_read(&file, &password)?;
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let mut conns = library::load(&path.0)?;
+    let mut creds = creds::load(&creds_path(&path))?;
+    let mut fresh_ids = std::collections::HashSet::new();
+    let mut added = (0, 0);
+    for v in c.connections {
+        let conn: Connection = serde_json::from_value(v).map_err(|e| format!("Verbindung nicht lesbar: {e}"))?;
+        conn.validate()?;
+        if !conns.iter().any(|x| x.id == conn.id) {
+            fresh_ids.insert(conn.id.clone());
+            conns.push(conn);
+            added.0 += 1;
+        }
+    }
+    for cr in c.credentials {
+        creds::validate(&cr)?;
+        if !creds.iter().any(|x| x.id == cr.id) {
+            fresh_ids.insert(creds::vault_id(&cr.id));
+            creds.push(cr);
+            added.1 += 1;
+        }
+    }
+    for (id, kind, secret) in c.secrets {
+        if let (true, Some((k, _))) = (fresh_ids.contains(&id), SECRET_KINDS.iter().find(|(_, n)| *n == kind)) {
+            vault::set(&id, *k, &secret)?;
+        }
+    }
+    let mut groups = library::load_groups(&groups_path(&path))?;
+    for g in c.groups {
+        if !groups.iter().any(|x| x.name == g.name) {
+            groups.push(g);
+        }
+    }
+    library::validate_groups(&groups)?;
+    library::save(&path.0, &conns)?;
+    creds::save(&creds_path(&path), &creds)?;
+    library::save(&groups_path(&path), &groups)?;
+    Ok(format!("{} Verbindungen und {} Zugangsdaten übernommen; Bestehendes blieb unverändert.", added.0, added.1))
 }
 
 /// Gruppe umbenennen bzw. löschen (`to` = None): ändert auch die Verbindungen.
@@ -302,6 +407,7 @@ async fn rdp_ports(
 /// Benutzer und Passwort gespeicherter Zugangsdaten (für RDP, VNC, Gateway).
 fn cred_login(path: &LibraryPath, cid: &str) -> Result<(String, Option<String>), String> {
     let cred = creds::load(&creds_path(path))?.into_iter().find(|x| x.id == cid).ok_or("Zugewiesene Zugangsdaten gibt es nicht mehr")?;
+    cred_used(cid);
     let pw = vault::get(&creds::vault_id(cid), Kind::Password)?;
     if let Some(p) = &pw {
         diag::add_secret(p);
@@ -498,9 +604,35 @@ fn login_secret(c: &Connection, kind: Kind) -> Result<Option<String>, String> {
         }
     }
     match (&c.credential_id, kind) {
-        (Some(cid), Kind::Password | Kind::SshKey) => vault::get(&creds::vault_id(cid), kind),
+        (Some(cid), Kind::Password | Kind::SshKey) => {
+            cred_used(cid);
+            vault::get(&creds::vault_id(cid), kind)
+        }
         _ => vault::get(&c.id, kind),
     }
+}
+
+/// «Zuletzt verwendet» merken. Nur wenn die Bibliothek gerade frei ist (nie warten, nie scheitern).
+fn cred_used(cid: &str) {
+    let (Some(lib), Ok(_g)) = (LIBRARY_FILE.get(), LIBRARY_LOCK.try_lock()) else { return };
+    let p = creds_path(&LibraryPath(lib.clone()));
+    let Ok(mut all) = creds::load(&p) else { return };
+    if let Some(c) = all.iter_mut().find(|x| x.id == cid) {
+        c.last_used = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs());
+        let _ = creds::save(&p, &all);
+    }
+}
+
+/// Zugang testen: mit diesen Zugangsdaten über SSH an einer Verbindung anmelden, die sie nutzt, und gleich wieder trennen.
+#[tauri::command]
+async fn cred_test(path: State<'_, LibraryPath>, connection: String, trust: Option<String>) -> Result<String, String> {
+    let c = find(&path, &connection)?;
+    if c.ssh_port.is_none() {
+        return Err(format!("«{}» hat kein SSH; testen geht vorerst nur über SSH.", c.name));
+    }
+    let h = ssh::connect(&ssh_target(&c, trust)?).await?;
+    let _ = h.disconnect(russh::Disconnect::ByApplication, "", "de").await;
+    Ok(format!("Anmeldung an «{}» erfolgreich.", c.name))
 }
 
 /// Pfad der Bibliothek für Stellen ohne Tauri-State (Sprungserver nachschlagen).
@@ -1813,6 +1945,10 @@ pub fn run() {
             certs_list,
             quick_register,
             creds_list,
+            cred_test,
+            backup_export,
+            backup_preview,
+            backup_import,
             cred_generate_key,
             cred_public_key,
             cred_install_key,

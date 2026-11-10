@@ -12,6 +12,8 @@ pub struct Cred {
     pub user: String,
     pub has_password: bool,
     pub has_key: bool,
+    /// Zuletzt für eine Anmeldung benutzt (Sekunden seit 1970).
+    pub last_used: Option<u64>,
 }
 
 /// Tresor-ID der Geheimnisse eines Profils.

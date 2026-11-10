@@ -1029,4 +1029,5 @@ addEventListener("keydown", (e) => {
   else if (e.key.toLowerCase() === "n" && !e.shiftKey && !detachedWindow && !document.querySelector("dialog[open]")) (e.preventDefault(), command("new"));
 });
 $("search").addEventListener("input", render);
+addEventListener("sesam:library-changed", () => reload());
 reload();
