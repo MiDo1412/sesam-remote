@@ -1043,6 +1043,12 @@ async fn sftp_trash_slot(files: State<'_, Files>, sid: String) -> Result<String,
     ssh_files(&files, &sid)?.trash_slot().await
 }
 
+/// Grösse (für das Grössenlimit des Papierkorbs).
+#[tauri::command]
+async fn sftp_size(files: State<'_, Files>, sid: String, path: String) -> Result<u64, String> {
+    ssh_files(&files, &sid)?.size(&path).await
+}
+
 /// Rückgängig: aus dem Papierkorb an den alten Ort.
 #[tauri::command]
 async fn sftp_restore(files: State<'_, Files>, sid: String, trashed: String, original: String) -> Result<(), String> {
@@ -2146,6 +2152,7 @@ pub fn run() {
             sftp_trash_slot,
             sftp_restore,
             sftp_trash_cleanup,
+            sftp_size,
             sftp_sha256,
             local_sha256,
             local_mkdir,

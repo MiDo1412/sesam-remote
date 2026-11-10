@@ -43,6 +43,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 /** Grösse des Einstellungsfensters (vom Benutzer gezogen) merken. */
 const SIZE_KEY = "sesam.settingsSize";
 let trashMenu: ReturnType<typeof enhanceSelect> | undefined;
+let trashMaxMenu: ReturnType<typeof enhanceSelect> | undefined;
 let keysMenu: { sync(): void } | undefined;
 let sizeWatch: ResizeObserver | null = null;
 
@@ -81,6 +82,11 @@ export async function openSettings(tab = "general") {
   trash.onchange = () => localStorage.setItem("sesam.trashDays", trash.value);
   trashMenu ??= enhanceSelect(trash);
   trashMenu.sync();
+  const trashMax = $<HTMLSelectElement>("settings-trash-max");
+  trashMax.value = localStorage.getItem("sesam.trashMaxMb") ?? "500";
+  trashMax.onchange = () => localStorage.setItem("sesam.trashMaxMb", trashMax.value);
+  trashMaxMenu ??= enhanceSelect(trashMax);
+  trashMaxMenu.sync();
   const keys = dlg.querySelector<HTMLSelectElement>("[name=systemKeys]")!;
   keys.value = appSettings().systemKeys;
   keysMenu ??= enhanceSelect(keys);

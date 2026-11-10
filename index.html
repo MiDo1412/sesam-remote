@@ -371,7 +371,8 @@
           </div>
           <p class="note">«Automatisch» folgt der Einstellung des Betriebssystems.</p>
           <label class="row"><span>Papierkorb auf dem Server</span><select id="settings-trash-days"><option value="1">1 Tag</option><option value="3">3 Tage</option><option value="7">7 Tage (Standard)</option><option value="14">14 Tage</option><option value="30">30 Tage</option></select></label>
-          <p class="note">Was Sesam im Dateifenster löscht oder ersetzt, kommt zuerst in einen versteckten Papierkorb im Home des Benutzers auf dem Server (<code>~/.sesam-papierkorb</code>) und lässt sich so lange zurückholen. Danach räumt Sesam beim nächsten Verbinden auf.</p>
+          <label class="row"><span>Papierkorb nur bis</span><select id="settings-trash-max"><option value="100">100 MB</option><option value="500">500 MB (Standard)</option><option value="2000">2 GB</option><option value="10000">10 GB</option></select></label>
+          <p class="note">Was Sesam im Dateifenster löscht oder ersetzt, kommt zuerst in einen versteckten Papierkorb im Home des Benutzers auf dem Server (<code>~/.sesam-papierkorb</code>) und lässt sich so lange zurückholen. Danach räumt Sesam beim nächsten Verbinden auf. Grössere Dateien und Ordner sichert Sesam nicht still, sondern fragt, ob ohne Papierkorb gelöscht werden soll.</p>
           <label class="row" id="system-keys-row"><span>Windows-Tastenkombinationen anwenden</span>
             <select name="systemKeys">
               <option value="remote">Wenn das Remote-Bild aktiv ist (Standard)</option>

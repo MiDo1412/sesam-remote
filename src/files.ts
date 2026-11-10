@@ -730,6 +730,23 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     for (const name of names) start(from.side === "local", join(from, name), to.listing.path, name);
   }
 
+  /** Vor dem Ersetzen die alte Fassung in den Papierkorb kopieren; mit sudo, wenn dem Benutzer die Rechte fehlen
+   *  (z. B. /etc). Zu gross oder nicht möglich: fragen. `false` = abgebrochen. */
+  async function backupOld(target: string, name: string, admin: boolean): Promise<boolean> {
+    const s = sid!;
+    if (await tooBig(target)) return ask("Ohne Papierkorb ersetzen?", `Die alte Fassung von «${name}» ist grösser als ${mb()} und wird nicht gesichert. Trotzdem ersetzen, ohne Rückgängig?`, "Ersetzen");
+    try {
+      const slot = await api.sftpTrashSlot(s);
+      const op = (pw?: string) => api.sftpSudoOp(s, "backup", target, slot, pw);
+      if (!admin && !(await ask("Alte Fassung mit sudo sichern?", `Dein Benutzer darf «${name}» nicht in den Papierkorb verschieben. Sesam kopiert die alte Fassung mit sudo dorthin (Besitzer und Rechte werden gemerkt) und ersetzt sie dann.`, "Mit sudo sichern"))) return false;
+      if (!(await withSudo("Alte Fassung sichern", (_, pw) => op(pw), true))) return false;
+      undoRow(`↺ ${name} (ersetzt)`, `${slot}/${name}`, target, true);
+      return true;
+    } catch (e) {
+      return ask("Alte Fassung nicht gesichert", `${e}\n\n«${name}» trotzdem ersetzen, ohne Rückgängig?`, "Ersetzen");
+    }
+  }
+
   /** Hochladen ohne Schreibrecht im Ziel: in einen temporären Ordner laden, dann mit sudo an den Zielort verschieben. */
   async function uploadAsAdmin(src: string, destDir: string, name: string) {
     const s = sid;
@@ -745,6 +762,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
           const done = await withSudo("Verschieben", (_, pw) => move(pw), true).catch(async (e) => {
             if (!String(e).startsWith("EXISTS:")) throw e;
             if (!(await ask(`«${name}» ersetzen?`, `In ${destDir} gibt es «${name}» schon. Ersetzen behält Besitzer und Rechte der bestehenden Datei.`, "Ersetzen"))) return false;
+            if (!(await backupOld(`${destDir.replace(/\/$/, "")}/${name}`, name, true))) return false;
             replace = true;
             return withSudo("Ersetzen", (_, pw) => move(pw), true);
           });
@@ -778,12 +796,17 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     // Ersetzen auf dem Server: die alte Fassung zuerst in den Papierkorb, dann normal hochladen («force» = ohne).
     if (upload && replace === true && !ftp && sid) {
       const target = `${destDir.replace(/\/$/, "")}/${name}`;
-      void api
-        .sftpTrash(sid, target)
-        .then((t) => (undoRow(`↺ ${name} (ersetzt)`, t, target), start(true, src, destDir, name, false, then)))
-        .catch(async (e) => {
-          if (await ask("Alte Fassung nicht gesichert", `${e}\n\n«${name}» trotzdem ersetzen, ohne Rückgängig?`, "Ersetzen")) start(true, src, destDir, name, "force", then);
-        });
+      const go = () => start(true, src, destDir, name, "force", then);
+      void (async () => {
+        if (await tooBig(target)) return void ((await backupOld(target, name, false)) && go());
+        try {
+          undoRow(`↺ ${name} (ersetzt)`, await api.sftpTrash(sid!, target), target);
+          go();
+        } catch (e) {
+          // Kein Recht, die alte Fassung wegzuschieben: mit sudo kopieren.
+          if (DENIED.test(String(e)) ? await backupOld(target, name, false) : await ask("Alte Fassung nicht gesichert", `${e}\n\n«${name}» trotzdem ersetzen, ohne Rückgängig?`, "Ersetzen")) go();
+        }
+      })();
       return;
     }
     const row = el("div", "transfer");
@@ -1048,11 +1071,15 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
 
   // ---------- Papierkorb auf dem Server und Rückgängig ----------
   // Was Sesam löscht oder ersetzt, kommt zuerst nach ~/.sesam-papierkorb (Zeitstempel-Ordner); ⌘Z bzw. Strg+Z holt es zurück.
-  const undoStack: { trashed: string; original: string; label: string; row: HTMLElement }[] = [];
+  const undoStack: { trashed: string; original: string; label: string; row: HTMLElement; sudo: boolean }[] = [];
   const trashDays = () => Math.max(1, Number(localStorage.getItem("sesam.trashDays")) || 7);
+  const trashMax = () => (Number(localStorage.getItem("sesam.trashMaxMb")) || 500) * 1e6;
+  /** `true`, wenn das Element zu gross für den Papierkorb ist (Grösse unbekannt: nein). */
+  const tooBig = async (path: string) => (await api.sftpSize(sid!, path).catch(() => 0)) > trashMax();
+  const mb = () => (trashMax() >= 1e9 ? `${trashMax() / 1e9} GB` : `${trashMax() / 1e6} MB`);
 
   /** Eintrag in der Übertragungsliste mit «Rückgängig». */
-  function undoRow(label: string, trashed: string, original: string) {
+  function undoRow(label: string, trashed: string, original: string, sudo = false) {
     const row = el("div", "transfer");
     const name = el("span", "transfer-name", label);
     const state = el("span", "transfer-state", `im Papierkorb auf ${c.name} (${trashDays()} Tage)`);
@@ -1060,7 +1087,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const btn = el("button", "plain", "Rückgängig");
     btn.type = "button";
     btn.title = `Rückgängig (${navigator.userAgent.includes("Mac") ? "⌘Z" : "Strg+Z"})`;
-    const entry = { trashed, original, label, row };
+    const entry = { trashed, original, label, row, sudo };
     btn.onclick = () => void undo(entry);
     row.append(name, el("span"), state, btn);
     transferList.prepend(row);
@@ -1070,7 +1097,12 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   async function undo(entry = undoStack[undoStack.length - 1]) {
     if (!entry || !sid) return;
     try {
-      await api.sftpRestore(sid, entry.trashed, entry.original);
+      const s = sid;
+      // Mit sudo Gesichertes (z. B. aus /etc) mit sudo zurück, samt Besitzer und Rechten.
+      const restore = (pw?: string) => api.sftpSudoOp(s, "restore", entry.trashed, entry.original, pw);
+      if (entry.sudo) {
+        if (!(await withSudo("Zurückholen", (_, pw) => restore(pw), true))) return;
+      } else await api.sftpRestore(s, entry.trashed, entry.original);
       undoStack.splice(undoStack.indexOf(entry), 1);
       entry.row.querySelector("button")?.remove();
       entry.row.querySelector(".transfer-state")!.textContent = "zurückgeholt";
@@ -1087,6 +1119,10 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
    *  fragt Sesam, ob endgültig gelöscht werden soll. `false` = abgebrochen. */
   async function trashOne(path: string, label: string): Promise<boolean> {
     const s = sid!;
+    if (await tooBig(path)) {
+      if (!(await ask("Ohne Papierkorb löschen?", `«${label}» ist grösser als ${mb()} (Einstellungen › Allgemein) und kommt darum nicht in den Papierkorb. Endgültig löschen, ohne Rückgängig?`, "Endgültig löschen"))) return false;
+      return withSudo("Löschen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "remove", path, "", pw) : api.sftpRemove(s, path)));
+    }
     try {
       undoRow(label, await api.sftpTrash(s, path), path);
       return true;
@@ -1094,7 +1130,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       if (DENIED.test(String(e)) && !ftp) {
         const slot = await api.sftpTrashSlot(s);
         if (!(await withSudo("In den Papierkorb legen", (_, pw) => api.sftpSudoOp(s, "trash", path, slot, pw), false).catch(() => false))) return false;
-        undoRow(label, `${slot}/${path.split("/").pop()}`, path);
+        undoRow(label, `${slot}/${path.split("/").pop()}`, path, true);
         return true;
       }
       if (!(await ask("Papierkorb nicht möglich", `${e}\n\n«${label}» endgültig löschen, ohne Rückgängig?`, "Endgültig löschen"))) return false;

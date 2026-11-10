@@ -257,6 +257,7 @@ export const api = {
   sftpSetPerms: (sid: string, path: string, mode: number | null, owner: string | null, recursive: boolean, sudo: boolean, password?: string) =>
     invoke<void>("sftp_set_perms", { sid, path, mode, owner, recursive, sudo, password }),
   sftpTrash: (sid: string, path: string) => invoke<string>("sftp_trash", { sid, path }),
+  sftpSize: (sid: string, path: string) => invoke<number>("sftp_size", { sid, path }),
   sftpTrashSlot: (sid: string) => invoke<string>("sftp_trash_slot", { sid }),
   sftpRestore: (sid: string, trashed: string, original: string) => invoke<void>("sftp_restore", { sid, trashed, original }),
   sftpTrashCleanup: (sid: string, days: number) => invoke<number>("sftp_trash_cleanup", { sid, days }),

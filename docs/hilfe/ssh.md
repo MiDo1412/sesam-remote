@@ -83,6 +83,10 @@ Nach dem ersten Abbruch einer Shell fragt Sesam einmal, ob es sie künftig halte
 
 Was du im Dateifenster löschst oder beim Hochladen ersetzt, löscht Sesam nicht sofort: es kommt in einen versteckten Papierkorb im Home des Benutzers auf dem Server (`~/.sesam-papierkorb/<Datum-Zeit>/`). In der Übertragungsliste steht dazu **Rückgängig**; ⌘Z (Mac) bzw. Strg+Z holt das zuletzt Gelöschte zurück. Nach 7 Tagen (einstellbar unter *Einstellungen › Allgemein*) räumt Sesam beim nächsten Verbinden auf.
 
-Liegt etwas auf einem anderen Dateisystem als das Home (z. B. ein eingehängtes Laufwerk), lässt es sich nicht in den Papierkorb verschieben. Dann fragt Sesam, ob es endgültig löschen soll. Mit Administratorrechten (sudo) Gelöschtes kommt ebenfalls in den Papierkorb, gehört dort aber root; zurückholen geht dann nur mit sudo.
+Liegt etwas auf einem anderen Dateisystem als das Home (z. B. ein eingehängtes Laufwerk), lässt es sich nicht in den Papierkorb verschieben. Dann fragt Sesam, ob es endgültig löschen soll. Mit Administratorrechten (sudo) Gelöschtes kommt ebenfalls in den Papierkorb; Rückgängig holt es dann mit sudo zurück.
+
+Ersetzt du eine Datei, die deinem Benutzer nicht gehört (z. B. in `/etc`), kopiert Sesam die alte Fassung nach Rückfrage mit sudo in deinen Papierkorb und merkt sich Besitzer und Rechte. Rückgängig schreibt sie mit sudo an den alten Ort zurück, wieder mit dem ursprünglichen Besitzer und den ursprünglichen Rechten.
+
+Grosse Dateien und Ordner (Standard: über 500 MB, einstellbar unter *Einstellungen › Allgemein*) legt Sesam nicht still in den Papierkorb, sondern fragt, ob ohne Papierkorb gelöscht bzw. ersetzt werden soll.
 
 Bei FTP gibt es keinen Papierkorb; dort löscht Sesam nach Rückfrage endgültig.

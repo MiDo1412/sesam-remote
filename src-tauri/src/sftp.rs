@@ -184,6 +184,16 @@ impl Sftp {
         Ok(dest)
     }
 
+    /// Grösse in Bytes (Ordner samt Inhalt, über `du`; ohne SSH nur Dateien).
+    pub async fn size(&self, path: &str) -> Result<u64, String> {
+        let m = self.s.symlink_metadata(path).await.map_err(|e| format!("{path}: {e}"))?;
+        if !m.file_type().is_dir() {
+            return Ok(m.size.unwrap_or(0));
+        }
+        let out = self.exec(&format!("du -sk -- {} 2>/dev/null | cut -f1", crate::scp::quote(path)?), false, None).await?;
+        Ok(out.trim().parse::<u64>().unwrap_or(0) * 1024)
+    }
+
     /// Neuer Zeitstempel-Ordner im Papierkorb (für die Erhöhung mit sudo: dorthin verschiebt root).
     pub async fn trash_slot(&self) -> Result<String, String> {
         let root = rjoin(&self.s.canonicalize(".").await.map_err(err)?, TRASH);
@@ -408,6 +418,14 @@ pub fn move_script(from: &str, dest_dir: &str, replace: bool) -> Result<String, 
 /// Fehlertext-Anfang: Ziel belegt, die Oberfläche fragt «Ersetzen?».
 pub const EXISTS: &str = "EXISTS:";
 
+/// Zeitstempel-Ordner im Papierkorb als Ziel prüfen und für die Shell setzen.
+fn trash_arg(arg: &str) -> Result<String, String> {
+    if !arg.starts_with('/') || !arg.contains(&format!("/{TRASH}/")) || arg.contains("..") {
+        return Err("Ungültiger Papierkorb".into());
+    }
+    crate::scp::quote(arg)
+}
+
 /// Einzelne Dateiaktion mit sudo, wenn dem Benutzer die Rechte fehlen.
 pub fn sudo_op_script(op: &str, path: &str, arg: &str) -> Result<String, String> {
     let q = crate::scp::quote;
@@ -435,10 +453,26 @@ pub fn sudo_op_script(op: &str, path: &str, arg: &str) -> Result<String, String>
         }
         // In den Papierkorb (Zeitstempel-Ordner von `trash_slot`) verschieben, statt zu löschen.
         "trash" => {
-            if !arg.contains(&format!("/{TRASH}/")) || arg.contains("..") || path.trim_end_matches('/').is_empty() {
-                return Err("Ungültiger Papierkorb".into());
+            if path.trim_end_matches('/').is_empty() {
+                return Err("Ungültiger Pfad".into());
             }
-            Ok(format!("mv -- {p} {}/", q(arg)?))
+            Ok(format!("mv -- {p} {}/", trash_arg(arg)?))
+        }
+        // Vor dem Ersetzen mit sudo: alte Fassung samt Besitzer und Rechten in den Papierkorb kopieren,
+        // Besitz und Rechte in `.sesam-meta` merken, dann dem Benutzer übergeben (damit er sie sehen und zurückholen kann).
+        "backup" => {
+            let slot = trash_arg(arg)?;
+            Ok(format!("cp -a -- {p} {slot}/ && {{ stat -c '%u:%g %a' -- {p} 2>/dev/null || stat -f '%u:%g %Lp' -- {p}; }} > {slot}/.sesam-meta 2>/dev/null; chown -R \"$SUDO_USER\" {slot}"))
+        }
+        // Zurückholen mit sudo: Inhalt an den Ursprungsort, Besitz und Rechte wie gemerkt.
+        "restore" => {
+            if !path.contains(&format!("/{TRASH}/")) || path.contains("..") || !arg.starts_with('/') {
+                return Err("Nur aus dem Papierkorb von Sesam".into());
+            }
+            let slot = rparent(path).ok_or("Ungültiger Pfad")?;
+            let meta = q(&format!("{slot}/.sesam-meta"))?;
+            let (o, slot) = (q(arg)?, trash_arg(&slot)?);
+            Ok(format!("cp -a -- {p} {o} && if [ -s {meta} ]; then set -- $(cat {meta}); chown \"$1\" {o} && chmod \"$2\" {o}; fi && rm -rf -- {slot}"))
         }
         // Zum Herunterladen: Kopie in einen temporären Ordner, die dem angemeldeten Benutzer gehört.
         "fetch" => {
@@ -1047,6 +1081,30 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// Sichern und Zurückholen laufen echt in der Shell (ohne sudo; chown auf den eigenen Benutzer).
+    #[cfg(unix)]
+    #[test]
+    fn sichern_und_zurueckholen_in_der_shell() {
+        let base = std::env::temp_dir().join(format!("sesam-bk-{}", std::process::id()));
+        let slot = base.join(".sesam-papierkorb/20261110-1");
+        std::fs::create_dir_all(&slot).unwrap();
+        let f = base.join("conf");
+        std::fs::write(&f, "alt").unwrap();
+        std::fs::set_permissions(&f, std::os::unix::fs::PermissionsExt::from_mode(0o640)).unwrap();
+        let (f, slot) = (f.to_str().unwrap().to_string(), slot.to_str().unwrap().to_string());
+        let sh = |c: String| assert!(std::process::Command::new("sh").arg("-c").arg(&c).env("SUDO_USER", std::env::var("USER").unwrap_or("root".into())).status().unwrap().success(), "{c}");
+        sh(super::sudo_op_script("backup", &f, &slot).unwrap());
+        assert_eq!(std::fs::read_to_string(format!("{slot}/conf")).unwrap(), "alt");
+        assert!(std::fs::read_to_string(format!("{slot}/.sesam-meta")).unwrap().trim().ends_with(" 640"));
+        std::fs::write(&f, "neu").unwrap();
+        std::fs::set_permissions(&f, std::os::unix::fs::PermissionsExt::from_mode(0o666)).unwrap();
+        sh(super::sudo_op_script("restore", &format!("{slot}/conf"), &f).unwrap());
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "alt");
+        assert_eq!(std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(&f).unwrap().permissions()) & 0o777, 0o640);
+        assert!(!std::path::Path::new(&slot).exists());
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
     #[test]
     fn skripte_fuer_rechte_und_verschieben() {
         assert_eq!(super::perms_script("/opt/a b", Some(0o755), Some("root:wheel"), true).unwrap(), "chmod -R 755 -- '/opt/a b' && chown -R root:wheel -- '/opt/a b'");
@@ -1062,6 +1120,11 @@ mod tests {
         assert_eq!(super::sudo_op_script("mkdir", "/opt", "app").unwrap(), "mkdir -- '/opt/app'");
         assert!(super::sudo_op_script("rename", "/opt/a", "../b").is_err());
         assert!(super::sudo_op_script("fetch", "/etc/x", "/home/m").is_err());
+        let b = super::sudo_op_script("backup", "/etc/ssh/sshd_config", "/home/m/.sesam-papierkorb/20261110-1").unwrap();
+        assert!(b.starts_with("cp -a -- '/etc/ssh/sshd_config' '/home/m/.sesam-papierkorb/20261110-1'/") && b.contains(".sesam-meta") && b.contains("chown -R"));
+        let r = super::sudo_op_script("restore", "/home/m/.sesam-papierkorb/20261110-1/sshd_config", "/etc/ssh/sshd_config").unwrap();
+        assert!(r.contains("cp -a --") && r.contains("chown \"$1\"") && r.contains("chmod \"$2\"") && r.ends_with("rm -rf -- '/home/m/.sesam-papierkorb/20261110-1'"));
+        assert!(super::sudo_op_script("restore", "/etc/passwd", "/tmp/x").is_err() && super::sudo_op_script("backup", "/etc/x", "/tmp").is_err());
         assert_eq!(super::sudo_error("sudo: a password is required", 1), super::SUDO_PASSWORD);
         assert!(super::sudo_error("Sorry, try again.\nsudo: 1 incorrect password attempt", 1).contains("stimmt nicht"));
     }
