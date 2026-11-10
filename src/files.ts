@@ -326,9 +326,9 @@ export function filesTab(ctx: TabCtx): TabHandle {
     const list = marksOf(p);
     const here = p.listing?.path ?? "";
     const v = await openMenu(anchor, [
-      ...list.map((m) => ({ value: `go:${m}`, label: m })),
-      { value: "add", label: "Diesen Ordner merken", separator: list.length > 0, disabled: !here || list.includes(here) },
-      { value: "del", label: "Diesen Ordner vergessen", disabled: !list.includes(here) },
+      ...list.map((m) => ({ value: `go:${m}`, label: m, icon: ICON.folder })),
+      { value: "add", label: "Diesen Ordner merken", icon: ICON.plus, separator: list.length > 0, disabled: !here || list.includes(here) },
+      { value: "del", label: "Diesen Ordner vergessen", icon: ICON.trash, disabled: !list.includes(here) },
     ]);
     if (!v) return;
     if (v.startsWith("go:")) load(p, v.slice(3), "go");
@@ -1001,7 +1001,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         { value: "transfer", label: remote ? "Herunterladen" : "Hochladen", icon: remote ? ICON.download : ICON.upload, disabled: !sid },
         { value: "rename", label: "Umbenennen …", icon: ICON.rename, shortcut: remote ? "F2" : undefined, disabled: !one || (remote && scp) },
       );
-      if (remote) items.push({ value: "chmod", label: ftp ? "Rechte ändern …" : "Berechtigungen …", disabled: !one || scp });
+      if (remote) items.push({ value: "chmod", label: ftp ? "Rechte ändern …" : "Berechtigungen …", icon: ICON.permissions, disabled: !one || scp });
       items.push({ value: "copy", label: "Pfad kopieren", icon: ICON.copy });
       if (remote) items.push({ value: "delete", label: "Löschen", icon: ICON.trash, shortcut: "Entf", disabled: scp, separator: true });
     }

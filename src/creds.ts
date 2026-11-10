@@ -54,9 +54,9 @@ async function credMenu(anchor: HTMLElement, c: Cred, users: string[]) {
     { value: "gen", label: c.hasKey ? "Neuen SSH-Schlüssel erzeugen …" : "SSH-Schlüssel erzeugen (Ed25519)", icon: ICON.plus },
     { value: "pub", label: "Öffentlichen Schlüssel kopieren", icon: ICON.copy, disabled: !c.hasKey },
     { value: "install", label: "Schlüssel auf einem Server eintragen …", icon: ICON.upload, disabled: !c.hasKey },
-    { value: "test", label: "Zugang testen …", disabled: !users.length, separator: true },
-    { value: "reveal", label: "Passwort anzeigen …", disabled: !c.hasPassword },
-    { value: "dup", label: "Duplizieren" },
+    { value: "test", label: "Zugang testen …", icon: ICON.key, disabled: !users.length, separator: true },
+    { value: "reveal", label: "Passwort anzeigen …", icon: ICON.eye, disabled: !c.hasPassword },
+    { value: "dup", label: "Duplizieren", icon: ICON.copy },
     { value: "del", label: "Löschen …", icon: ICON.trash, separator: true },
   ]);
   try {

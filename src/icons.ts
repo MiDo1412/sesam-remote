@@ -3,6 +3,9 @@
  *  als Inline-SVG mit currentColor; nur die gebrauchten Dateien kommen ins Bundle. macOS: SF Symbols (unten).
  *  Betriebssystem-Logos: siehe unten. Lizenzen: docs/lizenzen/README.md. */
 import fAdd from "@fluentui/svg-icons/icons/add_20_regular.svg?raw";
+import fShieldLock from "@fluentui/svg-icons/icons/shield_lock_20_regular.svg?raw";
+import fEye from "@fluentui/svg-icons/icons/eye_20_regular.svg?raw";
+import fKey from "@fluentui/svg-icons/icons/key_20_regular.svg?raw";
 import fArrowClockwise from "@fluentui/svg-icons/icons/arrow_clockwise_20_regular.svg?raw";
 import fArrowDownload from "@fluentui/svg-icons/icons/arrow_download_20_regular.svg?raw";
 import fArrowLeft from "@fluentui/svg-icons/icons/arrow_left_20_regular.svg?raw";
@@ -101,6 +104,9 @@ export const ICON = {
   pin: fl(fPin),
   windowed: fl(fFullScreenMinimize),
   more: fl(fMoreHorizontal),
+  permissions: fl(fShieldLock),
+  eye: fl(fEye),
+  key: fl(fKey),
   osLinux: logo(linuxLogo, 40),
   osUbuntu: logo(ubuntuLogo, 40),
   osMac: logo(appleLogo, 40),
@@ -119,6 +125,7 @@ export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
   font: "textformat", trash: "trash", upload: "arrow.up.circle", close: "xmark", minimize: "minus", splitRight: "rectangle.split.2x1",
   splitDown: "rectangle.split.1x2", screencast: "rectangle.on.rectangle", question: "questionmark.circle", viewGrid: "square.grid.2x2",
   viewList: "list.bullet", settings: "gearshape", pin: "pin", windowed: "arrow.down.right.and.arrow.up.left", more: "ellipsis",
+  permissions: "lock.shield", eye: "eye", key: "key",
 };
 
 /** macOS: SF Symbols statt Fluent. Das System zeichnet sie (src-tauri/src/sfsymbol.rs); als leeres <svg> mit Maske,
