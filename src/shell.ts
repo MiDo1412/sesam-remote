@@ -57,7 +57,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
   // Emoji und breite Zeichen richtig breit (Unicode 11), Links mit Strg+Klick im Browser öffnen.
   term.loadAddon(new Unicode11Addon());
   term.unicode.activeVersion = "11";
-  term.loadAddon(new WebLinksAddon((ev, uri) => (ev.ctrlKey || ev.metaKey) && /^https?:\/\//.test(uri) && void openUrl(uri)));
+  // Adressen auf dem Server selbst (localhost:3000 …) öffnet der Türöffner über SSH, alles andere der Browser.
+  term.loadAddon(new WebLinksAddon((ev, uri) => (ev.ctrlKey || ev.metaKey) && (!local && localAddress(uri) ? void door(uri) : /^https?:\/\//.test(uri) && void openUrl(uri))));
   term.open(host);
 
   let sid: string | null = null;
@@ -131,6 +132,64 @@ export function shellTab(ctx: TabCtx): TabHandle {
     }
     term.focus();
   });
+
+  // ---------- Türöffner: lokale Dienste des Servers über SSH im Browser ----------
+  const hint = navigator.userAgent.includes("Mac") ? "⌘-Klick" : "Strg+Klick";
+  if (!local)
+    term.registerLinkProvider({
+      provideLinks(y, done) {
+        // shortcut: Spalten = Zeichen, bei breiten Zeichen davor stimmt der Bereich nicht ganz; umgebrochene Zeilen nicht erkannt.
+        const line = term.buffer.active.getLine(y - 1)?.translateToString(true) ?? "";
+        const links = [...line.matchAll(LOCAL_RE)].map((m) => ({
+          range: { start: { x: m.index! + 1, y }, end: { x: m.index! + m[0].length, y } },
+          text: m[0],
+          decorations: { underline: true, pointerCursor: true },
+          activate: (ev: MouseEvent, text: string) => void ((ev.metaKey || ev.ctrlKey) && door(text)),
+          hover: () => (status.textContent = `${hint} öffnet ${m[0]} von ${c.name} über SSH im Browser`),
+          leave: () => (status.textContent = ""),
+        }));
+        done(links.length ? links : undefined);
+      },
+    });
+  let lastDoor = 0;
+  async function door(text: string) {
+    const a = localAddress(text);
+    if (!a || !sid || Date.now() - lastDoor < 600) return; // beide Link-Erkenner melden denselben Klick
+    lastDoor = Date.now();
+    try {
+      const port = await api.shellDoorOpen(sid, a.port, a.v6);
+      const url = `${a.https ? "https" : "http"}://127.0.0.1:${port}${a.path}`;
+      status.textContent = `Tür offen: ${text} auf ${c.name} → ${url}`;
+      await openUrl(url);
+      void refreshDoors();
+    } catch (e) {
+      status.textContent = `Tür nicht geöffnet: ${e}`;
+    }
+  }
+  const doorsBtn: HTMLButtonElement = toolButton(ICON.globe, "Offene Türen", () => void doorsMenu(), { secondary: true });
+  doorsBtn.hidden = true;
+  async function refreshDoors() {
+    const list = sid ? await api.shellDoorList(sid).catch(() => []) : [];
+    doorsBtn.hidden = !list.length;
+    doorsBtn.title = `Offene Türen (${list.length}): Dienste von ${c.name} über SSH`;
+    return list;
+  }
+  async function doorsMenu() {
+    const list = await refreshDoors();
+    const v = await openMenu(doorsBtn, [
+      ...list.flatMap(([port, v6, l], i) => [
+        { value: `o:${l}`, label: `${v6 ? "[::1]" : "localhost"}:${port} → 127.0.0.1:${l}`, icon: ICON.globe, section: i ? undefined : `Türen zu ${c.name}`, separator: i > 0 },
+        { value: `c:${port}`, label: "Schliessen", icon: ICON.close },
+      ]),
+      ...(list.length > 1 ? [{ value: "c:0", label: "Alle schliessen", separator: true }] : []),
+    ]);
+    if (v?.startsWith("o:")) void openUrl(`http://127.0.0.1:${v.slice(2)}/`);
+    else if (v?.startsWith("c:") && sid) {
+      await api.shellDoorClose(sid, Number(v.slice(2)));
+      void refreshDoors();
+    }
+    term.focus();
+  }
 
   // ---------- Werkzeugleiste ----------
   const copy = () => {
@@ -241,6 +300,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     toolButton(ICON.search, "Suchen", find, { shortcut: "Strg+Umschalt+F" }),
     broadcastBtn,
     toolButton(ICON.typeClipboard, "Textbausteine", () => void snippets(), { secondary: true }),
+    ...(local ? [] : [doorsBtn]),
     ...(local ? [] : [toolButton(ICON.shell, "Gehaltene Sitzungen", () => void heldSessions(), { secondary: true, shortcut: "tmux auf dem Server" })]),
     schemeBtn,
     ...(isTouch() ? [kb.button] : []),
@@ -334,7 +394,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
         if (ctx.extra?.command && !at) setTimeout(() => send(ctx.extra!.command!), 400);
         ctx.setState("connected");
         if (ctx.isActive()) term.focus();
-        if (!local) void watchHost();
+        if (!local) void (watchHost(), refreshDoors());
       } catch (e) {
         const msg = String(e);
         if (trust === null && msg.startsWith(HOSTKEY_UNKNOWN)) {
@@ -360,8 +420,9 @@ export function shellTab(ctx: TabCtx): TabHandle {
   };
   return {
     reconnect() {
-      if (sid) api.shellClose(sid);
+      if (sid) api.shellClose(sid); // schliesst auch die Türen
       sid = null;
+      doorsBtn.hidden = true;
       term.write("\r\n\x1b[2m— Neu verbinden —\x1b[0m\r\n");
       void connect();
     },
@@ -407,4 +468,14 @@ export function osc52Text(data: string): string | null {
 
 if (import.meta.env?.DEV) {
   console.assert(osc52Text("c;R3LDvGV6aQ==") === "Grüezi" && osc52Text("c;?") === null && osc52Text("c;%%") === null, "osc52Text");
+}
+
+/** Adressen, die auf dem Server selbst gemeint sind: localhost, 127.0.0.1, 0.0.0.0, [::1], [::] mit Port, optional mit http(s):// und Pfad. */
+export const LOCAL_RE = /(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):\d{1,5}(?:\/[^\s"'<>)\]]*)?/g;
+
+export function localAddress(text: string): { port: number; v6: boolean; https: boolean; path: string } | null {
+  const m = /^(https?:\/\/)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{1,5})(\/.*)?$/.exec(text.trim());
+  const port = m ? Number(m[3]) : 0;
+  if (!m || port < 1 || port > 65535) return null;
+  return { port, v6: m[2].startsWith("["), https: m[1] === "https://", path: m[4] ?? "/" };
 }

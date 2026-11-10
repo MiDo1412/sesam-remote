@@ -182,6 +182,9 @@ export const api = {
     ch.onmessage = onEvent;
     return invoke<string>("shell_open", { id, cols, rows, trust, slot, onEvent: ch });
   },
+  shellDoorOpen: (sid: string, port: number, v6: boolean) => invoke<number>("shell_door_open", { sid, port, v6 }),
+  shellDoorList: (sid: string) => invoke<[number, boolean, number][]>("shell_door_list", { sid }),
+  shellDoorClose: (sid: string, port: number) => invoke<void>("shell_door_close", { sid, port }),
   shellUpload: (sid: string, files: string[], dir: string) => invoke<string[]>("shell_upload", { sid, files, dir }),
   shellHeldList: (sid: string) => invoke<[string, boolean, number][]>("shell_held_list", { sid }),
   shellHeldKill: (sid: string, name: string) => invoke<void>("shell_held_kill", { sid, name }),

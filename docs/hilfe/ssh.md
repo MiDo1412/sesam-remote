@@ -79,6 +79,12 @@ Fehlt tmux auf dem Server, startet eine normale Shell mit einem Hinweis; Sesam i
 
 Nach dem ersten Abbruch einer Shell fragt Sesam einmal, ob es sie künftig halten soll.
 
+## Türöffner: Dienste auf dem Server im Browser
+
+Startest du auf dem Server etwas, das nur dort lauscht (ein Entwicklungsserver, Grafana, die Weboberfläche eines Geräts), zeigt die Shell meist eine Adresse wie `http://localhost:3000`, `127.0.0.1:8080`, `0.0.0.0:8000` oder `[::1]:9000`. Fährst du mit der Maus darüber, unterstreicht Sesam sie; ⌘-Klick (Mac) bzw. Strg+Klick öffnet sie im Browser dieses Computers. Dafür leitet Sesam einen freien Port auf `127.0.0.1` hier über die bestehende SSH-Verbindung zu diesem Port auf dem Server weiter; im Netz ist dabei nichts zusätzlich offen.
+
+Offene Türen zeigt der Knopf mit der Weltkugel im Sitzungskopf: dort lassen sie sich erneut öffnen oder schliessen. Mit der Shell schliessen sich auch ihre Türen.
+
 ## Papierkorb auf dem Server und Rückgängig
 
 Was du im Dateifenster löschst oder beim Hochladen ersetzt, löscht Sesam nicht sofort: es kommt in einen versteckten Papierkorb im Home des Benutzers auf dem Server (`~/.sesam-papierkorb/<Datum-Zeit>/`). In der Übertragungsliste steht dazu **Rückgängig**; ⌘Z (Mac) bzw. Strg+Z holt das zuletzt Gelöschte zurück. Nach 7 Tagen (einstellbar unter *Einstellungen › Allgemein*) räumt Sesam beim nächsten Verbinden auf.

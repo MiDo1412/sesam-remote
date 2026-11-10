@@ -820,6 +820,42 @@ async fn shell_upload(shells: State<'_, ssh::Shells>, sid: String, files: Vec<St
     Ok(out)
 }
 
+/// Türöffner: Weiterleitungen je Shell zu lokalen Diensten des Servers, (Server-Port, IPv6, lokaler Port, Task).
+static DOORS: std::sync::LazyLock<Mutex<HashMap<String, Vec<(u16, bool, u16, tokio::task::JoinHandle<()>)>>>> = std::sync::LazyLock::new(Default::default);
+
+/// `port` auf dem Server (localhost) über die SSH-Verbindung dieser Shell erreichbar machen; gibt den lokalen Port
+/// auf 127.0.0.1 zurück. Ist die Tür schon offen, dieselbe.
+#[tauri::command]
+async fn shell_door_open(shells: State<'_, ssh::Shells>, sid: String, port: u16, v6: bool) -> Result<u16, String> {
+    if let Some(d) = DOORS.lock().unwrap().get(&sid).and_then(|v| v.iter().find(|d| d.0 == port && d.1 == v6).map(|d| d.2)) {
+        return Ok(d);
+    }
+    let h = shells.0.lock().await.get(&sid).ok_or("Shell geschlossen")?.handle();
+    let (local, task) = forward::tunnel_to(h, if v6 { "::1" } else { "127.0.0.1" }, port).await?;
+    DOORS.lock().unwrap().entry(sid).or_default().push((port, v6, local, task));
+    Ok(local)
+}
+
+/// Offene Türen dieser Shell: (Server-Port, IPv6, lokaler Port).
+#[tauri::command]
+fn shell_door_list(sid: String) -> Vec<(u16, bool, u16)> {
+    DOORS.lock().unwrap().get(&sid).map(|v| v.iter().map(|d| (d.0, d.1, d.2)).collect()).unwrap_or_default()
+}
+
+/// Tür schliessen (`port` 0: alle dieser Shell).
+#[tauri::command]
+fn shell_door_close(sid: String, port: u16) {
+    if let Some(v) = DOORS.lock().unwrap().get_mut(&sid) {
+        v.retain(|d| {
+            let keep = port != 0 && d.0 != port;
+            if !keep {
+                d.3.abort();
+            }
+            keep
+        });
+    }
+}
+
 /// Gehaltene Sesam-Shells (tmux) auf dem Server dieser Shell.
 #[tauri::command]
 async fn shell_held_list(shells: State<'_, ssh::Shells>, sid: String) -> Result<Vec<(String, bool, u64)>, String> {
@@ -861,6 +897,9 @@ async fn shell_resize(shells: State<'_, ssh::Shells>, sid: String, cols: u32, ro
 #[tauri::command]
 async fn shell_close(shells: State<'_, ssh::Shells>, sid: String) -> Result<(), String> {
     relay::SHELLS.lock().unwrap().remove(&sid);
+    for d in DOORS.lock().unwrap().remove(&sid).unwrap_or_default() {
+        d.3.abort();
+    }
     if let Some(t) = localterm::TERMS.lock().unwrap().remove(&sid) {
         t.close();
     }
@@ -2103,6 +2142,9 @@ pub fn run() {
             shell_probe,
             shell_held_list,
             shell_upload,
+            shell_door_open,
+            shell_door_list,
+            shell_door_close,
             shell_held_kill,
             conn_set_persist,
             conn_set_os,
