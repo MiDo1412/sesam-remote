@@ -160,6 +160,17 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
   factories = f;
   onLibrary = library;
   $("session-back").onclick = showLibrary;
+  // Eine Leiste statt zwei: Werkzeuge des aktiven Tabs rechts in der Tab-Leiste, mehr Platz fürs Remote-Bild.
+  // Titel und Unterzeile (Adresse, Temperatur …) stehen im Tooltip des Tabs.
+  // Schmale Fenster: wieder zwei Leisten, damit Tabs und Werkzeuge Platz haben.
+  const wide = matchMedia("(min-width: 1000px)");
+  const place = () => {
+    document.body.classList.toggle("one-bar", wide.matches);
+    if (wide.matches) document.querySelector(".session-bar")!.insertBefore($("session-toolbar"), document.querySelector(".session-bar .term-btns"));
+    else document.querySelector(".session-head")!.append($("session-toolbar"));
+  };
+  wide.addEventListener("change", place);
+  place();
 }
 
 export const hasTabs = () => tabs.length > 0;

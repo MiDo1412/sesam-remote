@@ -782,3 +782,11 @@ body.settings-window dialog#settings { position: fixed; inset: 0; width: 100%; h
 body.settings-window dialog#settings::backdrop { background: transparent; }
 body.settings-window dialog#settings .settings { width: 100% !important; height: 100% !important; resize: none; }
 body.settings-window dialog#settings { overflow: hidden; }
+
+/* Eine Leiste (src/tabs.ts initTabs): Werkzeuge rechts neben den Tabs, kein eigener Sitzungskopf mehr */
+body.one-bar .session-head { display: none; }
+body.one-bar .session-bar #session-toolbar { flex: 0 0 auto; display: flex; align-items: center; }
+body.one-bar .session-bar #session-toolbar > .tab-tools { flex-wrap: nowrap; }
+body.one-bar #tabs { flex: 1 1 auto; }
+body.one-bar .tab { flex: 0 1 200px; min-width: 72px; }
+body.one-bar #session-back { flex-shrink: 0; white-space: nowrap; padding: 0 8px; }

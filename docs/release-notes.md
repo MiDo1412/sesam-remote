@@ -68,6 +68,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Statusmeldungen:** Hinweise blenden sich nach 6 s aus, Fehler bleiben stehen, bis man sie anklickt.
 - **Verbindungsqualität als Signalbalken:** Ein Klick zeigt Bilder pro Sekunde, Datenmenge und Latenz in einem kleinen Fenster.
 - **Einstellungen auf dem Mac in einem eigenen Fenster** (⌘,), wie bei anderen Mac-Apps; unter Windows bleibt das Sheet.
+- **Eine Leiste für Tabs und Werkzeuge:** Ab 1000 px Fensterbreite stehen die Werkzeuge der Sitzung rechts in der Tab-Leiste; das Remote-Bild bekommt rund 44 px mehr Höhe. Titel und Adresse zeigt der Tooltip des Tabs; in schmalen Fenstern bleibt es bei zwei Leisten.
 
 ### Behoben
 
