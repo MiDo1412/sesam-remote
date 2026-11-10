@@ -120,6 +120,37 @@ const VAULT_MAX_CHARS: usize = 1280;
 
 /// ed25519 oder ECDSA im OpenSSH- oder PuTTY-Format (.ppk v2/v3), klein genug für jeden Tresor.
 /// RSA passt ab 2048 Bit nicht mehr in die Windows-Anmeldeinformationsverwaltung.
+/// Neuer Ed25519-Schlüssel im OpenSSH-Format (privat) und der öffentliche Schlüssel als eine Zeile.
+pub fn generate_ed25519(comment: &str) -> Result<(String, String), String> {
+    let mut seed = [0u8; 32];
+    getrandom::fill(&mut seed).map_err(|e| format!("Zufall nicht verfügbar: {e}"))?;
+    let mut k = keys::PrivateKey::from(keys::ssh_key::private::Ed25519Keypair::from_seed(&seed));
+    seed.fill(0);
+    k.set_comment(comment);
+    let private = k.to_openssh(keys::ssh_key::LineEnding::LF).map_err(|e| e.to_string())?.to_string();
+    let public = k.public_key().to_openssh().map_err(|e| e.to_string())?;
+    Ok((private, public))
+}
+
+/// Öffentlicher Schlüssel (eine Zeile wie in authorized_keys) zu einem gespeicherten privaten Schlüssel.
+pub fn public_key_of(private: &str) -> Result<String, String> {
+    let t = private.trim();
+    let k = if t.starts_with("PuTTY-User-Key-File-") { keys::PrivateKey::from_ppk(t, None) } else { keys::PrivateKey::from_openssh(t) }
+        .map_err(|e| format!("Schlüssel nicht lesbar (mit Passphrase geschützt?): {e}"))?;
+    k.public_key().to_openssh().map_err(|e| e.to_string())
+}
+
+/// Skript wie ssh-copy-id: öffentlichen Schlüssel an ~/.ssh/authorized_keys anhängen, wenn er dort noch fehlt.
+pub fn install_key_script(public: &str) -> Result<String, String> {
+    let line = public.trim();
+    if line.contains(['\n', '\r', '\'']) || !(line.starts_with("ssh-") || line.starts_with("ecdsa-")) {
+        return Err("Ungültiger öffentlicher Schlüssel".into());
+    }
+    Ok(format!(
+        "umask 077; mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && (grep -qxF '{line}' ~/.ssh/authorized_keys && echo vorhanden || (echo '{line}' >> ~/.ssh/authorized_keys && echo eingetragen))"
+    ))
+}
+
 pub fn check_private_key(text: &str) -> Result<(), String> {
     let t = text.trim();
     let algorithm = if let Some(rest) = t.strip_prefix("PuTTY-User-Key-File-") {
@@ -423,6 +454,17 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn schluessel_erzeugen_und_eintragen() {
+        let (private, public) = generate_ed25519("sesam@test").unwrap();
+        check_private_key(&private).unwrap();
+        assert!(public.starts_with("ssh-ed25519 ") && public.ends_with(" sesam@test"));
+        assert_eq!(public_key_of(&private).unwrap(), public);
+        let s = install_key_script(&public).unwrap();
+        assert!(s.contains(&public) && s.contains("authorized_keys") && s.contains("grep -qxF"));
+        assert!(install_key_script("ssh-ed25519 AAA x'; rm -rf ~; '").is_err());
+    }
 
     #[test]
     fn algorithm_lists() {

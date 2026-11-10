@@ -9,7 +9,7 @@ interface Perm {
   state: "ok" | "missing" | "unknown";
 }
 
-const STATE = { ok: "Erteilt", missing: "Fehlt", unknown: "Wird beim ersten Mal gefragt" };
+const STATE = { ok: "Erteilt", missing: "Fehlt", unknown: "Noch offen" };
 
 export async function openPermissions() {
   const dlg = document.createElement("dialog");

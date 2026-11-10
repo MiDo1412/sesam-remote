@@ -548,7 +548,7 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
         layout();
         break;
       case 3:
-        status.textContent = `Verbindung beendet: ${text()}`;
+        status.textContent = /^Verbindung /.test(text()) ? text() : `Verbindung beendet: ${text()}`;
         sid = null;
         ctx.setState("closed");
         break;
