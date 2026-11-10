@@ -15,8 +15,10 @@ const glyph = (svg: string) => fl(svg, 14);
 export const isMac = navigator.userAgent.includes("Mac");
 
 export function initTitlebar(actions: { command(c: string): void; tool(t: string): void; help(id: string): void }) {
+  // Fenster an allen freien Flächen von Titel-, Tab- und Sitzungsleiste ziehen («deep»: auch auf Text und leeren
+  // Containern; Knöpfe, Tabs und Eingabefelder bleiben bedienbar). Doppelklick: Zoomen bzw. Maximieren.
   const bars = document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar");
-  for (const h of bars) h.setAttribute("data-tauri-drag-region", "");
+  for (const h of document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar, .session-head")) h.setAttribute("data-tauri-drag-region", "deep");
   if (isMac) return void document.body.classList.add("mac");
   document.body.classList.add("custom-titlebar");
   const win = getCurrentWindow();
