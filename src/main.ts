@@ -13,6 +13,7 @@ import { initTitlebar, isMac, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
 import { applyAppearance, openSettings } from "./settings";
+import { openPermissions } from "./permissions";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
 import { initFieldHelp } from "./fieldhelp";
@@ -963,6 +964,7 @@ const palette = initPalette(() => [
   { label: "Schnelle Verbindung …", hint: keyLabel("Strg+K"), keywords: "einmalig quick", run: () => $("quick").click() },
   { label: "Neues Terminal", hint: keyLabel("Strg+T"), keywords: "shell konsole powershell", run: () => void openTerminal() },
   { label: "Einstellungen", hint: keyLabel("Strg+,"), keywords: "optionen", run: () => void openSettings() },
+  { label: "Berechtigungen einrichten …", keywords: "freigabe datenschutz lokales netzwerk bedienungshilfen eingabeüberwachung", run: () => void openPermissions() },
   { label: "Ubuntu-PC hinzufügen …", keywords: "gnome assistent neue verbindung", run: () => ubuntu.open() },
   { label: "Bibliothek anzeigen", keywords: "übersicht verbindungen", run: () => runTool("Bibliothek") },
   { label: "Vorheriger Tab", keywords: "sitzung wechseln", run: () => runTool("Vorheriger Tab") },
@@ -998,6 +1000,7 @@ initFieldHelp(document.getElementById("quick-form")!);
 const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
   else if (cmd === "about") openSettings("about");
+  else if (cmd === "permissions") void openPermissions();
   else if (cmd === "palette") palette.open();
   else if (cmd === "addubuntu") ubuntu.open();
   else if (cmd === "terminal") void openTerminal();

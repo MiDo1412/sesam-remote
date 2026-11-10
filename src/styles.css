@@ -690,3 +690,12 @@ svg.sf { background-color: currentColor; -webkit-mask: var(--sf) center / contai
 .perms-grid { border-collapse: collapse; margin: 4px 0 12px; }
 .perms-grid th, .perms-grid td { padding: 4px 10px; text-align: center; font-weight: 500; }
 .perms-grid th[scope=row] { text-align: left; }
+
+/* Berechtigungen einrichten (src/permissions.ts) */
+.perm-list { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 8px; min-width: min(560px, 80vw); }
+.perm { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--chrome-bg2); }
+.perm div { display: grid; gap: 2px; }
+.perm small { color: var(--muted); }
+.perm-state { font-size: 12px; color: var(--muted); }
+.perm.ok .perm-state { color: var(--accent); }
+.perm.missing .perm-state { color: var(--danger); font-weight: 600; }

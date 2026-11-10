@@ -7,6 +7,7 @@ mod kdc;
 mod forward;
 mod ftp;
 mod library;
+mod perms;
 mod localterm;
 mod profiles;
 mod rdp;
@@ -1208,6 +1209,25 @@ fn with_desktop<T>(d: &Desktops, sid: &str, f: impl FnOnce(&Desktop) -> T) -> Re
     d.0.lock().unwrap().get(sid).map(f).ok_or_else(|| "Desktop-Sitzung geschlossen".into())
 }
 
+/// Freigaben des Betriebssystems mit Status (Einstellungen › «Berechtigungen einrichten …»).
+#[tauri::command]
+fn perm_list() -> Vec<perms::Perm> {
+    perms::list()
+}
+
+/// Freigabe anfragen (Systemdialog) und den neuen Stand liefern.
+#[tauri::command]
+fn perm_request(id: String) -> Vec<perms::Perm> {
+    perms::request(&id);
+    perms::list()
+}
+
+/// Passende Stelle in den Systemeinstellungen öffnen.
+#[tauri::command]
+fn perm_open(id: String) -> Result<(), String> {
+    perms::open(&id)
+}
+
 /// Die Oberfläche hat ein Bild gezeichnet (VNC oder RDP): das nächste darf kommen.
 #[tauri::command]
 fn desktop_ack(desktops: State<Desktops>, sessions: State<RdpSessions>, sid: String) {
@@ -1545,6 +1565,7 @@ pub fn run() {
                     .item(&P::about(app, Some("Über Sesam Remote"), Some(about))?)
                     .separator()
                     .item(&MenuItemBuilder::with_id("cmd:settings", "Einstellungen …").accelerator("CmdOrCtrl+,").build(app)?)
+                    .text("cmd:permissions", "Berechtigungen einrichten …")
                     .separator()
                     .item(&P::services(app, Some("Dienste"))?)
                     .separator()
@@ -1670,6 +1691,9 @@ pub fn run() {
             shell_close,
             vnc_open,
             desktop_ack,
+            perm_list,
+            perm_request,
+            perm_open,
             vnc_pointer,
             vnc_key,
             vnc_set_size,
