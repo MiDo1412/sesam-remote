@@ -790,3 +790,15 @@ body.one-bar .session-bar #session-toolbar > .tab-tools { flex-wrap: nowrap; }
 body.one-bar #tabs { flex: 1 1 auto; }
 body.one-bar .tab { flex: 0 1 200px; min-width: 72px; }
 body.one-bar #session-back { flex-shrink: 0; white-space: nowrap; padding: 0 8px; }
+
+/* Karte mit Türen (src/main.ts): Desktop, Shell, Dateien als Knöpfe unten rechts */
+.card-wrap { position: relative; }
+.card-wrap .card { padding-bottom: 14px; }
+.doors { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 2px; }
+.door { height: 26px; width: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 7px; background: transparent; color: var(--muted); }
+.door:hover { background: var(--hover); color: var(--text); }
+.door.default { color: var(--accent); }
+.door:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.card-wrap .card-name, .card-wrap .card-sub { margin-right: 100px; }
+.card-wrap .card-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.probe-note { display: block; min-height: 1em; margin-top: 4px; color: var(--muted); font-size: 11px; }

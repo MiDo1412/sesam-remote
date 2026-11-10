@@ -323,8 +323,83 @@ pub fn delete_group(items: &mut [Connection], groups: &mut Vec<Group>, name: &st
     groups.retain(|g| g.name != name);
 }
 
+/// Zwei Einträge desselben Geräts zusammenführen: `target` übernimmt die Dienste von `source`, die ihm fehlen.
+/// Haben beide denselben Dienst (z. B. RDP auf verschiedenen Ports), geht es nicht: das wären zwei Sitzungen,
+/// keine zwei Türen desselben Geräts. Gibt die übernommenen Dienste zurück.
+pub fn merge(target: &mut Connection, source: &Connection) -> Result<Vec<&'static str>, String> {
+    if target.address.trim().to_lowercase() != source.address.trim().to_lowercase() {
+        return Err("Nur Einträge mit derselben Adresse lassen sich zusammenführen".into());
+    }
+    let both: Vec<&str> = [("RDP", target.rdp_port.is_some() && source.rdp_port.is_some()), ("VNC", target.vnc_port.is_some() && source.vnc_port.is_some()), ("SSH", target.ssh_port.is_some() && source.ssh_port.is_some()), ("FTP", target.ftp_port.is_some() && source.ftp_port.is_some())]
+        .into_iter()
+        .filter(|(_, b)| *b)
+        .map(|(n, _)| n)
+        .collect();
+    let mut taken = Vec::new();
+    if target.rdp_port.is_none() && source.rdp_port.is_some() {
+        target.rdp_port = source.rdp_port;
+        target.rdp_domain.clone_from(&source.rdp_domain);
+        target.rdp_user.clone_from(&source.rdp_user);
+        target.rdp_target.clone_from(&source.rdp_target);
+        target.rdp_session_user.clone_from(&source.rdp_session_user);
+        target.rdp_credential_id.clone_from(&source.rdp_credential_id);
+        target.rdp_gateway.clone_from(&source.rdp_gateway);
+        target.rdp_gateway_user.clone_from(&source.rdp_gateway_user);
+        target.gateway_credential_id.clone_from(&source.gateway_credential_id);
+        taken.push("RDP");
+    }
+    if target.vnc_port.is_none() && source.vnc_port.is_some() {
+        target.vnc_port = source.vnc_port;
+        target.vnc_credential_id.clone_from(&source.vnc_credential_id);
+        taken.push("VNC");
+    }
+    if target.ssh_port.is_none() && source.ssh_port.is_some() {
+        target.ssh_port = source.ssh_port;
+        target.forwards.clone_from(&source.forwards);
+        target.jump_host.clone_from(&source.jump_host);
+        taken.push("SSH");
+    }
+    if target.ftp_port.is_none() && source.ftp_port.is_some() {
+        target.ftp_port = source.ftp_port;
+        target.ftp_security.clone_from(&source.ftp_security);
+        target.ftp_active = source.ftp_active;
+        taken.push("FTP");
+    }
+    if taken.is_empty() {
+        return Err(if both.is_empty() { "Nichts zu übernehmen".into() } else { format!("Beide Einträge haben {}; das sind zwei Sitzungen, nicht ein Gerät", both.join(" und ")) });
+    }
+    if target.user.is_empty() {
+        target.user.clone_from(&source.user);
+    }
+    if target.credential_id.is_none() {
+        target.credential_id.clone_from(&source.credential_id);
+    }
+    if target.os.is_empty() {
+        target.os.clone_from(&source.os);
+    }
+    if target.mac.is_empty() {
+        target.mac.clone_from(&source.mac);
+    }
+    Ok(taken)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn zusammenfuehren_uebernimmt_fehlende_dienste() {
+        use super::{Connection, merge};
+        let mut shell = Connection { address: "Darts.local".into(), ssh_port: Some(22), vnc_port: None, user: "dart".into(), ..Default::default() };
+        let desk = Connection { address: "darts.local".into(), ssh_port: None, vnc_port: Some(5900), vnc_credential_id: Some("c1".into()), os: "raspberry".into(), ..Default::default() };
+        assert_eq!(merge(&mut shell, &desk).unwrap(), vec!["VNC"]);
+        assert_eq!((shell.vnc_port, shell.vnc_credential_id.as_deref(), shell.os.as_str(), shell.user.as_str()), (Some(5900), Some("c1"), "raspberry", "dart"));
+        // Zwei RDP-Einträge (z. B. Anmeldebildschirm und Sitzung) bleiben getrennt.
+        let mut a = Connection { address: "pc".into(), rdp_port: Some(3389), vnc_port: None, ssh_port: None, ..Default::default() };
+        let b = Connection { address: "pc".into(), rdp_port: Some(3390), vnc_port: None, ssh_port: None, ..Default::default() };
+        assert!(merge(&mut a, &b).unwrap_err().contains("RDP"));
+        let mut c = Connection { address: "x".into(), ..Default::default() };
+        assert!(merge(&mut c, &Connection { address: "y".into(), ..Default::default() }).is_err());
+    }
+
     use super::*;
 
     #[test]

@@ -43,6 +43,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Sicherung:** Bibliothek und Zugangsdaten samt Passwörtern in eine mit eigenem Passwort verschlüsselte Datei (.sesam, AES-256-GCM, Argon2id); beim Einlesen zeigt Sesam zuerst, was dazukommt, und führt zusammen, ohne Bestehendes zu ändern.
 - **Zugangsdaten:** Suche, «zuletzt verwendet», Hinweis bei unbenutzten Einträgen und «Zugang testen» (Anmeldung über SSH an einer Verbindung, die sie nutzt).
 - **Raspberry Pi erkennen:** Nach dem Verbinden der Shell liest Sesam Modell und System aus und setzt das Symbol in der Bibliothek (Raspberry Pi bzw. Ubuntu), wenn noch keins gewählt ist. Auf Raspberry Pi OS zeigt der Sitzungskopf Modell, Temperatur und eine Warnung bei Unterspannung, jede Minute aktualisiert.
+- **Ein Gerät, drei Türen:** Karten zeigen Desktop, Shell und Dateien als Knöpfe und Benutzer@Adresse; bei einer neuen Verbindung erkennt Sesam die erreichbaren Dienste selbst; in der Sitzung lässt sich ein fehlender Dienst einrichten; zwei Einträge desselben Geräts lassen sich zusammenführen (mit Sicherung der Bibliothek).
 
 ### Verbessert
 

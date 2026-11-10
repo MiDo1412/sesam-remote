@@ -1,5 +1,15 @@
 # Komfortfunktionen
 
+## Ein Gerät, drei Türen
+
+Ein Eintrag der Bibliothek ist ein Gerät: Adresse und Anmeldung, dazu die Dienste **Desktop** (RDP oder VNC), **Shell** (SSH) und **Dateien** (SFTP oder FTP). Die Karte zeigt die Dienste als Knöpfe unten rechts; der grün hervorgehobene öffnet sich auch per Doppelklick (*Bearbeiten › Standardansicht*).
+
+Bei einer neuen Verbindung genügt die Adresse: Sesam fragt kurz die üblichen Ports ab (SSH 22, RDP 3389, VNC 5900, FTP 21 und eingetragene) und schaltet die Dienste ein, die antworten. Stellst du einen Schalter selbst um, bleibt deine Wahl.
+
+In einer Sitzung wechselst du oben links zu den anderen Diensten desselben Geräts. Fehlt einer, steht im Menü «…» *Desktop einrichten …* bzw. *Shell einrichten …*.
+
+Gibt es für dasselbe Gerät mehrere Einträge (zum Beispiel einen für die Shell, einen für VNC), bietet das Kontextmenü der Karte *«…» hier übernehmen* an: Der eine Eintrag bekommt die fehlenden Dienste und Zugangsdaten des anderen, dieser verschwindet. Vorher legt Sesam eine Sicherung der Bibliothek an (`library.json.vor-zusammenfuehren-…`). Haben beide denselben Dienst, etwa zwei RDP-Zugänge (Anmeldebildschirm und laufende Sitzung), bleiben es zwei Einträge.
+
 ## Online-Status und Aufwecken
 
 In der Bibliothek zeigt ein grüner Punkt vor der Adresse, dass der Rechner antwortet. Fährst du mit der Maus darüber, steht die Latenz in Millisekunden. Ein grauer Punkt heisst «nicht erreichbar». Sesam prüft alle 30 Sekunden, solange die Bibliothek offen ist.

@@ -376,7 +376,11 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   const icons: Record<Kind, string> = { desktop: ICON.desktop, shell: ICON.shell, files: ICON.folder };
   const jumps = (["desktop", "shell", "files"] as Kind[]).filter((k) => k !== kind).flatMap((k) => {
     const c = sameHost(conn, k);
-    return c ? [toolButton(icons[k], KIND_LABEL[k], () => openTab(c, k), { shortcut: c === conn ? "dieser Rechner" : c.name })] : [];
+    if (c) return [toolButton(icons[k], KIND_LABEL[k], () => openTab(c, k), { shortcut: c === conn ? "dieses Gerät" : c.name })];
+    // Fehlt der Dienst: anbieten, ihn bei diesem Gerät einzurichten (öffnet «Bearbeiten»).
+    if (conn.id.startsWith("local:") || conn.id.startsWith("quick-") || detachedWindow) return [];
+    const add = toolButton(icons[k], `${KIND_LABEL[k]} einrichten …`, () => dispatchEvent(new CustomEvent("sesam:edit-connection", { detail: conn.id })), { shortcut: "für dieses Gerät", secondary: true });
+    return [add];
   });
   if (jumps.length) toolbar.prepend(...jumps, toolSep());
   overflowMenu(toolbar, last);

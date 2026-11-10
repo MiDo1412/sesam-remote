@@ -92,6 +92,77 @@ fn library_save(
     Ok(connection)
 }
 
+/// Zwei Einträge desselben Geräts zusammenführen (`source` geht in `target` auf). Vorher eine Sicherung der Bibliothek.
+#[tauri::command]
+fn library_merge(path: State<LibraryPath>, target: String, source: String) -> Result<String, String> {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let mut items = library::load(&path.0)?;
+    let src = items.iter().find(|c| c.id == source).cloned().ok_or("Eintrag nicht gefunden")?;
+    let dst = items.iter_mut().find(|c| c.id == target).ok_or("Eintrag nicht gefunden")?;
+    let had_pw = vault::get(&dst.id, Kind::Password)?.is_some();
+    let had_key = vault::get(&dst.id, Kind::SshKey)?.is_some();
+    let taken = library::merge(dst, &src)?;
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    std::fs::copy(&path.0, path.0.with_extension(format!("json.vor-zusammenfuehren-{stamp}"))).map_err(|e| format!("Sicherung der Bibliothek: {e}"))?;
+    let copy = |kind: Kind| -> Result<(), String> {
+        match vault::get(&src.id, kind)? {
+            Some(v) => vault::set(&dst.id, kind, &v),
+            None => Ok(()),
+        }
+    };
+    if taken.contains(&"VNC") {
+        copy(Kind::VncPassword)?;
+        dst.has_vnc_password |= src.has_vnc_password;
+    }
+    if taken.contains(&"RDP") {
+        copy(Kind::RdpPassword)?;
+        copy(Kind::GatewayPassword)?;
+        dst.has_rdp_password |= src.has_rdp_password;
+        dst.has_gateway_password |= src.has_gateway_password;
+    }
+    if !had_pw {
+        copy(Kind::Password)?;
+        dst.has_password |= src.has_password;
+    }
+    if !had_key {
+        copy(Kind::SshKey)?;
+        dst.has_key |= src.has_key;
+    }
+    let name = dst.name.clone();
+    library::remove(&mut items, &src.id);
+    library::save(&path.0, &items)?;
+    for k in [Kind::Password, Kind::SshKey, Kind::VncPassword, Kind::RdpPassword, Kind::GatewayPassword] {
+        vault::delete(&src.id, k)?;
+    }
+    Ok(format!("«{}» ist jetzt Teil von «{name}» ({}).", src.name, taken.join(", ")))
+}
+
+/// Welche Dienste antworten? Standardports (SSH, RDP, VNC, FTP) und eingetragene, je 0,8 s, gleichzeitig.
+#[tauri::command]
+async fn probe_services(address: String, ports: Vec<u16>) -> Result<Vec<u16>, String> {
+    let host = address.trim().to_string();
+    if host.is_empty() || host.contains(char::is_whitespace) || host.len() > 253 {
+        return Err("Ungültige Adresse".into());
+    }
+    let mut all = vec![22u16, 3389, 5900, 21];
+    all.extend(ports.into_iter().take(8));
+    all.sort_unstable();
+    all.dedup();
+    let mut set = tokio::task::JoinSet::new();
+    for p in all {
+        let h = host.clone();
+        set.spawn(async move { (p, tokio::time::timeout(std::time::Duration::from_millis(800), tokio::net::TcpStream::connect((h.as_str(), p))).await.is_ok_and(|r| r.is_ok())) });
+    }
+    let mut open = Vec::new();
+    while let Some(Ok((p, ok))) = set.join_next().await {
+        if ok {
+            open.push(p);
+        }
+    }
+    open.sort_unstable();
+    Ok(open)
+}
+
 #[tauri::command]
 fn library_delete(path: State<LibraryPath>, id: String) -> Result<(), String> {
     let _g = LIBRARY_LOCK.lock().unwrap();
@@ -1950,6 +2021,8 @@ pub fn run() {
             desktop_ack,
             open_settings_window,
             perm_list,
+            library_merge,
+            probe_services,
             perm_request,
             perm_open,
             vnc_pointer,

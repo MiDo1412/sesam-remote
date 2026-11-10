@@ -356,13 +356,28 @@ function render() {
         { type: "button", class: "card", "aria-pressed": String(c.id === selected) },
         thumbEl(c, kind),
         el("div", { class: "card-name" }, c.name),
-        el("div", { class: "card-sub" }, onlineDot(c), c.address),
+        el("div", { class: "card-sub" }, onlineDot(c), c.user ? `${c.user}@${c.address}` : c.address),
       );
       card.onclick = () => ((selected = c.id), render());
       card.onpointerdown = (e) => dragCard(e, card, c);
       card.ondblclick = () => open(c, c.defaultView);
       card.oncontextmenu = (e) => (e.preventDefault(), cardMenu(card, c));
-      return card;
+      // Ein Gerät, drei Türen: Desktop, Shell, Dateien als eigene Knöpfe; der Standarddienst ist hervorgehoben.
+      const doors = (
+        [
+          ["desktop", ICON.desktop, "Desktop", !!desktopProtocol(c)],
+          ["shell", ICON.shell, "Shell", !!c.sshPort],
+          ["files", ICON.folder, "Dateien", !!filesProtocol(c)],
+        ] as const
+      )
+        .filter(([, , , on]) => on)
+        .map(([view, icon, label]) => {
+          const b = el("button", { type: "button", class: `door${view === c.defaultView ? " default" : ""}`, title: `${label} öffnen${view === c.defaultView ? " (Doppelklick)" : ""}`, "aria-label": `${label} von ${c.name} öffnen` });
+          b.innerHTML = icon;
+          b.onclick = () => open(c, view);
+          return b;
+        });
+      return el("div", { class: "card-wrap" }, card, el("div", { class: "doors" }, ...doors));
     }),
   );
   $("empty").hidden = items.length > 0;
@@ -588,15 +603,32 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
     { value: "lnk:desktop", label: "Desktop", section: isMac ? "Verknüpfung auf dem Schreibtisch" : "Verknüpfung auf dem Desktop", disabled: !desktopProtocol(c) },
     { value: "lnk:shell", label: "Shell", disabled: !c.sshPort },
     { value: "lnk:files", label: "Dateien", disabled: !filesProtocol(c) },
+    // Ein Gerät, drei Türen: weitere Einträge mit derselben Adresse übernehmen.
+    ...items
+      .filter((x) => x.id !== c.id && x.address.trim().toLowerCase() === c.address.trim().toLowerCase())
+      .map((x, i) => ({ value: `merge:${x.id}`, label: `«${x.name}» hier übernehmen …`, section: i === 0 ? "Gleiches Gerät" : undefined })),
   ]);
   if (!v) return;
   const [cmd, arg] = v.split(":");
+  if (cmd === "merge") return void mergeInto(c, items.find((x) => x.id === arg)!);
   if (cmd === "open") open(c, arg as Connection["defaultView"]);
   if (cmd === "edit") edit(c);
   if (cmd === "lnk")
     invoke<string>("create_shortcut", { id: c.id, view: arg })
       .then((p) => tell("Verknüpfung erstellt", p))
       .catch((e) => tell("Verknüpfung nicht erstellt", String(e)));
+}
+
+/** `source` geht in `target` auf: dessen fehlende Dienste und Zugangsdaten kommen dazu, der Eintrag verschwindet. */
+async function mergeInto(target: Connection, source: Connection) {
+  const svc = (x: Connection) => services(x).join(", ") || "keine Dienste";
+  if (!(await ask(`«${source.name}» übernehmen?`, `«${target.name}» (${svc(target)}) bekommt die Dienste von «${source.name}» (${svc(source)}), die ihm fehlen; «${source.name}» verschwindet danach aus der Bibliothek. Vorher legt Sesam eine Sicherung der Bibliothek an.`, "Zusammenführen"))) return;
+  try {
+    tell("Zusammengeführt", await api.libraryMerge(target.id, source.id));
+    reload();
+  } catch (e) {
+    tell("Nicht zusammengeführt", String(e));
+  }
 }
 
 /** sesam://open?id=…&view=… (Desktop-Verknüpfung) */
@@ -710,9 +742,41 @@ const blank = (): Connection => ({
   lastUsed: null,
 });
 
+/** Neue Verbindung: nach der Eingabe der Adresse nachsehen, welche Dienste antworten, und die Schalter vorschlagen,
+ *  solange niemand sie selbst umgestellt hat. Nur Verbindungsaufbau, je Port 0,8 s, nichts Aggressives. */
+let probeTimer = 0;
+let servicesTouched = false;
+const probeAddress = () => {
+  clearTimeout(probeTimer);
+  const f = form.elements as unknown as Record<string, HTMLInputElement>;
+  const addr = f.address.value.trim();
+  $("probe-note").textContent = "";
+  if (!editing || items.some((x) => x.id === editing!.id) || servicesTouched || !/^[\w.:-]+$/.test(addr)) return;
+  probeTimer = window.setTimeout(async () => {
+    $("probe-note").textContent = "Suche Dienste …";
+    const ports = ["sshPort", "rdpPort", "vncPort", "ftpPort"].map((n) => Number(f[n].value)).filter((p) => p > 0);
+    const open = await api.probeServices(addr, ports).catch(() => null);
+    if (f.address.value.trim() !== addr || servicesTouched) return;
+    if (!open) return void ($("probe-note").textContent = "");
+    const has = (n: string, std: number) => open.includes(Number(f[n].value) || std);
+    const found: [string, string, boolean][] = [["sshOn", "SSH", has("sshPort", 22)], ["rdpOn", "RDP", has("rdpPort", 3389)], ["vncOn", "VNC", has("vncPort", 5900)], ["ftpOn", "FTP", has("ftpPort", 21)]];
+    if (!found.some(([, , on]) => on)) return void ($("probe-note").textContent = "Keine Dienste gefunden; bitte unten selbst einschalten.");
+    for (const [n, , on] of found) {
+      f[n].checked = on;
+      f[n].dispatchEvent(new Event("change"));
+    }
+    servicesTouched = false; // die Änderung oben stammt von Sesam, nicht vom Benutzer
+    $("probe-note").textContent = `Erkannt: ${found.filter(([, , on]) => on).map(([, l]) => l).join(", ")}`;
+  }, 700);
+};
+(form.elements.namedItem("address") as HTMLInputElement).addEventListener("input", probeAddress);
+for (const n of ["vncOn", "rdpOn", "sshOn", "ftpOn"]) (form.elements.namedItem(n) as HTMLInputElement).addEventListener("change", (e) => e.isTrusted && (servicesTouched = true));
+
 function edit(c: Connection | null, asNew = false) {
   const isNew = !c || asNew;
   editing = c ?? blank();
+  servicesTouched = false;
+  $("probe-note").textContent = "";
   const f = form.elements as unknown as Record<string, HTMLInputElement>;
   $("editor-title").textContent = isNew ? "Neue Verbindung" : "Verbindung bearbeiten";
   f.name.value = editing.name;
@@ -1030,6 +1094,10 @@ addEventListener("keydown", (e) => {
 });
 $("search").addEventListener("input", render);
 addEventListener("sesam:library-changed", () => reload());
+addEventListener("sesam:edit-connection", (e) => {
+  const c = items.find((x) => x.id === (e as CustomEvent<string>).detail);
+  if (c) edit(c);
+});
 reload();
 // Eigenes Einstellungsfenster: nur die Einstellungen zeigen; «Fertig» schliesst das Fenster. Wechsel des Bereichs von aussen.
 if (settingsWindow) {

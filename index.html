@@ -88,7 +88,7 @@
         <label data-tip="Frei wählbar, erscheint in der Bibliothek. Beispiel: «Büro-PC». Pflichtfeld.">Name<input name="name" required /></label>
         <label data-tip="Optional. Verbindungen mit gleicher Gruppe stehen in der Seitenleiste zusammen. Beispiel: «Homelab».">Gruppe<input name="group" list="groups" /></label>
         <datalist id="groups"></datalist>
-        <label class="span" data-tip="Name oder IP-Adresse des Zielrechners, ohne Port. Beispiele: 192.168.1.20, pc-buero.local. Pflichtfeld.">Hostname oder IP-Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /></label>
+        <label class="span" data-tip="Name oder IP-Adresse des Zielrechners, ohne Port. Beispiele: 192.168.1.20, pc-buero.local. Pflichtfeld.">Hostname oder IP-Adresse<input name="address" required class="mono" autocomplete="off" spellcheck="false" /><small id="probe-note" class="probe-note" aria-live="polite"></small></label>
         <label data-tip="Bestimmt das Symbol in der Bibliothek, solange es noch kein Bild vom Desktop gibt.">Betriebssystem
           <select name="os">
             <option value="">Unbekannt</option>
