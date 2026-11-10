@@ -832,6 +832,13 @@ pub fn share_name(dir: &std::path::Path) -> String {
 }
 
 /// Neues rdpdr-Backend pro Verbindung (Handles gehören zur Sitzung).
+/// ironrdp-rdpdr-native kennt nur Windows, macOS und Linux; auf dem iPad gibt es keine Ordnerfreigabe.
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+fn drive_channel(_dir: &std::path::Path) -> Result<ironrdp_rdpdr::Rdpdr, String> {
+    Err("Ordner freigeben geht auf diesem Gerät nicht".into())
+}
+
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 fn drive_channel(dir: &std::path::Path) -> Result<ironrdp_rdpdr::Rdpdr, String> {
     use ironrdp_rdpdr::backend::RdpdrBackendFactory;
     if !dir.is_absolute() || !dir.is_dir() {
@@ -844,7 +851,7 @@ fn drive_channel(dir: &std::path::Path) -> Result<ironrdp_rdpdr::Rdpdr, String> 
             .map_err(|e| format!("Freigabe: {e}"))?;
         ironrdp_rdpdr_native::WindowsRdpdrBackendFactory::new(drive)
     };
-    #[cfg(not(windows))]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     let factory = ironrdp_rdpdr_native::backend::NixRdpdrBackendFactory::new(dir.to_string_lossy().into_owned()).with_drive(1, name);
     let product = factory.build_rdpdr_backend().map_err(|e| format!("Freigabe: {e}"))?;
     let (backend, drives) = product.into_parts();

@@ -1385,6 +1385,13 @@ async fn open_detached(app: AppHandle, token: String, title: String) -> Result<(
     if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err("Ungültige Übergabe".into());
     }
+    // iPad: keine weiteren Fenster (das Frontend bietet Abkoppeln dort nicht an).
+    #[cfg(mobile)]
+    return {
+        let _ = (app, title);
+        Err("Eigene Fenster gibt es auf diesem Gerät nicht".into())
+    };
+    #[cfg(desktop)]
     let builder = tauri::WebviewWindowBuilder::new(&app, format!("detached-{token}"), tauri::WebviewUrl::App("index.html".into()))
         .initialization_script(format!("window.__SESAM_DETACH__ = '{token}';"))
         .title(title)
@@ -1394,10 +1401,11 @@ async fn open_detached(app: AppHandle, token: String, title: String) -> Result<(
         .shadow(true);
     #[cfg(target_os = "macos")]
     let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
-    builder
-        .build()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    #[cfg(desktop)]
+    {
+        builder.build().map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 #[tauri::command]
