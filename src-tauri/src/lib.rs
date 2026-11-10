@@ -1328,16 +1328,13 @@ fn kbhook_set(active: bool) -> usize {
 /// Text aus der Zwischenablage des Systems (ohne Berechtigungsabfrage der Webansicht).
 #[tauri::command]
 fn clip_read() -> Result<String, String> {
-    clipshare::clipboard(|c| c.get_text()).or_else(|e| match e {
-        arboard::Error::ContentNotAvailable => Ok(String::new()),
-        e => Err(e),
-    }).map_err(|e| e.to_string())
+    clipshare::get_text()
 }
 
 /// Text in die Zwischenablage des Systems.
 #[tauri::command]
 fn clip_write(text: String) -> Result<(), String> {
-    clipshare::clipboard(|c| c.set_text(text)).map_err(|e| e.to_string())
+    clipshare::set_text(&text)
 }
 
 /// «Beenden» aus dem eigenen Menü (Windows/Linux).
@@ -2079,19 +2076,23 @@ pub fn run() {
         }
         .unwrap()
     });
+    // Zweiter Start (z. B. Klick auf eine Verknüpfung): Link an die laufende App, Fenster nach vorne. Nur Desktop.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+    }));
     builder
-        // Zweiter Start (z. B. Klick auf eine Verknüpfung): Link an die laufende App, Fenster nach vorne.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
-        }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Menüs und eigene Titelleiste gibt es nur auf dem Desktop (iPadOS: Vollbild-App ohne Menüleiste).
+            #[cfg(desktop)]
+            {
             use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
             // Menüs nach Systemstandard (docs/beschriftungen.md). macOS: native Menüleiste oben am Bildschirm.
             // Windows/Linux: eigene Titelleiste mit Menüknopf (src/titlebar.ts), kein natives Menü.
@@ -2177,6 +2178,7 @@ pub fn run() {
                 w.set_decorations(false)?;
                 let _ = w.set_shadow(true);
             }
+            }
             // Nur Debug-Build: Testskript aus $SESAM_DIAG_JS (Datei) im Hauptfenster ausführen, dann löschen; für Tests ohne Maus/Tastatur.
             #[cfg(debug_assertions)]
             if let Ok(path) = std::env::var("SESAM_DIAG_JS") {
@@ -2196,6 +2198,7 @@ pub fn run() {
                     }
                 });
             }
+            #[cfg(desktop)]
             app.on_menu_event(|app, e| {
                 if let Some(topic) = e.id().as_ref().strip_prefix("help:") {
                     let _ = app.emit("help", topic);

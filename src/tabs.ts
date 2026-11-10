@@ -8,7 +8,7 @@ import { GROUP_COLORS, colorMenu, dotSvg, groupDot } from "./groups";
 import { emit, emitTo, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { keyLabel } from "./titlebar";
+import { isMobile, keyLabel } from "./titlebar";
 
 /** Dieses Fenster zeigt abgekoppelte Sitzungen (ohne Bibliothek). */
 export const detachToken: string = (window as unknown as { __SESAM_DETACH__?: string }).__SESAM_DETACH__ ?? new URLSearchParams(location.search).get("detach") ?? "";
@@ -333,7 +333,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
       // Geteilte Ansicht wie Windows Terminal: dieser Tab neben/unter dem aktiven.
       ...(active && active !== tab ? [{ value: "split-right", label: "Neben aktivem Tab anzeigen", icon: ICON.splitRight, separator: true }, { value: "split-down", label: "Unter aktivem Tab anzeigen", icon: ICON.splitDown }] : []),
       ...(split && (split.tab === tab || active === tab) ? [{ value: "unsplit", label: "Geteilte Ansicht beenden", separator: true }] : []),
-      { value: "detach", label: detachedWindow ? "Ins Hauptfenster zurück" : "In eigenem Fenster öffnen", icon: ICON.detach, separator: true },
+      ...(isMobile ? [] : [{ value: "detach", label: detachedWindow ? "Ins Hauptfenster zurück" : "In eigenem Fenster öffnen", icon: ICON.detach, separator: true }]),
       { value: "min", label: "Minimieren", icon: ICON.minimize, disabled: detachedWindow },
       ...(tab.handle.reconnect ? [{ value: "reconnect", label: "Neu verbinden", icon: ICON.refresh, shortcut: keyLabel("Strg+R") }] : []),
       { value: "close", label: "Trennen", icon: ICON.disconnect },
@@ -371,7 +371,8 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   activate(tab);
   tab.handle = factories[kind](tab.ctx);
   // «Abkoppeln» und «Minimieren» vor «Trennen» in jeder Werkzeugleiste (auch für das Menü «Sitzung»).
-  const extraBtns = [toolButton(ICON.detach, detachedWindow ? "Andocken" : "Abkoppeln", () => detachTab(tab), { shortcut: detachedWindow ? "zurück ins Hauptfenster" : "eigenes Fenster", secondary: true })];
+  // iPad: keine weiteren Fenster, also kein Abkoppeln.
+  const extraBtns = isMobile ? [] : [toolButton(ICON.detach, detachedWindow ? "Andocken" : "Abkoppeln", () => detachTab(tab), { shortcut: detachedWindow ? "zurück ins Hauptfenster" : "eigenes Fenster", secondary: true })];
   if (!detachedWindow) extraBtns.push(toolButton(ICON.minimize, "Minimieren", () => minimizeTab(tab), { shortcut: "läuft weiter", secondary: true }));
   const last = toolbar.lastElementChild;
   for (const b of extraBtns) last ? toolbar.insertBefore(b, last) : toolbar.append(b);

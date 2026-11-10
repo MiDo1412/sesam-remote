@@ -3,9 +3,11 @@
 
 use crate::relay::Relay;
 use crate::ssh::ShellEvent;
+#[cfg(desktop)]
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::Deserialize;
 use std::collections::HashMap;
+#[cfg(desktop)]
 use std::io::{Read, Write};
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -21,19 +23,42 @@ pub struct Spec {
     pub env: HashMap<String, String>,
 }
 
+#[cfg(desktop)]
 pub struct Term {
     master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
 }
 
+/// iPadOS/Android: keine eigenen Prozesse, also kein lokales Terminal (das Frontend blendet es aus).
+#[cfg(mobile)]
+pub struct Term;
+
+#[cfg(mobile)]
+pub fn open(_spec: &Spec, _cols: u16, _rows: u16, _events: Relay<ShellEvent>) -> Result<Arc<Term>, String> {
+    Err("Ein lokales Terminal gibt es auf diesem Gerät nicht; SSH-Shells gehen.".into())
+}
+
+#[cfg(mobile)]
+impl Term {
+    pub fn write(&self, _data: &[u8]) -> Result<(), String> {
+        Ok(())
+    }
+    pub fn resize(&self, _cols: u16, _rows: u16) -> Result<(), String> {
+        Ok(())
+    }
+    pub fn close(&self) {}
+}
+
 /// Offene lokale Terminals nach Sitzungs-ID.
 pub static TERMS: LazyLock<Mutex<HashMap<String, Arc<Term>>>> = LazyLock::new(Default::default);
 
+#[cfg(desktop)]
 fn home() -> Option<String> {
     std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).ok()
 }
 
+#[cfg(desktop)]
 pub fn open(spec: &Spec, cols: u16, rows: u16, events: Relay<ShellEvent>) -> Result<Arc<Term>, String> {
     if spec.command.trim().is_empty() {
         return Err("Kein Programm angegeben".into());
@@ -85,6 +110,7 @@ pub fn open(spec: &Spec, cols: u16, rows: u16, events: Relay<ShellEvent>) -> Res
     Ok(Arc::new(Term { master: Mutex::new(pty.master), writer: Mutex::new(writer), killer: Mutex::new(killer) }))
 }
 
+#[cfg(desktop)]
 impl Term {
     pub fn write(&self, data: &[u8]) -> Result<(), String> {
         let mut w = self.writer.lock().unwrap();

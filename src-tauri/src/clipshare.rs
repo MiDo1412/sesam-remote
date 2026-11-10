@@ -29,17 +29,34 @@ pub enum Local {
 
 /// Zwischenablage des Systems, immer nur von einem Thread zugleich: NSPasteboard ist auf dem Mac nicht
 /// threadsicher (gleichzeitige Zugriffe aus VNC-Abgleich und RDP-Zwischenablage brachten Sesam zum Absturz).
-pub fn clipboard<T>(f: impl FnOnce(&mut arboard::Clipboard) -> Result<T, arboard::Error>) -> Result<T, arboard::Error> {
+#[cfg(desktop)]
+fn clipboard<T>(f: impl FnOnce(&mut arboard::Clipboard) -> Result<T, arboard::Error>) -> Result<T, arboard::Error> {
     static LOCK: Mutex<()> = Mutex::new(());
     let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     f(&mut arboard::Clipboard::new()?)
 }
 
+/// Text der Zwischenablage ("" wenn keiner da ist).
+#[cfg(desktop)]
+pub fn get_text() -> Result<String, String> {
+    clipboard(|c| c.get_text()).or_else(|e| match e {
+        arboard::Error::ContentNotAvailable => Ok(String::new()),
+        e => Err(e.to_string()),
+    })
+}
+
+#[cfg(desktop)]
+pub fn set_text(t: &str) -> Result<(), String> {
+    clipboard(|c| c.set_text(t)).map_err(|e| e.to_string())
+}
+
 /// Reihenfolge: Dateien, Text, Bild (z. B. kopiert Word Text *und* ein Bild davon).
+#[cfg(desktop)]
 pub fn read_local() -> Local {
     clipboard(|cb| Ok(read_local_from(cb))).unwrap_or(Local::Nothing)
 }
 
+#[cfg(desktop)]
 fn read_local_from(cb: &mut arboard::Clipboard) -> Local {
     if let Ok(files) = cb.get().file_list() {
         if !files.is_empty() {
@@ -57,12 +74,34 @@ fn read_local_from(cb: &mut arboard::Clipboard) -> Local {
     Local::Nothing
 }
 
-pub fn write_local_text(t: &str) {
-    let _ = clipboard(|cb| cb.set_text(t));
-}
-
+#[cfg(desktop)]
 fn write_local_files(files: &[PathBuf]) -> Result<(), String> {
     clipboard(|cb| cb.set().file_list(files)).map_err(|e| e.to_string())
+}
+
+// shortcut: iPadOS/Android ohne Anbindung an die System-Zwischenablage (arboard kennt sie nicht); im Frontend
+// greift dort navigator.clipboard. Später über UIPasteboard, wenn Sesam für das iPad gebaut wird.
+#[cfg(mobile)]
+const NO_CLIP: &str = "Die Zwischenablage dieses Geräts ist in Sesam noch nicht angebunden.";
+#[cfg(mobile)]
+pub fn get_text() -> Result<String, String> {
+    Err(NO_CLIP.into())
+}
+#[cfg(mobile)]
+pub fn set_text(_t: &str) -> Result<(), String> {
+    Err(NO_CLIP.into())
+}
+#[cfg(mobile)]
+pub fn read_local() -> Local {
+    Local::Nothing
+}
+#[cfg(mobile)]
+fn write_local_files(_files: &[PathBuf]) -> Result<(), String> {
+    Err(NO_CLIP.into())
+}
+
+pub fn write_local_text(t: &str) {
+    let _ = set_text(t);
 }
 
 pub fn hash(b: &[u8]) -> u64 {

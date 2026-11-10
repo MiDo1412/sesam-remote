@@ -1,5 +1,6 @@
 /** Lokales Terminal wie Windows Terminal: erkannte und eigene Profile, Standardprofil, «+»-Knopf, Strg+T.
  *  Ein lokales Terminal ist ein Shell-Tab mit der Pseudo-Verbindung `local:<Profil>` (gleiche Oberfläche wie SSH). */
+import { isMobile } from "./titlebar";
 import { invoke } from "@tauri-apps/api/core";
 import type { Connection } from "./api";
 import { ICON_CHEVRON, openMenu } from "./menu";
@@ -134,7 +135,7 @@ export function initTerminal() {
   }
   // Strg+T / ⌘T: neues Terminal – nicht, solange ein entfernter Desktop die Tastatur hat.
   addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "t") return;
+    if (isMobile || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "t") return;
     if ((document.activeElement as HTMLElement | null)?.closest(".desktop") || document.querySelector("dialog[open]")) return;
     e.preventDefault();
     void openTerminal();

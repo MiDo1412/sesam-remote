@@ -8,3 +8,11 @@ Was bewusst noch fehlt, mit dem Grund und dem nächsten Schritt.
 - **Qualitätsstufe für VNC:** fest JPEG-Qualität 8 und Kompression 2; eine Einstellung pro Verbindung fehlt.
 - **VNC-Anmeldung RA2/RA2ne (RealVNC, ältere Raspberry Pi OS):** RealVNC Server meldet sich standardmässig mit RA2 bzw. RA2ne (Typen 5/6) an, einem nicht offengelegten Verfahren. Sesam kann Keine, VNC-Passwort, Apple (ARD) und VeNCrypt mit X509 (Plain, VNC, None; mit Zertifikat-Pinning). wayvnc auf aktuellem Raspberry Pi OS bietet VeNCrypt X509Plain und funktioniert. Für RealVNC: dort «VNC-Passwort» als Anmeldung einstellen oder auf wayvnc wechseln. RSA-AES (TigerVNC/wayvnc, Typ 129) wäre mit dem rsa-Crate aus dem Baum machbar, ist aber nicht gebaut.
 - **Papierkorb:** Ein Grössenlimit fehlt noch (nur Altersgrenze). Beim Ersetzen mit Administratorrechten sichert Sesam die alte Fassung nicht im Papierkorb. Einen Texteditor mit Änderungsvorschau gibt es in Sesam nicht; der Punkt «Änderungen vor dem Speichern zeigen» entfällt, bis es einen Editor gibt.
+
+## iPad (iPadOS)
+
+- Vorbereitet: Desktop-Teile abgegrenzt (cfg `desktop`/`mobile`, Frontend `isMobile`), Schlüsselbund über `keyring-core` mit dem «protected»-Speicher (gleiche Dienst- und Kontonamen).
+- Noch nicht kompiliert für iOS: braucht `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` und `npx tauri ios init` (bestätigte Xcode-Lizenz). Erwartet weitere Stellen mit Desktop-APIs (Fenster bauen, abkoppeln, `RunEvent::Reopen`, Ausblenden statt Schliessen).
+- Zwischenablage: auf dem iPad noch ohne Anbindung (arboard kennt iOS nicht); später UIPasteboard.
+- H.264 (VideoToolbox) gibt es auch auf iOS; `h264.rs` ist bisher nur für macOS freigeschaltet.
+- Der «protected»-Speicher braucht je nach Signatur eine Keychain-Access-Group in den Entitlements.

@@ -9,7 +9,7 @@ import { ask, choose, tell } from "./ui";
 import { openHelp, topics } from "./help";
 import { connectionCommands, initPalette } from "./palette";
 import { clipHistory, initClipHistory } from "./cliphistory";
-import { initTitlebar, isMac, keyLabel } from "./titlebar";
+import { initTitlebar, isMac, isMobile, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
 import { applyAppearance, openSettings, settingsWindow } from "./settings";
@@ -606,9 +606,14 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
     { value: "edit", label: "Bearbeiten …", separator: true },
     { value: "aid", label: "Erste Hilfe …" },
     ...(c.sshPort && !desktopProtocol(c) ? [{ value: "unlock", label: "Desktop freischalten …" }] : []),
-    { value: "lnk:desktop", label: "Desktop", section: isMac ? "Verknüpfung auf dem Schreibtisch" : "Verknüpfung auf dem Desktop", disabled: !desktopProtocol(c) },
-    { value: "lnk:shell", label: "Shell", disabled: !c.sshPort },
-    { value: "lnk:files", label: "Dateien", disabled: !filesProtocol(c) },
+    // Verknüpfungen auf dem Schreibtisch gibt es nur auf Computern.
+    ...(isMobile
+      ? []
+      : [
+          { value: "lnk:desktop", label: "Desktop", section: isMac ? "Verknüpfung auf dem Schreibtisch" : "Verknüpfung auf dem Desktop", disabled: !desktopProtocol(c) },
+          { value: "lnk:shell", label: "Shell", disabled: !c.sshPort },
+          { value: "lnk:files", label: "Dateien", disabled: !filesProtocol(c) },
+        ]),
     // Ein Gerät, drei Türen: weitere Einträge mit derselben Adresse übernehmen.
     ...items
       .filter((x) => x.id !== c.id && x.address.trim().toLowerCase() === c.address.trim().toLowerCase())
@@ -1060,7 +1065,7 @@ const palette = initPalette(() => [
   ...items.flatMap((c) => connectionCommands(c, open, { desktop: !!desktopProtocol(c), files: !!filesProtocol(c) })),
   { label: "Neue Verbindung …", keywords: "hinzufügen anlegen", run: () => $("new").click() },
   { label: "Schnelle Verbindung …", hint: keyLabel("Strg+K"), keywords: "einmalig quick", run: () => $("quick").click() },
-  { label: "Neues Terminal", hint: keyLabel("Strg+T"), keywords: "shell konsole powershell", run: () => void openTerminal() },
+  ...(isMobile ? [] : [{ label: "Neues Terminal", hint: keyLabel("Strg+T"), keywords: "shell konsole powershell", run: () => void openTerminal() }]),
   { label: "Einstellungen", hint: keyLabel("Strg+,"), keywords: "optionen", run: () => void openSettings() },
   { label: "Zugangsdaten …", keywords: "passwort schlüssel ssh-key verwaltung anmeldung", run: () => void openSettings("creds") },
   { label: "Berechtigungen einrichten …", keywords: "freigabe datenschutz lokales netzwerk bedienungshilfen eingabeüberwachung", run: () => void openPermissions() },
@@ -1069,7 +1074,7 @@ const palette = initPalette(() => [
   { label: "Vorheriger Tab", keywords: "sitzung wechseln", run: () => runTool("Vorheriger Tab") },
   { label: "Nächster Tab", keywords: "sitzung wechseln", run: () => runTool("Nächster Tab") },
   { label: "Vollbild", hint: "F11", keywords: "ansicht", run: () => runTool("Vollbild") },
-  { label: "Sitzung in eigenem Fenster öffnen", keywords: "abkoppeln", run: () => runTool("Abkoppeln") },
+  ...(isMobile ? [] : [{ label: "Sitzung in eigenem Fenster öffnen", keywords: "abkoppeln", run: () => runTool("Abkoppeln") }]),
   { label: "Sitzung ins Hauptfenster zurück", keywords: "andocken", run: () => runTool("Andocken") },
   { label: "Sitzung minimieren", keywords: "läuft weiter", run: () => runTool("Minimieren") },
   { label: "Sitzung trennen", keywords: "schliessen beenden", run: () => runTool("Trennen") },
@@ -1103,7 +1108,7 @@ const command = (cmd: string) => {
   else if (cmd === "credentials") openSettings("creds");
   else if (cmd === "palette") palette.open();
   else if (cmd === "addubuntu") ubuntu.open();
-  else if (cmd === "terminal") void openTerminal();
+  else if (cmd === "terminal" && !isMobile) void openTerminal();
   else if (cmd === "new") edit(null);
   else if (cmd === "quick") quick.open();
   else if (cmd === "close") closeCommand();

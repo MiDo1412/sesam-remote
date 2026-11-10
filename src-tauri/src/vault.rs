@@ -1,7 +1,22 @@
 //! Tresor: Geheimnisse im Schlüsselbund des Betriebssystems
-//! (Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund).
+//! (Windows-Anmeldeinformationsverwaltung, macOS- bzw. iPadOS-Schlüsselbund).
 
+#[cfg(not(target_os = "ios"))]
 use keyring::{Entry, Error};
+// iPadOS: keyring 4 lehnt iOS in seiner einfachen API ab; dort direkt keyring-core mit dem «protected»-Speicher
+// von apple-native-keyring-store (Schlüsselbund der App, gleiche Dienst- und Kontonamen wie auf dem Mac).
+#[cfg(target_os = "ios")]
+use keyring_core::{Entry, Error};
+
+#[cfg(target_os = "ios")]
+fn ensure_store() -> Result<(), String> {
+    static STORE: std::sync::LazyLock<Result<(), String>> = std::sync::LazyLock::new(|| {
+        let store = apple_native_keyring_store::protected::Store::new().map_err(|e| e.to_string())?;
+        keyring_core::set_default_store(store);
+        Ok(())
+    });
+    STORE.clone()
+}
 
 /// Debug-Build mit eigenem Dienstnamen: läuft neben der installierten App, ohne deren Geheimnisse zu berühren.
 const SERVICE: &str = if cfg!(debug_assertions) { "ch.sesam.remote.dev" } else { "ch.sesam.remote" };
@@ -28,6 +43,8 @@ fn entry(id: &str, kind: Kind) -> Result<Entry, String> {
         Kind::GatewayPassword => "gateway-password",
         Kind::SshKey => "ssh-key",
     };
+    #[cfg(target_os = "ios")]
+    ensure_store().map_err(|e| format!("Tresor nicht verfügbar: {e}"))?;
     Entry::new(SERVICE, &format!("{id}:{k}")).map_err(|e| format!("Tresor nicht verfügbar: {e}"))
 }
 

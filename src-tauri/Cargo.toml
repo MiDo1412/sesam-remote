@@ -65,19 +65,28 @@ ironrdp-rdpdr-native = "0.9"
 tauri-plugin-dialog = "2"
 # sesam://-Links (Desktop-Verknüpfungen) an die laufende App
 tauri-plugin-deep-link = "2"
-tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 # Diagnose-Log und nachsichtiger Redirection-Decoder
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std", "registry"] }
 base64 = "0.22"
 # Zwischenablage mit Dateilisten und Bildern; Bilder gehen als PNG auf den Server
-arboard = "3"
 png = "0.18"
 chrono = "0.4"
 # Verschlüsselte Sicherung (src/backup.rs); beide schon im Baum (über sspi bzw. russh)
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
 argon2 = { version = "0.6", default-features = false, features = ["alloc"] }
+
+# Nur Desktop: zweiter Start an die laufende App, Zwischenablage (Dateilisten, Bilder), lokales Terminal.
+# iPadOS/Android haben dafür keine Unterstützung bzw. keine eigenen Prozesse (src/clipshare.rs, src/localterm.rs).
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+arboard = "3"
 portable-pty = "0.9"
+
+# iPadOS: Schlüsselbund über den «protected»-Speicher (keyring 4 kennt iOS nur so, src/vault.rs); beide schon im Baum.
+[target.'cfg(target_os = "ios")'.dependencies]
+keyring-core = "1"
+apple-native-keyring-store = { version = "1", features = ["protected"] }
 
 # Windows-Zwischenablage für RDP (Text, Bilder, Dateien)
 [target.'cfg(windows)'.dependencies]

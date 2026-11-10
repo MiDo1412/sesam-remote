@@ -5829,6 +5829,7 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "aes-gcm",
+ "apple-native-keyring-store",
  "arboard",
  "argon2",
  "base64 0.22.1",
@@ -5855,6 +5856,7 @@ dependencies = [
  "ironrdp-tls",
  "ironrdp-tokio",
  "keyring",
+ "keyring-core",
  "md5",
  "num-bigint 0.5.1",
  "objc2",

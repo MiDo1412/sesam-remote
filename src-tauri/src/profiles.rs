@@ -123,6 +123,9 @@ fn unix_profiles(out: &mut Vec<Profile>) {
 /// Alle erkannten Profile; die erste Shell ist der Vorschlag für «Standard».
 pub fn detect() -> Vec<Profile> {
     let mut out = Vec::new();
+    if cfg!(mobile) {
+        return out; // keine lokalen Programme auf iPadOS/Android
+    }
     #[cfg(windows)]
     windows_profiles(&mut out);
     #[cfg(not(windows))]

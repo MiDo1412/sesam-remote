@@ -1,4 +1,5 @@
 /** App-Einstellungen: Erscheinungsbild, Shell, Sicherheit, Über. Gespeichert lokal (keine Geheimnisse). */
+import { isMac, isMobile } from "./titlebar";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
@@ -52,7 +53,7 @@ export const settingsWindow: string = (window as unknown as { __SESAM_SETTINGS__
 
 export async function openSettings(tab = "general") {
   // macOS: Einstellungen in einem eigenen Fenster (HIG), sonst als Sheet über der Bibliothek.
-  if (navigator.userAgent.includes("Mac") && !settingsWindow) return void invoke("open_settings_window", { tab }).catch(() => {});
+  if (isMac && !settingsWindow) return void invoke("open_settings_window", { tab }).catch(() => {});
   const dlg = $<HTMLDialogElement>("settings");
   const box = dlg.querySelector<HTMLElement>(".settings")!;
   try {
@@ -95,8 +96,8 @@ export async function openSettings(tab = "general") {
   // Windows und macOS fangen die Kombinationen ab (kbhook.rs), Linux noch nicht.
   const row = $("system-keys-row");
   const note = row.nextElementSibling as HTMLElement;
-  row.hidden = note.hidden = !/Windows|Mac/.test(navigator.userAgent);
-  if (navigator.userAgent.includes("Mac")) {
+  row.hidden = note.hidden = isMobile || !/Windows|Mac/.test(navigator.userAgent);
+  if (isMac) {
     row.querySelector("span")!.textContent = "Mac-Tastenkürzel an den Remotecomputer";
     note.textContent =
       "Gilt für ⌘Tab, ⌘`, ⌘Leertaste, ⌃Leertaste, ⌃Pfeiltasten und ⌘⇧3/4/5; ⌘ kommt drüben als Windows-Taste an. ⌘Q, ⌘H, ⌘W und ⌘⌥Esc bleiben beim Mac. «Aktiv» heisst: Sesam ist vorne und das Remote-Bild hat den Fokus oder die Maus ist darüber. Dafür braucht Sesam einmal die Freigabe von macOS (Datenschutz & Sicherheit).";

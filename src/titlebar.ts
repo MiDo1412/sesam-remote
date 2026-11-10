@@ -12,13 +12,19 @@ import menuSvg from "@fluentui/svg-icons/icons/navigation_20_regular.svg?raw";
 // Eigene Symbole statt der Windows-Symbolschrift (die nicht überall verfügbar ist und dann bunt ersetzt wird).
 const glyph = (svg: string) => fl(svg, 14);
 
-export const isMac = navigator.userAgent.includes("Mac");
+/** iPad (meldet sich in der WebView als Mac, hat aber Touch), iPhone, Android: keine eigenen Fenster, keine lokalen
+ *  Programme, keine Desktop-Verknüpfungen; die Oberfläche blendet diese Funktionen aus (Klasse «mobile»). */
+export const isMobile = /iPad|iPhone|Android/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1);
+export const isMac = navigator.userAgent.includes("Mac") && !isMobile;
+/** Apple-Tastatur (Mac oder iPad mit Tastatur): Kürzel mit ⌘ anzeigen. */
+const appleKeys = navigator.userAgent.includes("Mac") || /iPad|iPhone/.test(navigator.userAgent);
 
 export function initTitlebar(actions: { command(c: string): void; tool(t: string): void; help(id: string): void }) {
   // Fenster an allen freien Flächen von Titel-, Tab- und Sitzungsleiste ziehen («deep»: auch auf Text und leeren
   // Containern; Knöpfe, Tabs und Eingabefelder bleiben bedienbar). Doppelklick: Zoomen bzw. Maximieren.
   const bars = document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar");
   for (const h of document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar, .session-head")) h.setAttribute("data-tauri-drag-region", "deep");
+  if (isMobile) return void document.body.classList.add("mobile");
   if (isMac) return void document.body.classList.add("mac");
   document.body.classList.add("custom-titlebar");
   const win = getCurrentWindow();
@@ -91,5 +97,5 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
 
 /** Kürzel so anzeigen, wie das System sie schreibt: macOS ⌘ ⇧ ⌥, sonst Strg/Umschalt/Alt. */
 export function keyLabel(s: string) {
-  return isMac ? s.replace(/Strg\+/g, "⌘").replace(/Umschalt\+/g, "⇧").replace(/Alt\+/g, "⌥").replace(/Entf/g, "⌫") : s;
+  return appleKeys ? s.replace(/Strg\+/g, "⌘").replace(/Umschalt\+/g, "⇧").replace(/Alt\+/g, "⌥").replace(/Entf/g, "⌫") : s;
 }
