@@ -1558,12 +1558,34 @@ fn save_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn local_list(path: String) -> Result<sftp::Listing, String> {
-    sftp::local_list(&path)
+fn local_list(app: AppHandle, path: String) -> Result<sftp::Listing, String> {
+    // iPad: nur der Ordner «Documents» der App (in der Dateien-App «Auf meinem iPad › Sesam Remote»), darüber nichts.
+    #[cfg(mobile)]
+    {
+        let root = local_home(app)?;
+        let inside = std::path::Path::new(&path).canonicalize().ok().zip(std::path::Path::new(&root).canonicalize().ok()).is_some_and(|(p, r)| p.starts_with(r));
+        let mut l = sftp::local_list(if inside { &path } else { &root })?;
+        if !inside || l.path.trim_end_matches('/') == root.trim_end_matches('/') {
+            l.parent = None;
+        }
+        return Ok(l);
+    }
+    #[cfg(desktop)]
+    {
+        let _ = app;
+        sftp::local_list(&path)
+    }
 }
 
 #[tauri::command]
 fn local_home(app: AppHandle) -> Result<String, String> {
+    #[cfg(mobile)]
+    {
+        let d = app.path().document_dir().map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+        return Ok(d.to_string_lossy().into_owned());
+    }
+    #[cfg(desktop)]
     app.path().home_dir().map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
 }
 

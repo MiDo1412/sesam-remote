@@ -3,6 +3,8 @@ import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNO
 import { ask, askHostKey, askPassword, askText, choose, tell } from "./ui";
 import { compareDirs, type Mark } from "./compare";
 import { openMenu, type MenuItem } from "./menu";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { isMobile } from "./titlebar";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { localNetworkText } from "./ubuntu";
@@ -86,14 +88,17 @@ export function filesTab(ctx: TabCtx): TabHandle {
   const host = el("div", "files");
   ctx.pane.prepend(host);
   const isWin = navigator.userAgent.includes("Windows");
+// iPad: links nur der Ordner der App («Auf meinem iPad › Sesam Remote» in der Dateien-App).
+const localName = isMobile ? "Auf meinem iPad" : "Dieser Computer";
+let localRoot = "";
   const panes: Record<Side, Pane> = {
-    local: makePane("local", "Dieser Computer", isWin ? "\\" : "/"),
+    local: makePane("local", localName, isWin ? "\\" : "/"),
     remote: makePane("remote", c.name, "/"),
   };
   const transfers = el("section", "transfers");
   transfers.setAttribute("aria-label", "Übertragungen");
   const transferHead = el("div", "transfers-head");
-  transferHead.append(el("h2", "", "Übertragungen"), el("span", "sub", "Zwischen den Seiten ziehen, Dateien aus dem Explorer/Finder rechts ablegen, oder doppelklicken."));
+  transferHead.append(el("h2", "", "Übertragungen"), el("span", "sub", isMobile ? "Zwischen den Seiten ziehen oder doppeltippen; «Hochladen» ohne Auswahl öffnet die Dateiauswahl. Heruntergeladenes liegt in der App «Dateien» unter «Auf meinem iPad › Sesam Remote»." : "Zwischen den Seiten ziehen, Dateien aus dem Explorer/Finder rechts ablegen, oder doppelklicken."));
   const transferList = el("div", "transfer-list");
   transfers.append(transferHead, transferList);
   const grid = el("div", "panes");
@@ -296,6 +301,16 @@ export function filesTab(ctx: TabCtx): TabHandle {
     const drives = p.side === "local" && isWin;
     if (drives) p.pathEl.append(crumb(p, "Laufwerke", ""));
     if (!path) return;
+    // iPad: Pfad ab dem Ordner der App, ohne den Container davor.
+    if (p.side === "local" && isMobile && localRoot && path.startsWith(localRoot)) {
+      p.pathEl.append(crumb(p, "Sesam Remote", localRoot));
+      let acc = localRoot;
+      for (const part of path.slice(localRoot.length).split("/").filter(Boolean)) {
+        acc = `${acc}/${part}`;
+        p.pathEl.append(el("span", "crumb-sep", "›"), crumb(p, part, acc));
+      }
+      return;
+    }
     const parts = path.split(/[\\/]/).filter(Boolean);
     const lead = p.sep === "/" ? "/" : "";
     let acc = lead;
@@ -747,6 +762,14 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     }
   }
 
+  /** iPad: ohne Auswahl links Dateien über die Dateiauswahl von iOS wählen und direkt hochladen. */
+  async function pickAndUpload() {
+    const dest = panes.remote.listing?.path;
+    if (!sid || dest == null) return;
+    const picked = await openDialog({ multiple: true, title: "Dateien hochladen" }).catch(() => null);
+    for (const f of (Array.isArray(picked) ? picked : picked ? [picked] : []).map(String)) start(true, f, dest, f.split("/").pop() || f);
+  }
+
   /** Hochladen ohne Schreibrecht im Ziel: in einen temporären Ordner laden, dann mit sudo an den Zielort verschieben. */
   async function uploadAsAdmin(src: string, destDir: string, name: string) {
     const s = sid;
@@ -810,7 +833,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       return;
     }
     const row = el("div", "transfer");
-    const label = el("span", "transfer-name", `${upload ? "↑" : "↓"} ${name} → ${upload ? c.name : "Dieser Computer"}${replace ? " (ersetzt)" : ""}`);
+    const label = el("span", "transfer-name", `${upload ? "↑" : "↓"} ${name} → ${upload ? c.name : localName}${replace ? " (ersetzt)" : ""}`);
     const bar = el("progress");
     bar.max = 1;
     bar.value = 0;
@@ -1186,7 +1209,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   compareBtn.setAttribute("aria-pressed", "false");
   const trashBtn = toolButton(ICON.trash, "Löschen", () => deleteRemote(), { shortcut: "Entf", danger: true });
   ctx.toolbar.append(
-    toolButton(ICON.upload, "Hochladen", () => transfer(panes.local, [...panes.local.selected]), { text: true }),
+    toolButton(ICON.upload, "Hochladen", () => (isMobile && !panes.local.selected.size ? void pickAndUpload() : transfer(panes.local, [...panes.local.selected])), { text: true }),
     toolButton(ICON.download, "Herunterladen", () => transfer(panes.remote, [...panes.remote.selected]), { text: true }),
     compareBtn,
     toolSep(),
@@ -1264,6 +1287,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
 
   // ---------- Verbinden ----------
   const connect = async () => {
+  if (isMobile) localRoot = await api.localHome().catch(() => "");
   if (!panes.local.listing) load(panes.local, await api.localHome());
   let trust: string | null = null;
   let remember = true;

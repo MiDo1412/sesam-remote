@@ -224,14 +224,14 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		"TEMP_9F701984-0A34-412C-9D02-0427946BB794" /* x86_64 */ = {
+		"TEMP_5CAEC887-B3E4-4A57-A209-8FABEB40044B" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = x86_64;
 			sourceTree = "<group>";
 		};
-		"TEMP_F13886DF-7913-4E10-9DB2-2D02FE3E127B" /* arm64 */ = {
+		"TEMP_EE95E10E-D927-4B58-A224-DE238298A57B" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
