@@ -7,6 +7,7 @@ mod kbhook;
 mod kdc;
 mod firstaid;
 mod forward;
+mod unlock;
 mod ftp;
 mod library;
 mod perms;
@@ -493,6 +494,40 @@ async fn conn_diagnose(path: State<'_, LibraryPath>, id: String, service: String
         _ => send(step("login", login, None, "Prüft Sesam beim Verbinden.", "")),
     }
     Ok(())
+}
+
+/// «Desktop freischalten», Schritt 1: System per SSH erkennen (nur lesen) und den Plan zeigen.
+#[tauri::command]
+async fn desktop_detect(path: State<'_, LibraryPath>, id: String, trust: Option<String>) -> Result<unlock::Plan, String> {
+    let c = find(&path, &id)?;
+    Ok(unlock::plan(&ssh::exec(&ssh_target(&c, trust)?, unlock::DETECT).await?))
+}
+
+/// Schritt 2, nach Bestätigung: die festen Befehle des Systems mit sudo ausführen (Ubuntu: Setup-Script läuft in der
+/// Shell, hier nur eintragen) und den Desktop-Dienst in der Verbindung eintragen. `SUDO_PASSWORD`: Passwort nötig.
+#[tauri::command]
+async fn desktop_enable(path: State<'_, LibraryPath>, id: String, trust: Option<String>, system: String, password: Option<String>) -> Result<(), String> {
+    let c = find(&path, &id)?;
+    if system != "ubuntu" {
+        let s = sftp::open(ssh_target(&c, trust)?).await?;
+        s.exec(&unlock::script(&system)?, true, password.as_deref()).await?;
+    }
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let mut lib = library::load(&path.0)?;
+    let x = lib.iter_mut().find(|x| x.id == id).ok_or("Verbindung nicht gefunden")?;
+    if system == "ubuntu" {
+        x.rdp_port = Some(3389);
+        x.rdp_target = "login".into();
+        x.desktop_protocol = "rdp".into();
+    } else {
+        x.vnc_port = Some(5900);
+        x.desktop_protocol = "vnc".into();
+    }
+    if x.os.is_empty() {
+        x.os = system;
+    }
+    x.validate()?;
+    library::save(&path.0, &lib)
 }
 
 /// Ports aus /etc/sesam-rdp/ports per SSH lesen (nur `cat`, kein sudo). Passwort aus dem Formular
@@ -2203,6 +2238,8 @@ pub fn run() {
             shell_upload,
             shell_door_open,
             conn_diagnose,
+            desktop_detect,
+            desktop_enable,
             shell_door_list,
             shell_door_close,
             shell_held_kill,

@@ -22,6 +22,16 @@ Klappt eine Verbindung nicht, öffnet **Erste Hilfe …** (Kontextmenü der Kart
 
 Je nach Befund steht darunter der passende Knopf: **Aufwecken** (schläft das Gerät und ist eine MAC-Adresse bekannt), **Berechtigungen …** (macOS blockiert das lokale Netz), **Über SSH-Tunnel verbinden** (Desktop-Port zu, SSH aber offen), **Zugangsdaten …** (Anmeldung abgelehnt) oder **Verbinden**.
 
+## Desktop freischalten
+
+Hat ein Gerät nur SSH eingetragen, steht auf der Karte bzw. im Kontextmenü **Desktop freischalten …**. Sesam fragt das Gerät per SSH, welches System läuft (nur lesen), und zeigt dann genau, was es mit sudo ausführen würde:
+
+- **Raspberry Pi OS:** `raspi-config nonint do_vnc 0` schaltet VNC ein (wayvnc unter Wayland, RealVNC unter X11), Port 5900.
+- **macOS:** Bildschirmfreigabe über `launchctl`, Port 5900. Je nach Version muss die Steuerung einmal am Mac selbst erlaubt werden.
+- **Ubuntu mit GNOME:** das Setup-Script von Sesam startet in einer Shell und fragt jeden Schritt nach (RDP, Port 3389).
+
+Erst «Mit sudo ausführen» bzw. «Setup-Script starten» ändert etwas; das sudo-Passwort fragt Sesam bei Bedarf ab und speichert es nicht. Danach trägt Sesam den Desktop in der Verbindung ein. Andere Systeme erkennt Sesam, schaltet dort aber nichts ein.
+
 ## Sicher über SSH verbinden
 
 Unter *Bearbeiten › Desktop* schickt **Sicher über SSH verbinden** RDP oder VNC durch einen SSH-Tunnel. Der Desktop-Dienst muss dann nicht offen im Netz stehen. Klassisches VNC, das selbst nicht verschlüsselt, ist so geschützt. Die Verbindung braucht dafür SSH (*Dienste › Shell*); den Schlüssel des Servers einmal in der Shell bestätigen.

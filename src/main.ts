@@ -14,6 +14,7 @@ import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
 import { applyAppearance, openSettings, settingsWindow } from "./settings";
 import { openFirstAid, serviceOf, type Service } from "./firstaid";
+import { unlockDesktop } from "./unlock";
 import { openPermissions } from "./permissions";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
@@ -494,7 +495,9 @@ function renderDetails() {
       fact("Schlüssel", c.hasKey ? "Im Tresor" : "–"),
     ),
     ...(reachOf.get(c.id) === null && c.mac ? [btn("Aufwecken und verbinden", "primary", () => void wakeAndOpen(c))] : []),
-    btn("Desktop öffnen", reachOf.get(c.id) === null && c.mac ? "" : "primary", () => open(c, "desktop"), !desktopProtocol(c)),
+    c.sshPort && !desktopProtocol(c)
+      ? btn("Desktop freischalten …", "primary", () => unlock(c))
+      : btn("Desktop öffnen", reachOf.get(c.id) === null && c.mac ? "" : "primary", () => open(c, "desktop"), !desktopProtocol(c)),
     el(
       "div",
       { class: "pair" },
@@ -503,7 +506,7 @@ function renderDetails() {
     ),
     btn("Bearbeiten …", "plain", () => edit(c)),
     // Das Setup-Script richtet GNOME Remote Desktop ein: nur für Linux-Ziele oder unbekanntes System anbieten.
-    ...(c.sshPort && !["windows", "macos"].includes(c.os ?? "") ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
+    ...(c.sshPort && desktopProtocol(c) && !["windows", "macos"].includes(c.os ?? "") ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
   );
 }
 
@@ -602,6 +605,7 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
     { value: "open:files", label: "Dateien öffnen", disabled: !filesProtocol(c) },
     { value: "edit", label: "Bearbeiten …", separator: true },
     { value: "aid", label: "Erste Hilfe …" },
+    ...(c.sshPort && !desktopProtocol(c) ? [{ value: "unlock", label: "Desktop freischalten …" }] : []),
     { value: "lnk:desktop", label: "Desktop", section: isMac ? "Verknüpfung auf dem Schreibtisch" : "Verknüpfung auf dem Desktop", disabled: !desktopProtocol(c) },
     { value: "lnk:shell", label: "Shell", disabled: !c.sshPort },
     { value: "lnk:files", label: "Dateien", disabled: !filesProtocol(c) },
@@ -616,10 +620,20 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
   if (cmd === "open") open(c, arg as Connection["defaultView"]);
   if (cmd === "edit") edit(c);
   if (cmd === "aid") firstAid(c, null);
+  if (cmd === "unlock") unlock(c);
   if (cmd === "lnk")
     invoke<string>("create_shortcut", { id: c.id, view: arg })
       .then((p) => tell("Verknüpfung erstellt", p))
       .catch((e) => tell("Verknüpfung nicht erstellt", String(e)));
+}
+
+/** Desktop auf einem Gerät mit nur SSH einschalten; danach Bibliothek neu laden und auf Wunsch gleich öffnen. */
+function unlock(c: Connection) {
+  void unlockDesktop(c, async (x, openNow) => {
+    await reload();
+    const y = items.find((i) => i.id === x.id);
+    if (openNow && y && desktopProtocol(y)) open(y, "desktop");
+  });
 }
 
 /** Erste Hilfe für `c`; die Leiste «Verbindung getrennt» eines Tabs ruft sie mit `sesam:first-aid` auf. */

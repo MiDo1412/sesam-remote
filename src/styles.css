@@ -834,3 +834,8 @@ body.one-bar #session-back { flex-shrink: 0; white-space: nowrap; padding: 0 8px
 .first-aid-steps .busy, .first-aid-steps .done { color: var(--muted); }
 .first-aid-fix { display: flex; flex-wrap: wrap; gap: 8px; }
 .first-aid-fix:empty { display: none; }
+
+/* Desktop freischalten (src/unlock.ts) */
+.unlock-desktop .sheet { width: min(560px, calc(100vw - 48px)); box-sizing: border-box; }
+.unlock-desktop .sheet > * { grid-column: 1 / -1; }
+.unlock-cmds { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--chrome-bg2); font: 12px/1.5 var(--mono, ui-monospace, Menlo, monospace); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
