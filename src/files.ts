@@ -277,6 +277,8 @@ export function filesTab(ctx: TabCtx): TabHandle {
       else render(p);
     } catch (e) {
       status.textContent = String(e);
+      // SSH-Verbindung weg (Schlaf, Netzwechsel): Tab bietet «Neu verbinden» an.
+      if (p.side === "remote" && /closed|reset|broken pipe|eof|timeout|timed out|not connected|getrennt|beendet/i.test(String(e))) ctx.setState("closed");
     }
   }
   function step(p: Pane, dir: "back" | "fwd") {
@@ -977,8 +979,8 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   };
 
   // ---------- Verbinden ----------
-  void (async () => {
-  load(panes.local, await api.localHome());
+  const connect = async () => {
+  if (!panes.local.listing) load(panes.local, await api.localHome());
   let trust: string | null = null;
   let remember = true;
   for (;;) {
@@ -999,7 +1001,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         scp = true;
       }
       ctx.setState("connected");
-      await load(panes.remote, st?.remote ?? "");
+      await load(panes.remote, st?.remote ?? panes.remote.listing?.path ?? "");
     } catch (e) {
       const msg = String(e);
       const changed = msg.startsWith(CERT_CHANGED);
@@ -1030,10 +1032,17 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     }
     break;
   }
-  })();
+  };
+  void connect();
 
   return {
     close,
+    reconnect() {
+      if (sid) api.sftpClose(sid);
+      sid = null;
+      status.textContent = "";
+      void connect();
+    },
     handoff: () => (sid ? { sid, state: { scp, remote: panes.remote.listing?.path ?? "", local: panes.local.listing?.path ?? "" } } : null),
     release: () => {
       sid = null; // SFTP-Sitzung läuft im anderen Fenster weiter

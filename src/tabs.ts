@@ -45,6 +45,10 @@ export interface TabHandle {
   handoff?(): { sid: string; state?: unknown } | null;
   /** Nach erfolgreicher Übergabe: Oberfläche aufräumen, ohne die Verbindung zu trennen. */
   release?(): void;
+  /** Nach einem Unterbruch im selben Tab neu verbinden (Inhalt bleibt stehen). */
+  reconnect?(): void;
+  /** Nach einem Abbruch selbst wieder verbinden (RDP macht das schon im Backend). */
+  autoReconnect?: boolean;
 }
 
 /** Übernahme einer laufenden Sitzung; nach dem Anhängen meldet der Tab `sesam:handoff-done` mit `token`. */
@@ -223,9 +227,11 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
       },
       isActive: () => active === tab,
       setState: (s) => {
+        const was = tab.state;
         tab.state = s;
         tabEl.dataset.state = s;
         renderActiveBar();
+        reconnectBar(tab, was);
       },
       openTab: (k, f) => openTab(conn, k, f),
       extra,
@@ -270,8 +276,10 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
       ...(split && (split.tab === tab || active === tab) ? [{ value: "unsplit", label: "Geteilte Ansicht beenden", separator: true }] : []),
       { value: "detach", label: detachedWindow ? "Ins Hauptfenster zurück" : "In eigenem Fenster öffnen", icon: ICON.detach, separator: true },
       { value: "min", label: "Minimieren", icon: ICON.minimize, disabled: detachedWindow },
+      ...(tab.handle.reconnect ? [{ value: "reconnect", label: "Neu verbinden", icon: ICON.refresh, shortcut: keyLabel("Strg+R") }] : []),
       { value: "close", label: "Trennen", icon: ICON.disconnect },
     ]);
+    if (v === "reconnect") reconnect(tab);
     if (v === "save") dispatchEvent(new CustomEvent("sesam:save-quick", { detail: conn }));
     if (v === "dup") openTab(conn, kind, true);
     if (v === "detach") detachTab(tab);
@@ -310,6 +318,56 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   for (const b of extraBtns) last ? toolbar.insertBefore(b, last) : toolbar.append(b);
   overflowMenu(toolbar, last);
 }
+
+// ---------- Neu verbinden ----------
+// Wie PuTTY: Nach einem Unterbruch bleibt der Tab mit seinem Inhalt stehen, eine Leiste bietet «Neu verbinden» an
+// (Enter, Strg+R bzw. ⌘R, Tab-Menü). Shell und VNC versuchen es nach einem Abbruch zuerst selbst (2, 5, 15 s).
+const RETRY_MS = [2000, 5000, 15000];
+const retries = new WeakMap<Tab, { n: number; timer: number }>();
+
+function reconnect(tab: Tab) {
+  if (!tab.handle.reconnect || tab.state === "connected") return;
+  clearTimeout(retries.get(tab)?.timer);
+  tab.ctx.extra = undefined; // Übergabe und Startbefehl gelten nur beim ersten Verbinden
+  tab.ctx.setState("connecting");
+  tab.handle.reconnect();
+}
+
+function reconnectBar(tab: Tab, was: Tab["state"]) {
+  tab.ctx.pane.querySelector(".reconnect-bar")?.remove();
+  const r = retries.get(tab) ?? { n: 0, timer: 0 };
+  retries.set(tab, r);
+  if (tab.state === "connected") r.n = 0;
+  if (tab.state !== "closed" || !tab.handle.reconnect || !tabs.includes(tab)) return;
+  const bar = document.createElement("div");
+  bar.className = "reconnect-bar";
+  bar.setAttribute("role", "alert");
+  const text = document.createElement("span");
+  const btn = Object.assign(document.createElement("button"), { type: "button", className: "primary", textContent: "Neu verbinden" });
+  btn.title = `Neu verbinden (Enter, ${keyLabel("Strg+R")})`;
+  btn.onclick = () => reconnect(tab);
+  // Nach einem Abbruch einer laufenden Sitzung (nicht nach einem Fehlschlag beim ersten Verbinden) selbst versuchen.
+  const auto = tab.handle.autoReconnect && (was === "connected" || (was === "connecting" && r.n > 0)) && r.n < RETRY_MS.length;
+  text.textContent = auto ? `Verbindung getrennt · neuer Versuch in ${RETRY_MS[r.n] / 1000} s` : "Verbindung getrennt";
+  if (auto) r.timer = window.setTimeout(() => (r.n++, reconnect(tab)), RETRY_MS[r.n]);
+  bar.append(text, btn);
+  tab.ctx.pane.append(bar);
+}
+
+addEventListener(
+  "keydown",
+  (e) => {
+    const t = active;
+    if (!t || t.state !== "closed" || !t.handle.reconnect || document.querySelector("dialog[open]")) return;
+    const r = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "r";
+    const enter = e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement && !e.target.closest(".xterm"));
+    if (!r && !enter) return;
+    e.preventDefault();
+    e.stopPropagation();
+    reconnect(t);
+  },
+  true,
+);
 
 // ---------- Abkoppeln / Andocken ----------
 // Die Verbindung bleibt bestehen: das Backend sendet ab der Übernahme an das neue Fenster.

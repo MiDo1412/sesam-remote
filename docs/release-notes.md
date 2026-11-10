@@ -34,6 +34,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Textbausteine:** je Verbindung, auf Wunsch an alle offenen Shells gleichzeitig.
 - **Bildschirmtastatur:** mit Esc, Tab, Strg, Alt, Win, Pfeilen und F-Tasten für Touch-Geräte.
 - **Hilfe:** Anleitungen je Servertyp, mit Suche.
+- **Neu verbinden im Tab:** Nach einem Unterbruch bleibt der Tab mit seinem Inhalt stehen, eine Leiste bietet «Neu verbinden» an (Enter, ⌘R bzw. Strg+R, Tab-Menü). Shell und VNC versuchen es nach einem Abbruch zuerst selbst (nach 2, 5 und 15 s), RDP wie bisher im Hintergrund.
 
 ### Verbessert
 

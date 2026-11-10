@@ -617,7 +617,7 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
     return api.rdpOpen(c.id, trust, remember, Math.max(w, 640), Math.max(h, 480), onFrame);
   };
 
-  void (async () => {
+  const connect = async () => {
   let trust: string | null = null;
   for (;;) {
     try {
@@ -658,10 +658,20 @@ Latenz (Verbindungsaufbau): ${stats.ms} ms` : ""}`;
     }
     break;
   }
-  })();
+  };
+  void connect();
 
   return {
     close,
+    reconnect() {
+      if (sid) (rdp ? api.rdpClose(sid) : api.vncClose(sid)).catch(() => {});
+      sid = null;
+      gotImage = false;
+      for (const h of wrap.querySelectorAll(".conn-hint")) h.remove();
+      status.textContent = "";
+      void connect();
+    },
+    autoReconnect: !rdp, // RDP verbindet im Backend selbst wieder
     handoff: () => (sid ? { sid, state: { w: canvas.width, h: canvas.height, img: canvas.toDataURL("image/jpeg", 0.85) } } : null),
     release: () => ((handedOff = true), close()),
     onShow: () => requestAnimationFrame(() => (layout(), requestSize(), canvas.focus())),

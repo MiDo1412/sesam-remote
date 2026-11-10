@@ -226,7 +226,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
   });
 
   // ---------- Verbinden ----------
-  void (async () => {
+  const connect = async () => {
     refit();
     const onEvent = (e: Parameters<Parameters<typeof api.shellOpen>[4]>[0]) => {
       if (e.kind === "data") term.write(new Uint8Array(e.data));
@@ -264,7 +264,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
       }
       break;
     }
-  })();
+  };
+  void connect();
 
   let handedOff = false;
   /** Sichtbarer Text samt Verlauf (letzte 2000 Zeilen) für die Übergabe; Farben gehen dabei verloren. */
@@ -276,6 +277,13 @@ export function shellTab(ctx: TabCtx): TabHandle {
     return lines.join("\r\n");
   };
   return {
+    reconnect() {
+      if (sid) api.shellClose(sid);
+      sid = null;
+      term.write("\r\n\x1b[2m— Neu verbinden —\x1b[0m\r\n");
+      void connect();
+    },
+    autoReconnect: !local,
     handoff: () => (sid ? { sid, state: bufferText() } : null),
     release() {
       handedOff = true;

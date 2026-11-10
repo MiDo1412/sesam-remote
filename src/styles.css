@@ -679,3 +679,7 @@ dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; paddin
 
 /* SF Symbols (macOS, src/icons.ts): Farbe aus currentColor, Form aus der vom System gezeichneten Maske */
 svg.sf { background-color: currentColor; -webkit-mask: var(--sf) center / contain no-repeat; mask: var(--sf) center / contain no-repeat; }
+
+/* Nach einem Unterbruch: Leiste oben im Tab, Inhalt bleibt darunter lesbar (src/tabs.ts reconnectBar) */
+.reconnect-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 14px; border-radius: 10px; background: var(--card); color: var(--text); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); font-size: 13px; white-space: nowrap; }
+.reconnect-bar button { height: 26px; padding: 0 12px; }
