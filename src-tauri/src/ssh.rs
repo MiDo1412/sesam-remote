@@ -15,6 +15,48 @@ pub enum ShellEvent {
     Closed { reason: String },
 }
 
+/// Befehle für `Shell::probe`: nur Lesen, vcgencmd nur wenn vorhanden (Raspberry Pi OS).
+const PROBE: &str = "printf 'model='; tr -d '\\0' < /proc/device-tree/model 2>/dev/null; echo; (. /etc/os-release 2>/dev/null && echo \"id=$ID\"); \
+command -v vcgencmd >/dev/null 2>&1 && { vcgencmd measure_temp; vcgencmd get_throttled; }";
+
+#[derive(serde::Serialize, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Probe {
+    /// z. B. «Raspberry Pi 5 Model B Rev 1.0», leer ohne Device-Tree.
+    pub model: String,
+    /// ID aus /etc/os-release (debian, raspbian, ubuntu …).
+    pub os_id: String,
+    /// Grad Celsius (nur mit vcgencmd).
+    pub temp: Option<f32>,
+    /// Unterspannung gerade jetzt bzw. seit dem Start (get_throttled Bit 0 bzw. 16).
+    pub undervolt_now: bool,
+    pub undervolt_since_boot: bool,
+}
+
+/// Rechner kurz befragen (eigener exec-Kanal derselben Verbindung): Modell, System, Temperatur, Unterspannung.
+pub async fn probe(h: &Handle<Client>) -> Result<Probe, String> {
+    let o = crate::scp::Remote::run(h, PROBE.into()).await?;
+    Ok(parse_probe(&String::from_utf8_lossy(&o.out)))
+}
+
+pub fn parse_probe(out: &str) -> Probe {
+    let mut p = Probe::default();
+    for l in out.lines().map(str::trim) {
+        if let Some(v) = l.strip_prefix("model=") {
+            p.model = v.trim().to_string();
+        } else if let Some(v) = l.strip_prefix("id=") {
+            p.os_id = v.trim_matches('"').to_string();
+        } else if let Some(v) = l.strip_prefix("temp=") {
+            p.temp = v.trim_end_matches("'C").parse().ok();
+        } else if let Some(v) = l.strip_prefix("throttled=0x") {
+            let bits = u32::from_str_radix(v, 16).unwrap_or(0);
+            p.undervolt_now = bits & 1 != 0;
+            p.undervolt_since_boot = bits & (1 << 16) != 0;
+        }
+    }
+    p
+}
+
 pub struct Shell {
     handle: Arc<Handle<Client>>,
     writer: ChannelWriteHalf<Msg>,
@@ -445,6 +487,11 @@ impl Shell {
         self.writer.window_change(cols, rows, 0, 0).await.map_err(|e| e.to_string())
     }
 
+    /// Verbindung für zusätzliche Befehle (ohne die Shell-Liste gesperrt zu halten).
+    pub fn handle(&self) -> Arc<Handle<Client>> {
+        self.handle.clone()
+    }
+
     pub async fn close(self) {
         let _ = self.writer.close().await;
         let _ = self.handle.disconnect(russh::Disconnect::ByApplication, "", "de").await;
@@ -454,6 +501,15 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raspberry_erkennen() {
+        let p = parse_probe("model=Raspberry Pi 5 Model B Rev 1.0\nid=debian\ntemp=52.1'C\nthrottled=0x50000\n");
+        assert_eq!((p.model.as_str(), p.os_id.as_str(), p.temp), ("Raspberry Pi 5 Model B Rev 1.0", "debian", Some(52.1)));
+        assert!(!p.undervolt_now && p.undervolt_since_boot);
+        let u = parse_probe("model=\nid=\"ubuntu\"\n");
+        assert_eq!((u.model.as_str(), u.os_id.as_str(), u.temp), ("", "ubuntu", None));
+    }
 
     #[test]
     fn schluessel_erzeugen_und_eintragen() {

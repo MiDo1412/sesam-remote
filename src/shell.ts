@@ -225,6 +225,26 @@ export function shellTab(ctx: TabCtx): TabHandle {
     return true;
   });
 
+  // ---------- Rechner: Raspberry Pi, Temperatur, Unterspannung ----------
+  // Einmal nach dem Verbinden, dann jede Minute, solange der Tab sichtbar ist (vcgencmd nur auf Raspberry Pi OS).
+  const baseSub = local ? "" : `SSH · ${c.user}@${c.address}:${c.sshPort}`;
+  let hostTimer = 0;
+  const watchHost = async () => {
+    clearTimeout(hostTimer);
+    const s = sid;
+    if (!s) return;
+    if (ctx.isActive()) {
+      const p = await api.shellProbe(s).catch(() => null);
+      if (!p || s !== sid) return;
+      const pi = p.model.startsWith("Raspberry Pi");
+      if (pi || p.osId === "ubuntu") void api.connSetOs(c.id, pi ? "raspberry" : "ubuntu").then((changed) => changed && dispatchEvent(new CustomEvent("sesam:library-changed"))).catch(() => {});
+      const parts = [baseSub, pi ? p.model.replace(/ Rev [\d.]+$/, "") : "", p.temp != null ? `${Math.round(p.temp)} °C` : "", p.undervoltNow ? "⚠ Unterspannung" : p.undervoltSinceBoot ? "Unterspannung seit dem Start" : ""];
+      ctx.setSub(parts.filter(Boolean).join(" · "));
+      if (!pi && p.temp == null) return; // nichts zu beobachten
+    }
+    hostTimer = window.setTimeout(watchHost, 60_000);
+  };
+
   // ---------- Verbinden ----------
   const connect = async () => {
     refit();
@@ -253,6 +273,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
         if (ctx.extra?.command && !at) setTimeout(() => send(ctx.extra!.command!), 400);
         ctx.setState("connected");
         if (ctx.isActive()) term.focus();
+        if (!local) void watchHost();
       } catch (e) {
         const msg = String(e);
         if (trust === null && msg.startsWith(HOSTKEY_UNKNOWN)) {
@@ -290,6 +311,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
       this.close();
     },
     close() {
+      clearTimeout(hostTimer);
       ro.disconnect();
       kb.dispose();
       closePop();

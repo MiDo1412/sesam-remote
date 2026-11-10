@@ -715,6 +715,30 @@ fn term_open(profile: localterm::Spec, cols: u16, rows: u16, on_event: Channel<s
     Ok(sid)
 }
 
+/// Erkanntes Betriebssystem eintragen (nur wenn noch keins gewählt ist), für das Symbol in der Bibliothek.
+#[tauri::command]
+fn conn_set_os(path: State<LibraryPath>, id: String, os: String) -> Result<bool, String> {
+    if !["raspberry", "ubuntu", "linux"].contains(&os.as_str()) {
+        return Err("Unbekanntes System".into());
+    }
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let mut lib = library::load(&path.0)?;
+    let Some(c) = lib.iter_mut().find(|c| c.id == id) else { return Ok(false) };
+    if !(c.os.is_empty() || (c.os == "linux" && os != "linux")) {
+        return Ok(false);
+    }
+    c.os = os;
+    library::save(&path.0, &lib)?;
+    Ok(true)
+}
+
+/// Rechner der Shell befragen (Raspberry-Pi-Erkennung, Temperatur, Unterspannung).
+#[tauri::command]
+async fn shell_probe(shells: State<'_, ssh::Shells>, sid: String) -> Result<ssh::Probe, String> {
+    let h = shells.0.lock().await.get(&sid).ok_or("Shell geschlossen")?.handle();
+    ssh::probe(&h).await
+}
+
 #[tauri::command]
 async fn shell_resize(shells: State<'_, ssh::Shells>, sid: String, cols: u32, rows: u32) -> Result<(), String> {
     if let Some(t) = local_term(&sid) {
@@ -1898,6 +1922,8 @@ pub fn run() {
             shell_open,
             shell_write,
             shell_resize,
+            shell_probe,
+            conn_set_os,
             shell_close,
             vnc_open,
             desktop_ack,

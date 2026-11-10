@@ -42,6 +42,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Zugangsdaten verwalten:** eigener Eintrag «Zugangsdaten …» im App-Menü und in der Befehlspalette; je Eintrag sichtbar, welche Verbindungen ihn nutzen. Neu: SSH-Schlüssel (Ed25519) erzeugen, öffentlichen Schlüssel kopieren und wie ssh-copy-id auf einem Server eintragen, duplizieren, und auf dem Mac das gespeicherte Passwort nach Touch ID anzeigen und kopieren. Geheimnisse bleiben im Schlüsselbund.
 - **Sicherung:** Bibliothek und Zugangsdaten samt Passwörtern in eine mit eigenem Passwort verschlüsselte Datei (.sesam, AES-256-GCM, Argon2id); beim Einlesen zeigt Sesam zuerst, was dazukommt, und führt zusammen, ohne Bestehendes zu ändern.
 - **Zugangsdaten:** Suche, «zuletzt verwendet», Hinweis bei unbenutzten Einträgen und «Zugang testen» (Anmeldung über SSH an einer Verbindung, die sie nutzt).
+- **Raspberry Pi erkennen:** Nach dem Verbinden der Shell liest Sesam Modell und System aus und setzt das Symbol in der Bibliothek (Raspberry Pi bzw. Ubuntu), wenn noch keins gewählt ist. Auf Raspberry Pi OS zeigt der Sitzungskopf Modell, Temperatur und eine Warnung bei Unterspannung, jede Minute aktualisiert.
 
 ### Verbessert
 
