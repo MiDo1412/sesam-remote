@@ -117,6 +117,145 @@ pub fn cursor(px: &[u8], mask: &[u8], w: u16, h: u16) -> Vec<u8> {
     out
 }
 
+/// Tight (Kodierung 7): vier zlib-Ströme, Füllfarbe, Kopie/Palette/Gradient und JPEG.
+/// Pixel kommen als TPIXEL (3 Bytes R,G,B bei unserem 32-bpp-Format mit Tiefe 24).
+#[derive(Default)]
+pub struct Tight {
+    z: [Option<Decompress>; 4],
+}
+
+/// Was nach dem Steuerbyte vom Server zu lesen ist (die Sitzung liest es asynchron vom Netz).
+pub enum TightNeed {
+    /// Füllfarbe: 3 Bytes.
+    Fill,
+    /// JPEG: kompakte Länge, dann so viele Bytes.
+    Jpeg,
+    /// Grundform: optional ein Filter-Byte, dann je nach Filter Palette und Daten.
+    Basic { stream: usize, filter: bool },
+}
+
+impl Tight {
+    /// Steuerbyte auswerten: Ströme zurücksetzen und sagen, was folgt.
+    pub fn control(&mut self, ctrl: u8) -> Result<TightNeed, String> {
+        for i in 0..4 {
+            if ctrl & (1 << i) != 0 {
+                self.z[i] = None;
+            }
+        }
+        match ctrl >> 4 {
+            8 => Ok(TightNeed::Fill),
+            9 => Ok(TightNeed::Jpeg),
+            c if c < 8 => Ok(TightNeed::Basic { stream: (c & 3) as usize, filter: c & 4 != 0 }),
+            c => Err(format!("Tight: unbekannte Kompression {c}")),
+        }
+    }
+
+    /// Länge der (entpackten) Bilddaten für Filter und Palettengrösse.
+    pub fn data_len(r: Rect, filter: u8, colors: usize) -> usize {
+        let (w, h) = (r.w as usize, r.h as usize);
+        match filter {
+            1 if colors <= 2 => w.div_ceil(8) * h,
+            1 => w * h,
+            _ => w * h * 3,
+        }
+    }
+
+    /// Zlib-Daten eines Stroms entpacken (genau `len` Bytes erwartet).
+    pub fn inflate(&mut self, stream: usize, input: &[u8], len: usize) -> Result<Vec<u8>, String> {
+        if len > MAX_INFLATED {
+            return Err("Tight-Daten zu gross".into());
+        }
+        let z = self.z[stream].get_or_insert_with(|| Decompress::new(true));
+        let mut out = Vec::with_capacity(len);
+        let start = z.total_in();
+        while out.len() < len {
+            let (in0, out0) = (z.total_in(), z.total_out());
+            let used = (in0 - start) as usize;
+            z.decompress_vec(&input[used..], &mut out, FlushDecompress::Sync).map_err(|e| format!("Tight: {e}"))?;
+            if z.total_in() == in0 && z.total_out() == out0 {
+                break;
+            }
+        }
+        if out.len() != len {
+            return Err("Tight: Daten unvollständig".into());
+        }
+        Ok(out)
+    }
+
+    pub fn fill(fb: &mut Framebuffer, r: Rect, px: [u8; 3]) -> Result<(), String> {
+        fb.check(r)?;
+        for y in r.y as usize..(r.y + r.h) as usize {
+            for x in r.x as usize..(r.x + r.w) as usize {
+                fb.set(x, y, px);
+            }
+        }
+        Ok(())
+    }
+
+    /// Entpackte Daten mit Filter (0 Kopie, 1 Palette, 2 Gradient) ins Bild schreiben.
+    pub fn basic(fb: &mut Framebuffer, r: Rect, filter: u8, palette: &[[u8; 3]], data: &[u8]) -> Result<(), String> {
+        fb.check(r)?;
+        let (w, h) = (r.w as usize, r.h as usize);
+        if data.len() != Self::data_len(r, filter, palette.len()) {
+            return Err("Tight: falsche Datenlänge".into());
+        }
+        let put = |fb: &mut Framebuffer, i: usize, px: [u8; 3]| fb.set(r.x as usize + i % w, r.y as usize + i / w, px);
+        match filter {
+            0 => data.chunks_exact(3).enumerate().for_each(|(i, p)| put(fb, i, [p[0], p[1], p[2]])),
+            1 => {
+                let color = |k: usize| palette.get(k).copied().ok_or("Tight: Farbe ausserhalb der Palette");
+                if palette.len() <= 2 {
+                    let stride = w.div_ceil(8);
+                    for y in 0..h {
+                        for x in 0..w {
+                            put(fb, y * w + x, color((data[y * stride + x / 8] >> (7 - x % 8) & 1) as usize)?);
+                        }
+                    }
+                } else {
+                    for (i, &k) in data.iter().enumerate() {
+                        put(fb, i, color(k as usize)?);
+                    }
+                }
+            }
+            2 => {
+                // Gradient: Vorhersage links + oben − oben links je Kanal, auf 0..255 begrenzt.
+                let mut prev = vec![0u8; w * 3];
+                let mut cur = vec![0u8; w * 3];
+                for y in 0..h {
+                    for x in 0..w {
+                        for c in 0..3 {
+                            let left = if x > 0 { cur[(x - 1) * 3 + c] as i32 } else { 0 };
+                            let up = prev[x * 3 + c] as i32;
+                            let ul = if x > 0 { prev[(x - 1) * 3 + c] as i32 } else { 0 };
+                            let pred = (left + up - ul).clamp(0, 255) as u8;
+                            cur[x * 3 + c] = data[(y * w + x) * 3 + c].wrapping_add(pred);
+                        }
+                        put(fb, y * w + x, [cur[x * 3], cur[x * 3 + 1], cur[x * 3 + 2]]);
+                    }
+                    std::mem::swap(&mut prev, &mut cur);
+                }
+            }
+            f => return Err(format!("Tight: unbekannter Filter {f}")),
+        }
+        Ok(())
+    }
+
+    /// Fertig dekodiertes JPEG (RGB oder RGBA, Zeile für Zeile) ins Bild schreiben.
+    pub fn pixels(fb: &mut Framebuffer, r: Rect, w: usize, h: usize, spp: usize, stride: usize, data: &[u8]) -> Result<(), String> {
+        fb.check(r)?;
+        if w != r.w as usize || h != r.h as usize || spp < 3 || data.len() < stride * h {
+            return Err("Tight: JPEG passt nicht zum Rechteck".into());
+        }
+        for y in 0..h {
+            for x in 0..w {
+                let i = y * stride + x * spp;
+                fb.set(r.x as usize + x, r.y as usize + y, [data[i], data[i + 1], data[i + 2]]);
+            }
+        }
+        Ok(())
+    }
+}
+
 /// ZRLE nutzt einen zlib-Strom über die ganze Verbindung.
 pub struct Zrle {
     z: Decompress,
@@ -259,6 +398,37 @@ impl Reader<'_> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tight_fuellen_kopie_palette_gradient() {
+        use super::{Framebuffer, Rect, Tight, TightNeed};
+        use flate2::{Compress, Compression, FlushCompress};
+        let mut fb = Framebuffer::new(4, 2);
+        let r = Rect { x: 0, y: 0, w: 4, h: 2 };
+        let px = |fb: &Framebuffer, x: usize, y: usize| fb.rgba[(y * 4 + x) * 4..(y * 4 + x) * 4 + 3].to_vec();
+        let mut t = Tight::default();
+        assert!(matches!(t.control(0x80).unwrap(), TightNeed::Fill));
+        Tight::fill(&mut fb, r, [9, 8, 7]).unwrap();
+        assert_eq!(px(&fb, 3, 1), [9, 8, 7]);
+        // Kopie über Strom 1 (zlib), Steuerbyte 0x51: Strom 0 zurücksetzen, Strom 1, mit Filter-Byte
+        assert!(matches!(t.control(0x51).unwrap(), TightNeed::Basic { stream: 1, filter: true }));
+        let raw: Vec<u8> = (0..24).collect();
+        let mut z = Compress::new(Compression::fast(), true);
+        let mut comp = Vec::with_capacity(256);
+        z.compress_vec(&raw, &mut comp, FlushCompress::Sync).unwrap();
+        let data = t.inflate(1, &comp, Tight::data_len(r, 0, 0)).unwrap();
+        Tight::basic(&mut fb, r, 0, &[], &data).unwrap();
+        assert_eq!(px(&fb, 1, 0), [3, 4, 5]);
+        // Palette mit 2 Farben: 1 Bit je Pixel, Zeilen auf Byte aufgefüllt
+        Tight::basic(&mut fb, r, 1, &[[1, 1, 1], [2, 2, 2]], &[0b1010_0000, 0b0101_0000]).unwrap();
+        assert_eq!((px(&fb, 0, 0), px(&fb, 1, 0), px(&fb, 0, 1)), (vec![2, 2, 2], vec![1, 1, 1], vec![1, 1, 1]));
+        // Gradient: konstante Farbe ergibt nur im ersten Pixel einen Wert, danach Nullen
+        let mut g = vec![0u8; 24];
+        g[..3].copy_from_slice(&[50, 60, 70]);
+        Tight::basic(&mut fb, r, 2, &[], &g).unwrap();
+        assert_eq!(px(&fb, 3, 1), [50, 60, 70]);
+        assert!(Tight::basic(&mut fb, r, 0, &[], &[0; 5]).is_err());
+        assert!(t.control(0xA0).is_err(), "PNG gibt es nur in TightPNG");
+    }
     #[test]
     fn dirty_vereint_ueberlappende_und_begrenzt_die_anzahl() {
         use super::{add_dirty, Rect};

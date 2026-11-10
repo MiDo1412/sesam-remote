@@ -6,14 +6,18 @@ pub mod clipboard;
 pub mod decode;
 pub mod tls;
 
-use decode::{Framebuffer, Rect, Zrle, add_dirty};
+use decode::{Framebuffer, Rect, Tight, TightNeed, Zrle, add_dirty};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
 const ENC_RAW: i32 = 0;
 const ENC_COPYRECT: i32 = 1;
+const ENC_TIGHT: i32 = 7;
 const ENC_ZRLE: i32 = 16;
+/// Tight: JPEG-Qualität 8 von 9 (nur wo ein JPEG-Decoder da ist) und Kompressionsstufe 2 (schnell).
+const ENC_JPEG_QUALITY_8: i32 = -24;
+const ENC_COMPRESS_2: i32 = -254;
 const ENC_DESKTOP_SIZE: i32 = -223;
 const ENC_LAST_RECT: i32 = -224;
 const ENC_EXT_DESKTOP_SIZE: i32 = -308;
@@ -229,20 +233,28 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
     s.read_exact(&mut name).await.map_err(io)?;
 
     s.write_all(&set_pixel_format()).await.map_err(io)?;
-    s.write_all(&set_encodings(&[
-        ENC_COPYRECT,
-        ENC_ZRLE,
-        ENC_RAW,
-        ENC_EXT_DESKTOP_SIZE,
-        ENC_DESKTOP_SIZE,
-        ENC_LAST_RECT,
-        ENC_CURSOR,
-        ENC_EXT_CLIPBOARD,
-    ]))
+    // Tight vor ZRLE: kompakter, und mit JPEG für Fotos und Videos viel kleiner (Server wie TigerVNC und wayvnc
+    // nehmen JPEG nur, wenn der Client eine Qualitätsstufe nennt; ohne JPEG-Decoder bleibt Tight verlustfrei).
+    let mut encs = vec![ENC_COPYRECT, ENC_TIGHT, ENC_ZRLE, ENC_RAW, ENC_EXT_DESKTOP_SIZE, ENC_DESKTOP_SIZE, ENC_LAST_RECT, ENC_CURSOR, ENC_EXT_CLIPBOARD, ENC_COMPRESS_2];
+    if cfg!(target_os = "macos") {
+        encs.push(ENC_JPEG_QUALITY_8);
+    }
+    s.write_all(&set_encodings(&encs))
     .await
     .map_err(io)?;
     s.flush().await.map_err(io)?;
     Ok((s, ServerInit { width, height, name: String::from_utf8_lossy(&name).into_owned() }))
+}
+
+/// JPEG für Tight: auf dem Mac über ImageIO, sonst nicht angefordert (siehe Kodierungsliste).
+fn jpeg(data: &[u8]) -> Option<(usize, usize, usize, usize, Vec<u8>)> {
+    #[cfg(target_os = "macos")]
+    return crate::sfsymbol::decode_jpeg(data);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = data;
+        None
+    }
 }
 
 // ---------- Client-Nachrichten ----------
@@ -345,7 +357,7 @@ impl Session {
         let (o, sh, cr) = (out.clone(), shared.clone(), credit.clone());
         let reader = tokio::spawn(async move {
             emit(Event::Resize { width: init.width, height: init.height });
-            let mut st = Reader { rd: BufReader::with_capacity(1 << 16, rd), fb: Framebuffer::new(init.width, init.height), zrle: Zrle::default(), out: o, shared: sh, credit: cr };
+            let mut st = Reader { rd: BufReader::with_capacity(1 << 16, rd), fb: Framebuffer::new(init.width, init.height), zrle: Zrle::default(), tight: Tight::default(), out: o, shared: sh, credit: cr };
             let _ = st.out.send(update_request(false, init.width, init.height));
             let reason = loop {
                 match st.message(&emit).await {
@@ -399,6 +411,7 @@ struct Reader<R> {
     rd: BufReader<R>,
     fb: Framebuffer,
     zrle: Zrle,
+    tight: Tight,
     out: UnboundedSender<Vec<u8>>,
     shared: Arc<Mutex<Shared>>,
     credit: Arc<tokio::sync::Semaphore>,
@@ -412,6 +425,56 @@ impl<R: AsyncRead + Unpin> Reader<R> {
         let mut b = vec![0; len as usize];
         self.rd.read_exact(&mut b).await.map_err(|e| format!("Verbindung unterbrochen: {e}"))?;
         Ok(b)
+    }
+
+    /// Kompakte Länge (Tight): 1 bis 3 Bytes, je 7 Bit, das höchste Bit sagt «es folgt noch eins».
+    async fn compact_len(&mut self) -> Result<u32, String> {
+        let io = |e: std::io::Error| format!("Verbindung beendet: {e}");
+        let mut len = 0u32;
+        for i in 0..3 {
+            let b = self.rd.read_u8().await.map_err(io)?;
+            len |= u32::from(if i < 2 { b & 0x7f } else { b }) << (7 * i);
+            if b & 0x80 == 0 || i == 2 {
+                break;
+            }
+        }
+        Ok(len)
+    }
+
+    async fn tight_rect(&mut self, r: Rect) -> Result<(), String> {
+        let io = |e: std::io::Error| format!("Verbindung beendet: {e}");
+        let ctrl = self.rd.read_u8().await.map_err(io)?;
+        match self.tight.control(ctrl)? {
+            TightNeed::Fill => {
+                let p = self.bytes(3).await?;
+                Tight::fill(&mut self.fb, r, [p[0], p[1], p[2]])
+            }
+            TightNeed::Jpeg => {
+                let len = self.compact_len().await?;
+                let data = self.bytes(len).await?;
+                let (w, h, bpp, stride, px) = jpeg(&data).ok_or("Tight: JPEG nicht lesbar")?;
+                Tight::pixels(&mut self.fb, r, w, h, bpp, stride, &px)
+            }
+            TightNeed::Basic { stream, filter } => {
+                let f = if filter { self.rd.read_u8().await.map_err(io)? } else { 0 };
+                let palette: Vec<[u8; 3]> = if f == 1 {
+                    let n = self.rd.read_u8().await.map_err(io)? as u32 + 1;
+                    self.bytes(n * 3).await?.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()
+                } else {
+                    Vec::new()
+                };
+                let size = Tight::data_len(r, f, palette.len());
+                // Unter 12 Bytes kommt es unkomprimiert.
+                let data = if size < 12 {
+                    self.bytes(size as u32).await?
+                } else {
+                    let len = self.compact_len().await?;
+                    let z = self.bytes(len).await?;
+                    self.tight.inflate(stream, &z, size)?
+                };
+                Tight::basic(&mut self.fb, r, f, &palette, &data)
+            }
+        }
     }
 
     /// Eine Server-Nachricht verarbeiten. `Ok(false)` = Frontend weg, still beenden.
@@ -446,6 +509,10 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                             let len = self.rd.read_u32().await.map_err(io)?;
                             let data = self.bytes(len).await?;
                             self.zrle.decode(&mut self.fb, r, &data)?;
+                            add_dirty(&mut dirty, r);
+                        }
+                        ENC_TIGHT => {
+                            self.tight_rect(r).await?;
                             add_dirty(&mut dirty, r);
                         }
                         ENC_DESKTOP_SIZE => new_size = Some((r.w, r.h)),
