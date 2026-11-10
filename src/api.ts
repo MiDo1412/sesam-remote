@@ -182,6 +182,7 @@ export const api = {
     ch.onmessage = onEvent;
     return invoke<string>("shell_open", { id, cols, rows, trust, slot, onEvent: ch });
   },
+  shellUpload: (sid: string, files: string[], dir: string) => invoke<string[]>("shell_upload", { sid, files, dir }),
   shellHeldList: (sid: string) => invoke<[string, boolean, number][]>("shell_held_list", { sid }),
   shellHeldKill: (sid: string, name: string) => invoke<void>("shell_held_kill", { sid, name }),
   connSetPersist: (id: string, on: boolean) => invoke<void>("conn_set_persist", { id, on }),

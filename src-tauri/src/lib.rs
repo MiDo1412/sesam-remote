@@ -806,6 +806,20 @@ fn conn_set_os(path: State<LibraryPath>, id: String, os: String) -> Result<bool,
     Ok(true)
 }
 
+/// Dateien auf die Shell gezogen: über dieselbe SSH-Verbindung (eigener SFTP-Kanal) in `dir` laden
+/// ("" = Home), nie überschreiben. Gibt die Pfade auf dem Server zurück.
+#[tauri::command]
+async fn shell_upload(shells: State<'_, ssh::Shells>, sid: String, files: Vec<String>, dir: String) -> Result<Vec<String>, String> {
+    let h = shells.0.lock().await.get(&sid).ok_or("Shell geschlossen")?.handle();
+    let s = Arc::new(sftp::over(&h).await?);
+    let dir = if dir.trim().is_empty() { s.s.canonicalize(".").await.map_err(|e| e.to_string())? } else { dir };
+    let mut out = Vec::new();
+    for f in files {
+        out.push(sftp::upload(&s, std::path::Path::new(&f), &dir, false, |_| {}).await?);
+    }
+    Ok(out)
+}
+
 /// Gehaltene Sesam-Shells (tmux) auf dem Server dieser Shell.
 #[tauri::command]
 async fn shell_held_list(shells: State<'_, ssh::Shells>, sid: String) -> Result<Vec<(String, bool, u64)>, String> {
@@ -1327,7 +1341,10 @@ async fn drop_files(path: State<'_, LibraryPath>, id: String, files: Vec<String>
     if c.ssh_port.is_some() {
         let share = ClipShare::new(c.clone(), std::env::temp_dir());
         let done = share.upload_files(&files).await?;
-        return Ok(format!("{} Element(e) nach ~/Sesam-Ablage hochgeladen.", done.len()));
+        return Ok(match done.as_slice() {
+            [one] => format!("Hochgeladen nach {one}"),
+            _ => format!("{} Elemente hochgeladen nach {}", done.len(), done.first().map(|p| sftp::rparent(p).unwrap_or_default()).unwrap_or_default()),
+        });
     }
     let dir = c.shared_folder.trim();
     if c.rdp_port.is_some() && !dir.is_empty() {
@@ -1347,7 +1364,7 @@ async fn drop_files(path: State<'_, LibraryPath>, id: String, files: Vec<String>
         }
         return Ok(format!("{} Datei(en) in den freigegebenen Ordner kopiert (auf dem Server als Laufwerk sichtbar).", files.len()));
     }
-    Err("Für Dateien SSH einschalten oder unter RDP einen Ordner freigeben.".into())
+    Err(format!("«{}» hat kein SSH; darum kann Sesam keine Dateien hinüberlegen. SSH bei der Verbindung einschalten (Bearbeiten › Dienste) oder unter RDP einen Ordner freigeben.", c.name))
 }
 
 /// Gemerkte TLS-Zertifikate (RDP/VNC) für die Einstellungen.
@@ -2055,6 +2072,7 @@ pub fn run() {
             shell_resize,
             shell_probe,
             shell_held_list,
+            shell_upload,
             shell_held_kill,
             conn_set_persist,
             conn_set_os,

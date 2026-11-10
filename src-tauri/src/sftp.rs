@@ -25,6 +25,21 @@ pub async fn open(t: Target) -> Result<Sftp, String> {
 }
 
 /// SFTP auf einer bestehenden Verbindung starten. Scheitert es, kommt die Verbindung zurück (für SCP).
+/// SFTP über eine bestehende SSH-Verbindung (z. B. die einer Shell), ohne sie zu übernehmen.
+pub async fn over(h: &Handle<Client>) -> Result<Sftp, String> {
+    let mut ch = h.channel_open_session().await.map_err(err)?;
+    ch.request_subsystem(true, "sftp").await.map_err(err)?;
+    loop {
+        match ch.wait().await {
+            Some(russh::ChannelMsg::Success) => break,
+            Some(russh::ChannelMsg::Failure | russh::ChannelMsg::Close | russh::ChannelMsg::Eof) | None => return Err("Der Server bietet kein SFTP an".into()),
+            _ => {}
+        }
+    }
+    let s = SftpSession::new(ch.into_stream()).await.map_err(|e| format!("SFTP nicht verfügbar: {e}"))?;
+    Ok(Sftp { s, ssh: None })
+}
+
 pub async fn start(h: Handle<Client>) -> Result<Sftp, (Handle<Client>, String)> {
     let stream = async {
         let mut ch = h.channel_open_session().await.map_err(err)?;

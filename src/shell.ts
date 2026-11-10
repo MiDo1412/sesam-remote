@@ -100,9 +100,35 @@ export function shellTab(ctx: TabCtx): TabHandle {
 
   // Ordner/Dateien aus Explorer/Finder aufs Terminal ziehen: Pfad einfügen (wie Windows Terminal).
   const quote = (p: string) => (/[\s'"&()]/.test(p) ? (local?.command.toLowerCase().includes("cmd") ? `"${p}"` : `'${p.replace(/'/g, "'\\''")}'`) : p);
-  const unlistenDrop = getCurrentWebview().onDragDropEvent((ev) => {
+  // Fern-Shell: Dateien kommen in den aktuellen Ordner der Shell (OSC 7) bzw. nach Rückfrage, dann der Pfad in die Zeile.
+  let cwd = "";
+  term.parser.registerOscHandler(7, (data) => {
+    try {
+      const u = new URL(data);
+      if (u.protocol === "file:") {
+        cwd = decodeURIComponent(u.pathname);
+        dispatchEvent(new CustomEvent("sesam:shell-cwd", { detail: { conn: c.id, path: cwd } }));
+      }
+    } catch {}
+    return true;
+  });
+  const unlistenDrop = getCurrentWebview().onDragDropEvent(async (ev) => {
     if (ev.payload.type !== "drop" || !ctx.isActive() || !sid) return;
-    send(ev.payload.paths.map(quote).join(" "));
+    if (local) {
+      send(ev.payload.paths.map(quote).join(" "));
+      return term.focus();
+    }
+    const s = sid;
+    const dir = cwd || (await askText("Wohin hochladen?", `Den aktuellen Ordner der Shell kennt Sesam nicht (die Shell meldet ihn nicht). Ordner auf ${c.name}; leer = Home.`, "Hochladen", ""));
+    if (dir === null) return;
+    status.textContent = `Lade ${ev.payload.paths.length} Element(e) hoch …`;
+    try {
+      const done = await api.shellUpload(s, ev.payload.paths, dir);
+      status.textContent = `Hochgeladen nach ${dir || "Home"}`;
+      send(done.map(quote).join(" "));
+    } catch (e) {
+      status.textContent = `Nicht hochgeladen: ${e}`;
+    }
     term.focus();
   });
 

@@ -1059,6 +1059,21 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     await load(p, p.listing.path);
   }
 
+  // «Dem Ordner der Shell folgen»: wechselt eine Shell desselben Geräts den Ordner (OSC 7), zieht die rechte Seite mit.
+  let follow = false;
+  const followBtn = toolButton(ICON.shell, "Dem Ordner der Shell folgen", () => {
+    follow = !follow;
+    followBtn.setAttribute("aria-pressed", String(follow));
+    followBtn.classList.toggle("on", follow);
+    status.textContent = follow ? "Folgt dem Ordner der Shell (wenn die Shell ihn meldet)." : "";
+  }, { secondary: true });
+  followBtn.setAttribute("aria-pressed", "false");
+  const onShellCwd = (e: Event) => {
+    const { conn, path } = (e as CustomEvent<{ conn: string; path: string }>).detail;
+    if (follow && sid && conn === c.id && path !== panes.remote.listing?.path) load(panes.remote, path, "go");
+  };
+  addEventListener("sesam:shell-cwd", onShellCwd);
+
   const renameBtn = toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2" });
   const compareBtn = toolButton(ICON.compare, "Vergleichen", () => toggleCompare(), { text: true, shortcut: "linken und rechten Ordner" });
   compareBtn.setAttribute("aria-pressed", "false");
@@ -1075,6 +1090,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     toolButton(ICON.refresh, "Neu laden", () => {
       for (const p of Object.values(panes)) if (p.listing) load(p, p.listing.path);
     }),
+    followBtn,
     toolSep(),
     toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
   );
@@ -1131,6 +1147,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   });
 
   const close = () => {
+    removeEventListener("sesam:shell-cwd", onShellCwd);
     unlistenDrop.then((u) => u());
     for (const t of running) api.transferCancel(t);
     running.clear();

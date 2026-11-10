@@ -42,3 +42,9 @@ Im Desktop-Tab steht oben links, wie viele Bildaktualisierungen pro Sekunde anko
 ## Zwischenablage-Verlauf
 
 Sesam merkt sich die letzten 25 Texte der Zwischenablage, auch Kopien vom entfernten Rechner, solange Sesam im Vordergrund ist. Sie stehen in der Befehlspalette unter «Zwischenablage: …»; Enter legt den Text wieder in die Zwischenablage. Der Verlauf liegt nur im Arbeitsspeicher und ist nach dem Beenden weg.
+
+## Dateien hinüberreichen
+
+- **Auf die Shell ziehen** (SSH): Sesam lädt die Dateien in den aktuellen Ordner der Shell und setzt die Pfade in die Zeile. Den Ordner kennt Sesam, wenn die Shell ihn meldet (OSC 7, z. B. in der fish-Shell oder mit `vte.sh` unter GNOME); sonst fragt Sesam nach dem Zielordner. Bei einer lokalen Shell kommt nur der Pfad in die Zeile.
+- **Auf das Remote-Bild ziehen** (RDP/VNC): Sesam lädt die Dateien über SSH desselben Geräts in dessen Downloads-Ordner (sonst Schreibtisch bzw. `~/Sesam-Ablage`) und zeigt den Pfad. Ohne SSH sagt Sesam, warum es nicht geht; unter RDP hilft ein freigegebener Ordner.
+- **Dateifenster:** *… › Dem Ordner der Shell folgen* zieht die rechte Seite mit, wenn eine Shell desselben Geräts den Ordner wechselt (wenn die Shell ihn meldet).

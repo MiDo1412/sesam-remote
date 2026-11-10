@@ -6,7 +6,7 @@ import { ask, choose } from "./ui";
 import { keysym } from "./keysym";
 import { ICON } from "./icons";
 import { enhanceSelect } from "./menu";
-import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
+import { handoffDone, sameHost, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { saveDesktopThumb } from "./thumbs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
@@ -513,7 +513,8 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     if (ev.payload.type === "drop") {
       wrap.classList.remove("drop");
       status.textContent = "Übertrage …";
-      invoke<string>("drop_files", { id: c.id, files: ev.payload.paths })
+      // Ohne SSH bei dieser Verbindung: dasselbe Gerät über einen Eintrag mit SSH (Ein Gerät, drei Türen).
+      invoke<string>("drop_files", { id: c.sshPort ? c.id : (sameHost(c, "shell")?.id ?? c.id), files: ev.payload.paths })
         .then((m) => (status.textContent = m))
         .catch((e) => (status.textContent = String(e)));
     }

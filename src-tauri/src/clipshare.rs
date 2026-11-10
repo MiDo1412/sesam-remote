@@ -152,10 +152,22 @@ impl ClipShare {
         Ok(dir)
     }
 
+    /// Wohin aufs Remote-Bild gezogene Dateien kommen: Downloads, sonst Schreibtisch, sonst ~/Sesam-Ablage.
+    async fn drop_dir(s: &Sftp) -> Result<String, String> {
+        let home = s.s.canonicalize(".").await.map_err(|e| e.to_string())?;
+        for d in ["Downloads", "Schreibtisch", "Desktop"] {
+            let p = rjoin(&home, d);
+            if s.s.try_exists(&p).await.unwrap_or(false) {
+                return Ok(p);
+            }
+        }
+        Self::ablage(s).await
+    }
+
     /// Lokale Dateien hochladen; gibt die Pfade auf dem Server zurück.
     pub async fn upload_files(&self, files: &[PathBuf]) -> Result<Vec<String>, String> {
         let s = self.sftp().await?;
-        let dir = Self::ablage(&s).await?;
+        let dir = Self::drop_dir(&s).await?;
         let mut out = Vec::new();
         for f in files {
             out.push(sftp::upload(&s, f, &dir, false, |_| {}).await?);
