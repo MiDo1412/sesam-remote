@@ -818,3 +818,19 @@ body.one-bar #session-back { flex-shrink: 0; white-space: nowrap; padding: 0 8px
 /* Titel nie abschneiden: bei wenig Platz rutschen die Knöpfe in eine zweite Zeile */
 .list-head { flex-wrap: wrap; row-gap: 10px; }
 .list-head h1 { flex: 1 0 auto; }
+
+/* Erste Hilfe (src/firstaid.ts) */
+.first-aid .sheet { width: min(560px, calc(100vw - 48px)); box-sizing: border-box; }
+.first-aid .sheet > * { grid-column: 1 / -1; }
+.first-aid { overflow-x: hidden; overflow-y: auto; }
+.first-aid-svc { justify-self: start; }
+.first-aid-steps { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 6px; }
+.first-aid-steps li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; border-radius: 10px; background: var(--chrome-bg2); }
+.first-aid-steps li div { display: grid; gap: 2px; min-width: 0; }
+.first-aid-steps small { color: var(--muted); overflow-wrap: anywhere; }
+.first-aid-steps .mark { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--muted); }
+.first-aid-steps .ok .mark { background: var(--accent); }
+.first-aid-steps .fail .mark { background: var(--danger); }
+.first-aid-steps .busy, .first-aid-steps .done { color: var(--muted); }
+.first-aid-fix { display: flex; flex-wrap: wrap; gap: 8px; }
+.first-aid-fix:empty { display: none; }

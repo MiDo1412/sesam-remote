@@ -16,6 +16,12 @@ In der Bibliothek zeigt ein grüner Punkt vor der Adresse, dass der Rechner antw
 
 War ein Rechner einmal erreichbar, merkt sich Sesam seine MAC-Adresse (nur im selben Netz möglich). Ist er später aus, erscheint im Detailbereich **Aufwecken und verbinden**: Sesam schickt ein Wake-on-LAN-Signal und verbindet, sobald er antwortet. Die MAC-Adresse lässt sich auch unter *Bearbeiten › Erweitert* eintragen. Wake-on-LAN muss im BIOS/UEFI und bei der Netzwerkkarte eingeschaltet sein.
 
+## Erste Hilfe
+
+Klappt eine Verbindung nicht, öffnet **Erste Hilfe …** (Kontextmenü der Karte oder Leiste «Verbindung getrennt») eine Prüfung Schritt für Schritt: Namensauflösung, Erreichbarkeit, ob der Port offen ist, ob dort wirklich SSH, RDP, VNC bzw. FTP antwortet, die Anmeldung (SSH und RDP) und das Zertifikat bzw. den Hostschlüssel. Jeder Schritt bekommt ein Häkchen oder ein Kreuz mit einer kurzen Erklärung. Sesam ändert dabei nichts und bestätigt keine Schlüssel.
+
+Je nach Befund steht darunter der passende Knopf: **Aufwecken** (schläft das Gerät und ist eine MAC-Adresse bekannt), **Berechtigungen …** (macOS blockiert das lokale Netz), **Über SSH-Tunnel verbinden** (Desktop-Port zu, SSH aber offen), **Zugangsdaten …** (Anmeldung abgelehnt) oder **Verbinden**.
+
 ## Sicher über SSH verbinden
 
 Unter *Bearbeiten › Desktop* schickt **Sicher über SSH verbinden** RDP oder VNC durch einen SSH-Tunnel. Der Desktop-Dienst muss dann nicht offen im Netz stehen. Klassisches VNC, das selbst nicht verschlüsselt, ist so geschützt. Die Verbindung braucht dafür SSH (*Dienste › Shell*); den Schlüssel des Servers einmal in der Shell bestätigen.

@@ -13,6 +13,7 @@ import { initTitlebar, isMac, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
 import { applyAppearance, openSettings, settingsWindow } from "./settings";
+import { openFirstAid, serviceOf, type Service } from "./firstaid";
 import { openPermissions } from "./permissions";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
@@ -600,6 +601,7 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
     { value: "open:shell", label: "Shell öffnen", disabled: !c.sshPort },
     { value: "open:files", label: "Dateien öffnen", disabled: !filesProtocol(c) },
     { value: "edit", label: "Bearbeiten …", separator: true },
+    { value: "aid", label: "Erste Hilfe …" },
     { value: "lnk:desktop", label: "Desktop", section: isMac ? "Verknüpfung auf dem Schreibtisch" : "Verknüpfung auf dem Desktop", disabled: !desktopProtocol(c) },
     { value: "lnk:shell", label: "Shell", disabled: !c.sshPort },
     { value: "lnk:files", label: "Dateien", disabled: !filesProtocol(c) },
@@ -613,11 +615,26 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
   if (cmd === "merge") return void mergeInto(c, items.find((x) => x.id === arg)!);
   if (cmd === "open") open(c, arg as Connection["defaultView"]);
   if (cmd === "edit") edit(c);
+  if (cmd === "aid") firstAid(c, null);
   if (cmd === "lnk")
     invoke<string>("create_shortcut", { id: c.id, view: arg })
       .then((p) => tell("Verknüpfung erstellt", p))
       .catch((e) => tell("Verknüpfung nicht erstellt", String(e)));
 }
+
+/** Erste Hilfe für `c`; die Leiste «Verbindung getrennt» eines Tabs ruft sie mit `sesam:first-aid` auf. */
+function firstAid(c: Connection, service: Service | null) {
+  openFirstAid(c, service, {
+    edit: (x) => edit(x),
+    wake: (x) => void wakeAndOpen(x),
+    connect: (x, svc) => open(x, svc === "ssh" ? "shell" : svc === "ftp" ? "files" : "desktop"),
+  });
+}
+addEventListener("sesam:first-aid", (e) => {
+  const { id, view } = (e as CustomEvent<{ id: string; view: "desktop" | "shell" | "files" }>).detail;
+  const c = items.find((x) => x.id === id);
+  if (c) firstAid(c, serviceOf(c, view));
+});
 
 /** `source` geht in `target` auf: dessen fehlende Dienste und Zugangsdaten kommen dazu, der Eintrag verschwindet. */
 async function mergeInto(target: Connection, source: Connection) {

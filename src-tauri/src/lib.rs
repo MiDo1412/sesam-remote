@@ -5,6 +5,7 @@ mod diag;
 mod h264;
 mod kbhook;
 mod kdc;
+mod firstaid;
 mod forward;
 mod ftp;
 mod library;
@@ -432,6 +433,64 @@ async fn rdp_check(path: State<'_, LibraryPath>, id: String, trust: Option<Strin
     if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && seen.lock().unwrap().as_ref() == Some(fp)) {
         pins.insert(pin_key, fp);
         let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+    }
+    Ok(())
+}
+
+/// Erste Hilfe: Verbindung für einen Dienst (ssh, rdp, vnc, ftp) Schritt für Schritt prüfen; jeder Schritt geht
+/// sofort über `on_step` an die Oberfläche. Anmeldung und Zertifikat mit den gespeicherten Zugangsdaten,
+/// ohne etwas zu bestätigen oder zu speichern.
+#[tauri::command]
+async fn conn_diagnose(path: State<'_, LibraryPath>, id: String, service: String, on_step: Channel<firstaid::Step>) -> Result<(), String> {
+    use firstaid::step;
+    let c = find(&path, &id)?;
+    let port = match service.as_str() {
+        "ssh" => c.ssh_port,
+        "rdp" => c.rdp_port,
+        "vnc" => c.vnc_port,
+        "ftp" => c.ftp_port,
+        _ => return Err("Unbekannter Dienst".into()),
+    }
+    .ok_or_else(|| format!("{} ist für «{}» ausgeschaltet", service.to_uppercase(), c.name))?;
+    let send = |s: firstaid::Step| {
+        let _ = on_step.send(s);
+    };
+    if !c.jump_host.is_empty() && service == "ssh" {
+        send(step("name", "Sprungserver", None, "Die Verbindung läuft über einen Sprungserver; geprüft wird nur die Anmeldung.", ""));
+    } else if c.ssh_tunnel && service != "ssh" {
+        send(step("name", "SSH-Tunnel", None, "Der Desktop läuft durch SSH; geprüft wird zuerst SSH.", ""));
+        if !firstaid::network(&c.address, c.ssh_port.unwrap_or(22), "ssh", &send).await {
+            return Ok(());
+        }
+    } else if !firstaid::network(&c.address, port, &service, &send).await {
+        return Ok(());
+    }
+    let login = "Anmeldung";
+    match service.as_str() {
+        "ssh" => match ssh::connect(&ssh_target(&c, None)?).await {
+            Ok(h) => {
+                send(step("login", login, Some(true), format!("Angemeldet als {}.", c.user), ""));
+                tokio::spawn(async move { h.disconnect(russh::Disconnect::ByApplication, "", "de").await });
+            }
+            Err(e) if e.starts_with(ssh::HOSTKEY_UNKNOWN) => {
+                send(step("cert", "Hostschlüssel", None, "Noch nicht bestätigt. Beim ersten Verbinden zeigt Sesam den Fingerabdruck zum Vergleichen.", "trust"));
+            }
+            Err(e) => send(step("login", login, Some(false), e, "creds")),
+        },
+        "rdp" => match rdp_check(path, id, None, Some(false)).await {
+            Ok(()) => {
+                send(step("cert", "Zertifikat", Some(true), "Bekannt oder gültig.", ""));
+                send(step("login", login, Some(true), "Anmeldung angenommen.", ""));
+            }
+            Err(e) if e.starts_with(vnc::tls::CERT_UNKNOWN) => {
+                send(step("cert", "Zertifikat", None, "Eigenes Zertifikat, noch nicht bestätigt. Beim Verbinden zeigt Sesam den Fingerabdruck.", "trust"));
+            }
+            Err(e) if e.starts_with(vnc::tls::CERT_CHANGED) => {
+                send(step("cert", "Zertifikat", Some(false), "Hat sich seit dem letzten Mal geändert. Nur weiter, wenn es auf dem Server erneuert wurde.", "trust"));
+            }
+            Err(e) => send(step("login", login, Some(false), e, "creds")),
+        },
+        _ => send(step("login", login, None, "Prüft Sesam beim Verbinden.", "")),
     }
     Ok(())
 }
@@ -2143,6 +2202,7 @@ pub fn run() {
             shell_held_list,
             shell_upload,
             shell_door_open,
+            conn_diagnose,
             shell_door_list,
             shell_door_close,
             shell_held_kill,

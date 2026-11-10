@@ -420,7 +420,10 @@ function reconnectBar(tab: Tab, was: Tab["state"]) {
   const auto = tab.handle.autoReconnect && (was === "connected" || (was === "connecting" && r.n > 0)) && r.n < RETRY_MS.length;
   text.textContent = auto ? `Verbindung getrennt · neuer Versuch in ${RETRY_MS[r.n] / 1000} s` : "Verbindung getrennt";
   if (auto) r.timer = window.setTimeout(() => (r.n++, reconnect(tab)), RETRY_MS[r.n]);
-  bar.append(text, btn);
+  const aid = Object.assign(document.createElement("button"), { type: "button", textContent: "Erste Hilfe …" });
+  aid.title = "Schritt für Schritt prüfen, wo die Verbindung hängt";
+  aid.onclick = () => dispatchEvent(new CustomEvent("sesam:first-aid", { detail: { id: tab.ctx.conn.id, view: tab.kind } }));
+  bar.append(text, ...(tab.ctx.conn.id.startsWith("local:") ? [] : [aid]), btn);
   tab.ctx.pane.append(bar);
 }
 
