@@ -73,7 +73,7 @@ Im Sheet unter «Erweitert»:
 
 Unter *Bearbeiten › Dienste › Shell auf dem Server halten* läuft die Shell in einer tmux-Sitzung auf dem Server. Bricht die Verbindung ab (Ruhezustand, WLAN-Wechsel, VPN), läuft dort alles weiter; Sesam verbindet neu und hängt dieselbe Sitzung wieder an. Jeder Shell-Tab einer Verbindung hat seine eigene Sitzung (`sesam-…-0`, `-1` …).
 
-Sesam stellt tmux so ein, dass es sich wie ein normales Terminal anfühlt: keine Statuszeile, keine tmux-Tastenkürzel, das Mausrad blättert im Verlauf. Text markierst du dann mit gedrückter Wahltaste (⌥) bzw. Umschalttaste.
+Sesam stellt tmux so ein, dass es sich wie ein normales Terminal anfühlt: keine Statuszeile, keine tmux-Tastenkürzel, das Mausrad blättert im Verlauf. Markierst du Text mit der Maus, landet er beim Loslassen in der Zwischenablage dieses Rechners (tmux schickt ihn per OSC 52). Ganz normal wie ohne tmux markierst du mit gedrückter Wahltaste (⌥, Mac) bzw. Umschalttaste (Windows). Bei sehr altem tmux (vor 2.2) bleiben einzelne dieser Einstellungen aus.
 
 Fehlt tmux auf dem Server, startet eine normale Shell mit einem Hinweis; Sesam installiert nichts. Unter *… › Gehaltene Sitzungen* siehst du die Sesam-Sitzungen auf diesem Server, auch verwaiste, und kannst sie beenden.
 

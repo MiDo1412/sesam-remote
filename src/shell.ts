@@ -41,6 +41,14 @@ export function shellTab(ctx: TabCtx): TabHandle {
     fontSize: s.fontSize,
     theme: resolveTheme(s.theme),
     allowProposedApi: true,
+    // Wenn ein Programm die Maus übernimmt (tmux, vim): mit gedrückter ⌥ bzw. Umschalttaste trotzdem normal markieren.
+    macOptionClickForcesSelection: true,
+  });
+  // OSC 52: Programme (tmux mit set-clipboard, vim, ssh-Kopierhilfen) legen Text in die Zwischenablage dieses Rechners.
+  term.parser.registerOscHandler(52, (data) => {
+    const text = osc52Text(data);
+    if (text != null) api.clipWrite(text).catch(() => {});
+    return true;
   });
   const fit = new FitAddon();
   const search = new SearchAddon();
@@ -358,4 +366,19 @@ export function shellTab(ctx: TabCtx): TabHandle {
       });
     },
   };
+}
+
+/** Text aus einer OSC-52-Nachricht («c;BASE64», Ziel beliebig); null bei Abfrage («?») oder kaputten Daten. Max. 1 MB. */
+export function osc52Text(data: string): string | null {
+  const b64 = data.slice(data.indexOf(";") + 1);
+  if (!b64 || b64 === "?" || b64.length > 1_400_000) return null;
+  try {
+    return new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+  } catch {
+    return null;
+  }
+}
+
+if (import.meta.env?.DEV) {
+  console.assert(osc52Text("c;R3LDvGV6aQ==") === "Grüezi" && osc52Text("c;?") === null && osc52Text("c;%%") === null, "osc52Text");
 }

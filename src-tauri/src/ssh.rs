@@ -445,14 +445,16 @@ pub fn parse_ports(text: &str) -> Vec<(String, u16)> {
 }
 
 /// Befehl für eine gehaltene Shell: in der tmux-Sitzung `name` (anhängen oder neu), so eingestellt, dass sie sich
-/// wie ein normales Terminal anfühlt: keine Statuszeile, kein Präfix-Kürzel, Mausrad scrollt, kein Esc-Verzug.
+/// wie ein normales Terminal anfühlt: keine Statuszeile, kein Esc-Verzug, Kopieren landet per OSC 52 in der
+/// Zwischenablage, Mausrad scrollt, kein Präfix-Kürzel. Reihenfolge mit Absicht: Schlägt bei altem tmux eine
+/// Option fehl (mouse ab 2.1, prefix None ab 2.2), bricht tmux nur die folgenden ab, die wichtigen stehen vorne.
 /// Fehlt tmux: Hinweis und eine normale Login-Shell.
 pub fn tmux_command(name: &str) -> Result<String, String> {
     if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err("Ungültiger Sitzungsname".into());
     }
     Ok(format!(
-        "if command -v tmux >/dev/null 2>&1; then exec tmux new-session -A -s {name} \\; set-option status off \\; set-option prefix None \\; set-option mouse on \\; set-option -s escape-time 0; \
+        "if command -v tmux >/dev/null 2>&1; then exec tmux new-session -A -s {name} \\; set-option status off \\; set-option -s escape-time 0 \\; set-option -s set-clipboard on \\; set-option mouse on \\; set-option prefix None; \
 else printf '\\033[2m[Sesam] tmux fehlt auf diesem Server; die Shell läuft ohne Halten weiter.\\033[0m\\r\\n'; exec \"${{SHELL:-/bin/sh}}\" -l; fi"
     ))
 }
@@ -548,7 +550,9 @@ mod tests {
     #[test]
     fn tmux_befehl_und_namen() {
         let c = tmux_command("sesam-ab12-0").unwrap();
-        assert!(c.contains("new-session -A -s sesam-ab12-0") && c.contains("status off") && c.contains("prefix None") && c.contains("mouse on"));
+        assert!(c.contains("new-session -A -s sesam-ab12-0") && c.contains("status off") && c.contains("prefix None") && c.contains("mouse on") && c.contains("set-clipboard on"));
+        // Was bei altem tmux scheitern kann, steht hinten.
+        assert!(c.find("status off").unwrap() < c.find("set-clipboard").unwrap() && c.find("set-clipboard").unwrap() < c.find("mouse on").unwrap() && c.find("mouse on").unwrap() < c.find("prefix None").unwrap());
         assert!(c.contains("tmux fehlt"));
         assert!(tmux_command("x; rm -rf ~").is_err() && tmux_command("").is_err());
     }
