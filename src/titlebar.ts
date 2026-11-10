@@ -24,7 +24,7 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
   // Containern; Knöpfe, Tabs und Eingabefelder bleiben bedienbar). Doppelklick: Zoomen bzw. Maximieren.
   const bars = document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar");
   for (const h of document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar, .session-head")) h.setAttribute("data-tauri-drag-region", "deep");
-  if (isMobile) return void document.body.classList.add("mobile");
+  if (isMobile) return void (document.body.classList.add("mobile"), longPressMenus());
   if (isMac) return void document.body.classList.add("mac");
   document.body.classList.add("custom-titlebar");
   const win = getCurrentWindow();
@@ -98,4 +98,25 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
 /** Kürzel so anzeigen, wie das System sie schreibt: macOS ⌘ ⇧ ⌥, sonst Strg/Umschalt/Alt. */
 export function keyLabel(s: string) {
   return appleKeys ? s.replace(/Strg\+/g, "⌘").replace(/Umschalt\+/g, "⇧").replace(/Alt\+/g, "⌥").replace(/Entf/g, "⌫") : s;
+}
+
+/** iPad: WKWebView meldet langes Drücken nicht als «contextmenu». Nach 550 ms ohne Bewegung lösen wir es selbst aus,
+ *  damit Kontextmenüs (Karten, Dateien, Tabs) wie auf dem Mac erreichbar sind. Terminal und Remote-Bild haben eigene Gesten. */
+function longPressMenus() {
+  let timer = 0, x = 0, y = 0, quiet = 0;
+  const cancel = () => clearTimeout(timer);
+  addEventListener("click", (c) => Date.now() < quiet && (c.preventDefault(), c.stopPropagation()), true);
+  addEventListener("pointerdown", (e) => {
+    cancel();
+    const t = e.target as Element;
+    if (e.pointerType !== "touch" || t.closest("input, textarea, select, .xterm, .desktop, [contenteditable]")) return;
+    [x, y] = [e.clientX, e.clientY];
+    timer = window.setTimeout(() => {
+      t.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+      quiet = Date.now() + 700; // der «click» beim Loslassen soll nichts öffnen
+    }, 550);
+  }, true);
+  addEventListener("pointermove", (e) => Math.hypot(e.clientX - x, e.clientY - y) > 10 && cancel(), true);
+  addEventListener("pointerup", cancel, true);
+  addEventListener("pointercancel", cancel, true);
 }

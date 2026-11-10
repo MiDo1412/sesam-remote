@@ -846,3 +846,8 @@ body.mobile .lib-term, body.mobile .term-btns, body.mobile [data-pane="terminal"
 body.mobile { height: 100dvh; }
 /* Fläche unter der Home-Leiste in der Farbe der App statt weiss */
 html:has(> body.mobile) { background: var(--bg); }
+/* iPad: keine Textauswahl, Lupe oder Zieh-Vorschau des Systems beim Antippen der Oberfläche (Eingabefelder und Terminal ausgenommen) */
+body.mobile { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.mobile :is(input, textarea, [contenteditable], .xterm, pre, code) { -webkit-user-select: text; user-select: text; }
+body.mobile img, body.mobile a { -webkit-user-drag: none; }
+body.mobile * { -webkit-tap-highlight-color: transparent; }
