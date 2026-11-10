@@ -109,6 +109,8 @@ export async function openSettings(tab = "general") {
   $("settings-version").textContent = __COMMIT__ ? `${v} (${__COMMIT__})` : v;
   show(tab);
   if (!dlg.open) dlg.showModal();
+  // Fokus auf den gewählten Bereich (nicht immer «Allgemein»), damit Tastatur und Anzeige übereinstimmen.
+  dlg.querySelector<HTMLButtonElement>(`[data-pane="${tab}"]`)?.focus({ preventScroll: true });
 }
 
 async function renderCerts() {

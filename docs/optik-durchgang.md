@@ -1,5 +1,9 @@
 # Optik-Durchgang: grösste Schwächen und Vorschläge
 
+Stand Runde 15: umgesetzt sind Seitenleiste (5), Gewichtung der Knöpfe ohne Umbau (1 teilweise), Karten, Sitzungskopf
+niedriger mit Qualitäts-Plakette (6 teilweise, 9 teilweise), Fokus in den Einstellungen (15) und Zeilenabstände (16 teilweise).
+Offen: alles, was die Bedienung oder den Aufbau ändert (2, 3, 4, 7, 10–14, 17, 18).
+
 Grundlage: Bildschirmfotos der echten App auf macOS 27 (hell und dunkel, kleinstes und normales Fenster) und die
 Human Interface Guidelines von Apple. Unter Windows gelten dieselben Punkte sinngemäss (Fluent statt SF). Umsetzen
 nach Freigabe, jeweils mit Vorher/Nachher-Foto.

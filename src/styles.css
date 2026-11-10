@@ -709,3 +709,58 @@ svg.sf { background-color: currentColor; -webkit-mask: var(--sf) center / contai
 .cred-users.unused { color: var(--danger); }
 #cred-search { width: 100%; box-sizing: border-box; margin-bottom: 8px; }
 .cred-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ========== Optik-Durchgang (docs/optik-durchgang.md) ==========
+   Ziel: ruhiger, plattformtypischer, klare Hierarchie. Akzentgrün nur für Auswahl, Hauptaktion und Zustand. */
+
+/* Seitenleiste wie eine Quellenliste: kompakte Zeilen, Auswahl als getönte Fläche statt Balken, kleine Abschnittstitel. */
+.nav-item { height: 30px; gap: 8px; padding: 0 10px; border-radius: 7px; transition: background-color 120ms ease; }
+.nav-item[aria-current=page] { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 600; }
+.nav-item[aria-current=page]::before { display: none; }
+.nav-item[aria-current=page] .count { color: var(--text); }
+.nav-header { font-size: 11px; letter-spacing: 0.02em; padding: 16px 10px 4px; }
+.count { font-variant-numeric: tabular-nums; }
+.sidebar-settings { height: 30px; border-radius: 7px; padding: 0 10px; }
+
+/* Titelzeile der Bibliothek: Titel trägt die Hierarchie, Nebenaktionen treten zurück, eine Hauptaktion. */
+.list { padding: 28px 28px 24px; gap: 20px; }
+.list-head h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.list-head .lib-term button, .list-head .quick-btn { border-color: transparent; background: transparent; }
+.list-head .lib-term button:hover, .list-head .quick-btn:hover { background: var(--hover); }
+.list-head .lib-term { border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); }
+.list-head .quick-btn { box-shadow: inset 0 0 0 1px var(--line); }
+.list-head button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Karten: ruhige Fläche, beim Darüberfahren leicht angehoben, Tastaturfokus sichtbar. */
+.grid { grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 18px; }
+.card { padding: 6px 6px 12px; border-radius: 14px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent), 0 1px 2px rgba(0, 0, 0, 0.04); }
+.card:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(0, 0, 0, 0.09); }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card .thumb { height: 112px; border-radius: 10px; }
+.card-name { margin: 10px 6px 0; font-size: 13px; letter-spacing: -0.005em; }
+.card .card-sub { margin: 2px 6px 0; }
+.badge { border-radius: 5px; letter-spacing: 0.02em; backdrop-filter: blur(6px); }
+@media (prefers-reduced-motion: reduce) { .card, .card:hover { transition: none; transform: none; } }
+
+/* Tab-Leiste: aktiver Tab als angehobene Fläche. */
+.tab { height: 28px; border-radius: 8px; transition: background-color 120ms ease; }
+.tab[aria-selected=true] { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), inset 0 -2px 0 var(--tab-color, transparent); }
+#session-back { font-weight: 500; }
+
+/* Sitzungskopf: niedriger, Titel und Unterzeile klar abgestuft, Verbindungsqualität als leise Plakette. */
+.session-head { min-height: 40px; gap: 12px; }
+.session-id h1 { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+.session-id .sub { margin-top: 1px; }
+.quality { font-size: 11px; color: var(--chrome-muted); font-variant-numeric: tabular-nums; padding: 2px 8px; border-radius: 10px; background: color-mix(in srgb, var(--chrome-line) 45%, transparent); white-space: nowrap; }
+
+/* Statusmeldung über dem Bild: Material statt flacher Pille. */
+.tab-pane > .status:not(:empty) { backdrop-filter: blur(14px) saturate(160%); }
+
+/* Einstellungen: Fokusrahmen nur bei Tastaturbedienung, Auswahl getönt wie in der Seitenleiste. */
+.settings-nav button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+.settings-nav button[aria-selected=true] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.settings-nav button:hover:not([aria-selected=true]) { background: var(--hover); }
+
+/* Zeilen in Einstellungen (Zugangsdaten, Zertifikate): etwas mehr Luft, Name klar vor Details. */
+.cert-row { padding: 12px 14px; border-radius: 10px; }
+.cert-host { font-weight: 600; }
