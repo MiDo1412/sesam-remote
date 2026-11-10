@@ -898,7 +898,7 @@ fn kbhook_set(active: bool) -> usize {
 /// Text aus der Zwischenablage des Systems (ohne Berechtigungsabfrage der Webansicht).
 #[tauri::command]
 fn clip_read() -> Result<String, String> {
-    arboard::Clipboard::new().and_then(|mut c| c.get_text()).or_else(|e| match e {
+    clipshare::clipboard(|c| c.get_text()).or_else(|e| match e {
         arboard::Error::ContentNotAvailable => Ok(String::new()),
         e => Err(e),
     }).map_err(|e| e.to_string())
@@ -907,7 +907,7 @@ fn clip_read() -> Result<String, String> {
 /// Text in die Zwischenablage des Systems.
 #[tauri::command]
 fn clip_write(text: String) -> Result<(), String> {
-    arboard::Clipboard::new().and_then(|mut c| c.set_text(text)).map_err(|e| e.to_string())
+    clipshare::clipboard(|c| c.set_text(text)).map_err(|e| e.to_string())
 }
 
 /// «Beenden» aus dem eigenen Menü (Windows/Linux).

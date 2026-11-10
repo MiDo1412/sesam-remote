@@ -27,9 +27,20 @@ pub enum Local {
     Nothing,
 }
 
+/// Zwischenablage des Systems, immer nur von einem Thread zugleich: NSPasteboard ist auf dem Mac nicht
+/// threadsicher (gleichzeitige Zugriffe aus VNC-Abgleich und RDP-Zwischenablage brachten Sesam zum Absturz).
+pub fn clipboard<T>(f: impl FnOnce(&mut arboard::Clipboard) -> Result<T, arboard::Error>) -> Result<T, arboard::Error> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    f(&mut arboard::Clipboard::new()?)
+}
+
 /// Reihenfolge: Dateien, Text, Bild (z. B. kopiert Word Text *und* ein Bild davon).
 pub fn read_local() -> Local {
-    let Ok(mut cb) = arboard::Clipboard::new() else { return Local::Nothing };
+    clipboard(|cb| Ok(read_local_from(cb))).unwrap_or(Local::Nothing)
+}
+
+fn read_local_from(cb: &mut arboard::Clipboard) -> Local {
     if let Ok(files) = cb.get().file_list() {
         if !files.is_empty() {
             return Local::Files(files);
@@ -47,13 +58,11 @@ pub fn read_local() -> Local {
 }
 
 pub fn write_local_text(t: &str) {
-    if let Ok(mut cb) = arboard::Clipboard::new() {
-        let _ = cb.set_text(t);
-    }
+    let _ = clipboard(|cb| cb.set_text(t));
 }
 
 fn write_local_files(files: &[PathBuf]) -> Result<(), String> {
-    arboard::Clipboard::new().and_then(|mut cb| cb.set().file_list(files)).map_err(|e| e.to_string())
+    clipboard(|cb| cb.set().file_list(files)).map_err(|e| e.to_string())
 }
 
 pub fn hash(b: &[u8]) -> u64 {

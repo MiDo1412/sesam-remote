@@ -30,7 +30,7 @@ struct Backend {
 }
 
 fn local_text() -> Option<String> {
-    arboard::Clipboard::new().and_then(|mut c| c.get_text()).ok().filter(|t| !t.is_empty())
+    crate::clipshare::clipboard(|c| c.get_text()).ok().filter(|t| !t.is_empty())
 }
 
 fn announce(proxy: &ClipProxy) {
@@ -110,7 +110,7 @@ impl CliprdrBackend for Backend {
         }
         let Some(t) = decode(&r) else { return };
         *self.last.lock().unwrap() = Some(t.clone());
-        if let Err(e) = arboard::Clipboard::new().and_then(|mut c| c.set_text(t)) {
+        if let Err(e) = crate::clipshare::clipboard(|c| c.set_text(t)) {
             tracing::warn!(error = %e, "Zwischenablage: Text vom Server nicht übernommen");
         }
     }
