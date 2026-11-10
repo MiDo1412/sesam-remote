@@ -11,8 +11,10 @@ Was bewusst noch fehlt, mit dem Grund und dem nächsten Schritt.
 
 ## iPad (iPadOS)
 
-- Vorbereitet: Desktop-Teile abgegrenzt (cfg `desktop`/`mobile`, Frontend `isMobile`), Schlüsselbund über `keyring-core` mit dem «protected»-Speicher (gleiche Dienst- und Kontonamen).
-- Noch nicht kompiliert für iOS: braucht `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` und `npx tauri ios init` (bestätigte Xcode-Lizenz). Erwartet weitere Stellen mit Desktop-APIs (Fenster bauen, abkoppeln, `RunEvent::Reopen`, Ausblenden statt Schliessen).
+- Läuft im Simulator (iPad Pro 13", iPadOS 27): Bibliothek, Einstellungen als Blatt, SSH (Hostschlüssel, Erste Hilfe), Zusatzleiste über der Bildschirmtastatur, VNC mit Pinch-Zoom und Touch-Umschalter. Xcode-Projekt in `src-tauri/gen/apple` (nur iPad, ab iPadOS 16, «Lokales Netzwerk»-Text, zlib gelinkt).
+- Bauen: `npx tauri ios build --debug --target aarch64-sim` (Simulator) bzw. für das Gerät mit Team-ID (`APPLE_DEVELOPMENT_TEAM` oder `bundle.iOS.developmentTeam`, nicht im Repository).
+- Ungeprüft: Schlüsselbund mit gespeichertem Passwort/Schlüssel auf iOS (Eingabe im Simulator nicht automatisierbar), RDP, Dateien, echtes Gerät.
 - Zwischenablage: auf dem iPad noch ohne Anbindung (arboard kennt iOS nicht); später UIPasteboard.
 - H.264 (VideoToolbox) gibt es auch auf iOS; `h264.rs` ist bisher nur für macOS freigeschaltet.
+- Start im Debug-Build dauert rund 10 s (weisse Fläche); im Release-Build prüfen.
 - Der «protected»-Speicher braucht je nach Signatur eine Keychain-Access-Group in den Entitlements.

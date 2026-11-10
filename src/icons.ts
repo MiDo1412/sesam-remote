@@ -130,7 +130,8 @@ export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
 
 /** macOS: SF Symbols statt Fluent. Das System zeichnet sie (src-tauri/src/sfsymbol.rs); als leeres <svg> mit Maske,
  *  damit Grössen- und Farbregeln für «svg» in styles.css weiter greifen. */
-export const onApple = navigator.userAgent.includes("Mac");
+// Nur die Mac-App hat das Protokoll sfsymbol://; das iPad meldet sich auch als «Mac», hat aber Touch (titlebar.ts isMobile).
+export const onApple = navigator.userAgent.includes("Mac") && navigator.maxTouchPoints <= 1;
 export const sf = (name: string, n: number | string = 16) =>
   `<svg class="sf" xmlns="http://www.w3.org/2000/svg" width="${n}" height="${n}" style="--sf:url('sfsymbol://localhost/${name}?${n}')" aria-hidden="true" focusable="false"></svg>`;
 if (onApple) for (const [k, name] of Object.entries(SF_SYMBOL) as [keyof typeof ICON, string][]) ICON[k] = sf(name, /width="(\d+)"/.exec(ICON[k])?.[1]);
