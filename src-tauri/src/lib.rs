@@ -2127,10 +2127,11 @@ pub fn run() {
             // Menüs nach Systemstandard (docs/beschriftungen.md). macOS: native Menüleiste oben am Bildschirm.
             // Windows/Linux: eigene Titelleiste mit Menüknopf (src/titlebar.ts), kein natives Menü.
             if cfg!(target_os = "macos") {
-                use tauri::menu::{AboutMetadata, PredefinedMenuItem as P};
-                let about = AboutMetadata { name: Some("Sesam Remote".into()), version: Some(app.package_info().version.to_string()), ..Default::default() };
+                use tauri::menu::PredefinedMenuItem as P;
                 let app_menu = SubmenuBuilder::new(app, "Sesam Remote")
-                    .item(&P::about(app, Some("Über Sesam Remote"), Some(about))?)
+                    // Eigener Bereich «Über Sesam» statt des Systemfensters: zeigt die Versionsangabe aus VERSION
+                    // samt Entwicklungsstand (vite.config.ts), die das Systemfenster nicht kennt.
+                    .text("cmd:about", "Über Sesam Remote")
                     .separator()
                     .item(&MenuItemBuilder::with_id("cmd:settings", "Einstellungen …").accelerator("CmdOrCtrl+,").build(app)?)
                     .text("cmd:credentials", "Zugangsdaten …")

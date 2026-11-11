@@ -123,8 +123,7 @@ export async function openSettings(tab = "general") {
   fam.onchange = () => saveTermSettings({ ...termSettings(), fontFamily: fam.value.trim() });
 
   // Über
-  const v = await getVersion().catch(() => "");
-  $("settings-version").textContent = __COMMIT__ ? `${v} (${__COMMIT__})` : v;
+  $("settings-version").textContent = __VERSION_LABEL__ || (await getVersion().catch(() => ""));
   show(tab);
   if (!dlg.open) dlg.showModal();
   // Fokus auf den gewählten Bereich (nicht immer «Allgemein»), damit Tastatur und Anzeige übereinstimmen.
