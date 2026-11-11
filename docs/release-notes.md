@@ -54,6 +54,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Verbessert
 
+- **iPad bedienbar mit dem Finger:** Die Oberfläche ist auf dem iPad grösser (Text rund 17 pt, Knöpfe, Menüzeilen und Tabs mindestens 44 pt hoch, nach den Richtlinien von Apple), hoch und quer; Seitenleiste und Inhaltsfeld laufen bis an den unteren Rand.
 - **Versionsangabe:** Builds zwischen zwei Releases zeigen den Entwicklungsstand («26.11.1 Entwicklungsstand · Commit · Datum») statt einer nackten Nummer; ein Release zeigt nur die Nummer. «Über Sesam Remote» im Mac-Menü öffnet diese Angabe.
 - **Neue Verbindung per Kontextmenü:** Rechtsklick (iPad: lange drücken) auf freie Fläche, Gruppe oder Karte bietet «Neue Verbindung …»; auf einer Karte auch «Neue Verbindung zum gleichen Gerät …» mit Adresse, Gruppe und Benutzer vorausgefüllt.
 - **iPad:** Sesam läuft als iPad-App (iPadOS 16 oder neuer). Im Simulator getestet: Bibliothek, Einstellungen, SSH-Shell mit Zusatztasten über der Bildschirmtastatur, Erste Hilfe und VNC mit Touch (Pinch-Zoom, Touchpad/Direkt). Ausgeblendet ist, was es nur auf Computern gibt (lokales Terminal, Verknüpfungen, eigene Fenster, Mac-Tastenkürzel).

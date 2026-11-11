@@ -24,7 +24,7 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
   // Containern; Knöpfe, Tabs und Eingabefelder bleiben bedienbar). Doppelklick: Zoomen bzw. Maximieren.
   const bars = document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar");
   for (const h of document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar, .session-head")) h.setAttribute("data-tauri-drag-region", "deep");
-  if (isMobile) return void (document.body.classList.add("mobile"), longPressMenus());
+  if (isMobile) return void (document.body.classList.add("mobile"), touchScale(), longPressMenus());
   if (isMac) return void document.body.classList.add("mac");
   document.body.classList.add("custom-titlebar");
   const win = getCurrentWindow();
@@ -119,4 +119,19 @@ function longPressMenus() {
   addEventListener("pointermove", (e) => Math.hypot(e.clientX - x, e.clientY - y) > 10 && cancel(), true);
   addEventListener("pointerup", cancel, true);
   addEventListener("pointercancel", cancel, true);
+}
+
+/** iPad: die ganze Oberfläche ist für die Maus gebaut (13 px Text, 32 px Knöpfe). Einheitlich vergrössert ergibt das
+ *  rund 17 pt Text und mit den Mindesthöhen in styles.css 44-pt-Touchziele (Apple HIG); Koordinaten bleiben stimmig. */
+function touchScale() {
+  const scale = Math.min(screen.width, screen.height) >= 800 ? 1.3 : 1.2; // iPad mini: etwas weniger, sonst wird es eng
+  const meta = document.querySelector('meta[name="viewport"]');
+  // WKWebView rechnet «device-width» beim Vergrössern nicht neu: Breite selbst setzen, auch nach dem Drehen.
+  const apply = () => {
+    const landscape = matchMedia("(orientation: landscape)").matches;
+    const width = Math.round((landscape ? Math.max : Math.min)(screen.width, screen.height) / scale);
+    meta?.setAttribute("content", `width=${width}, initial-scale=${scale}, minimum-scale=${scale}, maximum-scale=${scale}, user-scalable=no, viewport-fit=cover`);
+  };
+  apply();
+  matchMedia("(orientation: landscape)").addEventListener("change", apply);
 }
