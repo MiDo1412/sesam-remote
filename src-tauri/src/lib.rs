@@ -3,6 +3,7 @@ mod clipshare;
 mod creds;
 mod diag;
 mod h264;
+mod jumps;
 mod kbhook;
 mod kdc;
 mod firstaid;
@@ -2278,6 +2279,9 @@ pub fn run() {
             diag::init(&dir);
             kbhook::init(app.handle().clone());
             let _ = LIBRARY_FILE.set(dir.join("library.json"));
+            #[cfg(target_os = "macos")]
+            jumps::dock::install(app.handle().clone());
+            jumps::changed(&dir.join("library.json"));
             app.manage(LibraryPath(dir.join("library.json")));
             app.manage(ssh::Shells::default());
             app.manage(Desktops::default());

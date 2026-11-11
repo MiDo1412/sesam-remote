@@ -61,8 +61,9 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Verschlüsselte Sicherung (Export/Import) | ✓ | ✓ | ✓ | ✓ (Datei über «Dateien») |
 | Gemeinsame Zwischenablage Text | ✓ | ✓ | ✓ | ✓ nur im Vordergrund; Einfügen mit Bestätigung von iOS |
 | Zwischenablage Dateien und Bilder | ✓ | ✓ | ✓ | … noch nicht |
+| Kurzbefehl «Verbindung öffnen» | ↻ Kurzbefehl mit der Aktion «URL öffnen» und `sesam://open?id=…` (eigene Aktion siehe unten) | – | – | ✓ |
 | Verknüpfung zu einer Verbindung | ✓ «Verknüpfung auf dem Schreibtisch» | ✓ «Verknüpfung auf dem Desktop» | ✓ | ↻ Kurzbefehl «Verbindung öffnen» (App «Kurzbefehle», Spotlight, Siri, Home-Bildschirm) |
-| Zuletzt verwendete Verbindungen am App-Symbol | … Dock-Menü | … Sprungliste (Jump List) | – | … Widget (braucht bezahltes Team, siehe unten) |
+| Zuletzt verwendete Verbindungen am App-Symbol | ✓ Dock-Menü (Rechtsklick aufs Symbol im Dock) | ✓ Sprungliste (Rechtsklick aufs Symbol in der Taskleiste; auf Windows noch ungeprüft) | – (je nach Desktop; nicht gebaut) | … Widget «Zuletzt verwendet»: Code bereit, braucht die App Group (siehe unten) |
 | `sesam://`-Links | ✓ | ✓ | ✓ | ✓ |
 | Freigabe «Lokales Netzwerk» | ✓ Systemeinstellungen | – (nicht nötig) | – | ✓ Abfrage beim ersten Verbinden |
 | Berechtigungen einrichten (Dialog) | ✓ | – (nicht nötig) | – | – (iPadOS fragt selbst) |
@@ -81,11 +82,27 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 - **Zwischenablage:** nur solange Sesam vorne ist; iOS kann beim Einfügen um Bestätigung bitten.
 - **Kein lokales Terminal, keine Verknüpfungen auf dem Schreibtisch**; ersetzt durch den Kurzbefehl «Verbindung öffnen».
 
+## Widget einschalten (iPad, bezahltes Entwicklerprogramm)
+
+Der Code liegt bereit: `src-tauri/gen/apple/SesamWidget/SesamWidget.swift` (Widget «Zuletzt verwendet», klein,
+mittel, gross; ein Tipp öffnet `sesam://open?id=…`). Die App schreibt die Liste selbst nach `widget.json` im
+Ordner der App Group (`src-tauri/src/jumps.rs`); ohne App Group tut sie nichts. Das kostenlose Team kann keine
+App Group ausstellen, darum ist das Widget noch in keinem Ziel und die App baut wie bisher.
+
+Mit dem bezahlten Team:
+1. Auf developer.apple.com die App Group `group.ch.sesam.remote` anlegen und der App-ID `ch.sesam.remote` geben.
+2. In `sesam-remote_iOS/sesam-remote_iOS.entitlements` den Schlüssel `com.apple.security.application-groups`
+   mit `group.ch.sesam.remote` eintragen.
+3. In `project.yml` ein Ziel `SesamWidget` (Typ `app-extension`, Plattform iOS, ab iOS 16, Quelle
+   `SesamWidget`, Bundle-ID `ch.sesam.remote.widget`, `NSExtensionPointIdentifier` =
+   `com.apple.widgetkit-extension`, eigene Entitlements mit derselben App Group) anlegen, im App-Ziel unter
+   `dependencies` mit `embed: true` eintragen, dann `xcodegen generate` (ohne Team-ID im Repository).
+
 ## Nächste Schritte
 
-- iPad: Widget mit zuletzt verwendeten Verbindungen. Es braucht eine App Group, die das kostenlose Team nicht
-  ausstellen kann; erst mit dem bezahlten Programm sinnvoll.
-- macOS: dieselben Kurzbefehle (App Intents ab macOS 13) und ein Dock-Menü mit zuletzt verwendeten
-  Verbindungen.
-- Windows: Sprungliste am Taskleisten-Symbol, Windows Hello vor dem Anzeigen von Passwörtern.
+- iPad: Widget einschalten, sobald das bezahlte Programm da ist (siehe oben).
+- macOS: eigene Kurzbefehl-Aktion «Verbindung öffnen». App Intents verlangen Swift-Code und Metadaten, die
+  Xcode beim Bauen erzeugt; Tauri baut die Mac-App ohne Xcode-Projekt. Machbar über ein kleines Swift-Paket
+  plus den Schritt `appintentsmetadataprocessor` im Build. Bis dahin: Kurzbefehl mit «URL öffnen».
+- Windows: Sprungliste auf einem echten Windows-Rechner prüfen, Windows Hello vor dem Anzeigen von Passwörtern.
 - Linux: Tastenkürzel an den Remotecomputer.

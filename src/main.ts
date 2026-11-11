@@ -701,6 +701,8 @@ function handleLink(url: string) {
   try {
     const u = new URL(url);
     if (u.protocol !== "sesam:") return;
+    // Dock-Menü, Sprungliste: sesam://new, sesam://quick
+    if (u.host === "new" || u.host === "quick") return command(u.host);
     const id = u.searchParams.get("id");
     const view = (u.searchParams.get("view") ?? "") as Connection["defaultView"];
     const c = items.find((x) => x.id === id);
@@ -1091,6 +1093,8 @@ document.querySelector<HTMLElement>("main > section.list")!.addEventListener("co
   if (v) command(v);
 });
 if (!detachedWindow && !settingsWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
+// Dock-Menü (macOS): Klick kommt als Link direkt von der App, ohne Umweg über das System.
+if (!detachedWindow && !settingsWindow) listen<string>("link", (e) => handleLink(e.payload));
 for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
 listen<string>("help", (e) => openHelp(e.payload));
 initTitlebar({ command: (c) => (!detachedWindow || c === "settings") && command(c), tool: runTool, help: openHelp });

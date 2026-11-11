@@ -54,6 +54,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Verbessert
 
+- **Zuletzt verwendet am App-Symbol:** Rechtsklick aufs Sesam-Symbol im Dock (Mac) bzw. in der Taskleiste (Windows) zeigt die zuletzt verbundenen Verbindungen sowie «Neue Verbindung …» und «Schnelle Verbindung …». Ein Klick öffnet sie direkt.
 - **Vollbild auf dem iPad:** «Vollbild» blendet Leisten, Statusleiste und Home-Leiste aus; das Remote-Bild nimmt den ganzen Bildschirm. Die Verbindungsleiste kommt mit einem Tipp auf den Griff oben in der Mitte oder mit einem Wisch vom oberen Rand nach unten; dort beendet man das Vollbild auch wieder.
 - **Kompakte Sitzungsleiste:** Auf dem iPad und in schmalen Fenstern zeigt die Leiste nur noch Tasten, Bildschirmtastatur, Vollbild und Trennen; Ansicht (Anpassen, Skalieren, 1:1), Touch-Bedienung, Lupe und Seltenes liegen im Menü «…». Tabs zeigen den ganzen Namen.
 - **Seitenleiste und Details ein- und ausblenden:** Zwei Knöpfe in der Bibliothek blenden die Seitenleiste und die Details aus, Sesam merkt sich die Wahl. Auf dem iPad sind die Details anfangs aus und erscheinen als Blatt über den Karten; im Hochformat ist die Seitenleiste anfangs eingeklappt. Lange Knopftexte in den Details brechen sauber um.

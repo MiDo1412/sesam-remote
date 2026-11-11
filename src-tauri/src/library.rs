@@ -232,7 +232,9 @@ pub fn save<T: Serialize>(path: &Path, items: &[T]) -> Result<(), String> {
     let tmp = path.with_extension("json.tmp");
     let json = serde_json::to_string_pretty(items).map_err(|e| e.to_string())?;
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+    std::fs::rename(&tmp, path).map_err(|e| e.to_string())?;
+    crate::jumps::changed(path);
+    Ok(())
 }
 
 pub fn upsert(items: &mut Vec<Connection>, c: Connection) {
