@@ -1,0 +1,11 @@
+{
+  "bundle": {
+    "macOS": {
+      "signingIdentity": null,
+      "entitlements": "store/mas.entitlements",
+      "files": {
+        "Resources/PrivacyInfo.xcprivacy": "store/PrivacyInfo.xcprivacy"
+      }
+    }
+  }
+}

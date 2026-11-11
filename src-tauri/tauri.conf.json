@@ -41,7 +41,10 @@
     },
     "iOS": {
       "minimumSystemVersion": "16.0"
-    }
+    },
+    "category": "Utility",
+    "shortDescription": "Bildschirm, Shell und Dateien entfernter Rechner in einer App",
+    "longDescription": "Sesam Remote verbindet sich mit Rechnern per RDP, VNC, SSH, SFTP und FTP: Desktop, Shell und Dateien in einer App, mit Zugangsdaten im Schlüsselbund des Systems."
   },
   "plugins": {
     "deep-link": {
