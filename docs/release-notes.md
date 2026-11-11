@@ -18,6 +18,8 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.2 — 2026-11-11
+
 ### Neu
 
 - **Automatische Updates:** Sesam sucht im Hintergrund nach neuen Versionen, lädt sie still herunter, prüft die Signatur und installiert beim Beenden; der nächste Start ist neu. Unter Einstellungen › Über Sesam stehen der Stand, «Automatisch aktualisieren» (an) und «Jetzt suchen». Windows mit MSI im Programme-Ordner: nur Hinweis mit «Jetzt installieren»; Firmen schalten es mit `AUTOUPDATE=0` bzw. einer Richtlinie aus (`docs/intune.md`). Portable Fassungen aktualisieren sich an Ort und Stelle. Auf dem iPad aktualisiert der App Store.
