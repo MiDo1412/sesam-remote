@@ -4,6 +4,7 @@ mod backup;
 mod clipshare;
 mod creds;
 mod diag;
+mod folders;
 mod h264;
 mod jumps;
 mod kbhook;
@@ -1615,6 +1616,14 @@ fn local_list(app: AppHandle, path: String) -> Result<sftp::Listing, String> {
     // iPad: nur der Ordner «Documents» der App (in der Dateien-App «Auf meinem iPad › Sesam Remote»), darüber nichts.
     #[cfg(mobile)]
     {
+        // Freigegebene Ordner aus «Dateien» (folders.rs): darin frei, an ihrer Wurzel kein «übergeordneter Ordner».
+        if let Some(at_root) = folders::inside(std::path::Path::new(&path)) {
+            let mut l = sftp::local_list(&path)?;
+            if at_root {
+                l.parent = None;
+            }
+            return Ok(l);
+        }
         let root = local_home(app)?;
         let inside = std::path::Path::new(&path).canonicalize().ok().zip(std::path::Path::new(&root).canonicalize().ok()).is_some_and(|(p, r)| p.starts_with(r));
         let mut l = sftp::local_list(if inside { &path } else { &root })?;
@@ -1635,7 +1644,8 @@ fn local_list(app: AppHandle, path: String) -> Result<sftp::Listing, String> {
 fn local_read(app: AppHandle, path: String, max: u64) -> Result<tauri::ipc::Response, String> {
     #[cfg(mobile)]
     {
-        let ok = [app.path().document_dir(), app.path().app_cache_dir()].into_iter().flatten().any(|d| std::path::Path::new(&path).canonicalize().ok().zip(d.canonicalize().ok()).is_some_and(|(p, r)| p.starts_with(r)));
+        let ok = folders::inside(std::path::Path::new(&path)).is_some()
+            || [app.path().document_dir(), app.path().app_cache_dir()].into_iter().flatten().any(|d| std::path::Path::new(&path).canonicalize().ok().zip(d.canonicalize().ok()).is_some_and(|(p, r)| p.starts_with(r)));
         if !ok {
             return Err("Nur Dateien aus den Ordnern von Sesam".into());
         }
@@ -1646,6 +1656,30 @@ fn local_read(app: AppHandle, path: String, max: u64) -> Result<tauri::ipc::Resp
     let mut buf = Vec::new();
     std::fs::File::open(&path).and_then(|f| f.take(max).read_to_end(&mut buf)).map_err(|e| format!("{path}: {e}"))?;
     Ok(tauri::ipc::Response::new(buf))
+}
+
+/// iPad: Ordner in «Dateien» wählen (Zugriff bleibt über ein Lesezeichen); `None` bei Abbruch.
+#[tauri::command]
+async fn folder_pick(window: tauri::WebviewWindow) -> Result<Option<folders::Folder>, String> {
+    folders::pick(window).await
+}
+
+/// iPad: gemerkten Ort wieder öffnen (Lesezeichen auflösen, Zugriff starten).
+#[tauri::command]
+fn folder_open(bookmark: String) -> Result<folders::Folder, String> {
+    folders::open(&bookmark)
+}
+
+/// iPad: Ort entfernen (Zugriff beenden).
+#[tauri::command]
+fn folder_close(path: String) {
+    folders::close(&path)
+}
+
+/// «Dateien wählen …»: Kopien in einen Ordner der linken Seite legen.
+#[tauri::command]
+fn local_import(paths: Vec<String>, dir: String) -> Result<Vec<String>, String> {
+    folders::import(&paths, std::path::Path::new(&dir))
 }
 
 /// Arbeitsordner im Cache (Vorschau, Bearbeiten); `sub` nur aus Buchstaben, Ziffern und «-».
@@ -2448,6 +2482,10 @@ pub fn run() {
             clip_read,
             clip_write,
             stage_file,
+            folder_pick,
+            folder_open,
+            folder_close,
+            local_import,
             transfer_pause,
             local_read,
             local_temp,

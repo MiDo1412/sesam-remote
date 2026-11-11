@@ -949,3 +949,5 @@ dialog.preview[open] { display: flex; flex-direction: column; }
 body.mobile .pane-tools { gap: 10px; flex-wrap: nowrap; overflow: hidden; }
 .transfer-btns { display: inline-flex; gap: 4px; }
 .transfer.paused progress { opacity: 0.5; }
+.pane td.empty { white-space: normal; }
+.pane td.empty .empty-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }

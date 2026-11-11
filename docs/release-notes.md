@@ -54,6 +54,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Verbessert
 
+- **iPad: eigene Ordner im Dateifenster:** «Ordner öffnen …» (Haus-Knopf links oder in der leeren Liste) wählt einen Ordner aus der App «Dateien», etwa in iCloud Drive, «Auf meinem iPad», auf einem USB-Stick oder einer Freigabe. Sesam merkt ihn sich als Ort und zeigt ihn links mit Unterordnern; Hoch- und Herunterladen gehen direkt dorthin. «Dateien wählen …» holt einzelne Dateien in den offenen Ordner. Orte lassen sich wieder entfernen.
 - **Nach einem Verbindungsabbruch weitermachen:** Bricht die Verbindung mitten in einer Datei ab (SFTP), bleibt der fertige Teil liegen; «Wiederholen» macht dort weiter, sofern sich die Quelle nicht geändert hat (Grösse und Änderungszeit), sonst überträgt Sesam die Datei von vorn.
 - **Übertragungen pausieren:** «Pause» hält eine Übertragung an ihrer Stelle an, «Weiter» setzt sie dort fort (SFTP, SCP, FTP; bei FTP kann ein Server eine sehr lange Pause beenden).
 - **Klarere Fehler bei der Anmeldung:** Sesam sagt, welche Verfahren versucht wurden (Agent, Schlüssel, Passwort), und meldet, wenn ein gespeichertes Passwort oder ein gespeicherter Schlüssel im Schlüsselbund dieses Geräts fehlt.

@@ -282,6 +282,10 @@ export const api = {
   localRead: (path: string, max: number) => invoke<ArrayBuffer>("local_read", { path, max }),
   localTemp: (sub: string) => invoke<string>("local_temp", { sub }),
   localOpen: (path: string) => invoke<void>("local_open", { path }),
+  folderPick: () => invoke<{ path: string; bookmark: string } | null>("folder_pick"),
+  folderOpen: (bookmark: string) => invoke<{ path: string; bookmark: string }>("folder_open", { bookmark }),
+  folderClose: (path: string) => invoke<void>("folder_close", { path }),
+  localImport: (paths: string[], dir: string) => invoke<string[]>("local_import", { paths, dir }),
   /** upload: lokal → Server; sonst Server → lokal. `replace`: gleichnamige Datei ersetzen (nur nach Rückfrage). Gibt die Übertragungs-ID zurück. */
   transferStart: (sid: string, upload: boolean, src: string, destDir: string, onProgress: (p: Progress) => void, replace = false) => {
     const ch = new Channel<Progress>();

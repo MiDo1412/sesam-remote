@@ -25,7 +25,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | VNC | ✓ | ✓ | ✓ | ✓ |
 | SSH-Shell | ✓ | ✓ | ✓ | ✓ |
 | Dateien SFTP/FTP | ✓ | ✓ | ✓ | ✓ |
-| Lokale Seite im Dateifenster | ✓ ganzer Rechner | ✓ ganzer Rechner | ✓ ganzer Rechner | ↻ «Auf meinem iPad › Sesam Remote» in der App «Dateien»; Hochladen über die Dateiauswahl |
+| Lokale Seite im Dateifenster | ✓ ganzer Rechner | ✓ ganzer Rechner | ✓ ganzer Rechner | ✓ Sesam-Ordner plus gewählte Ordner aus «Dateien» (iCloud Drive, Auf meinem iPad, USB, Freigaben) als Orte; «Dateien wählen …» für einzelne Dateien |
 | Lokales Terminal | ✓ Terminal | ✓ Windows-Terminal-Profile | ✓ | ✗ iPadOS startet keine fremden Programme |
 | Online-Status, Aufwecken (Wake-on-LAN) | ✓ | ✓ | ✓ | ✓ |
 | Erste Hilfe | ✓ | ✓ | ✓ | ✓ |
@@ -81,8 +81,8 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
   Zurückkommen verbindet Sesam neu; eine gehaltene Shell (tmux, «Nahtlos») läuft auf dem Server weiter.
 - **Systemkürzel:** ⌘Tab, ⌘Leertaste, Globus-Taste und ⌘H bleiben bei iPadOS und kommen nicht beim
   Remotecomputer an; dafür gibt es die Zusatzleiste und «Tasten senden».
-- **Dateien:** nur über die App «Dateien» bzw. die Dateiauswahl; Heruntergeladenes liegt dort unter
-  «Auf meinem iPad › Sesam Remote».
+- **Dateien:** nur Ordner, die man in der Auswahl von «Dateien» freigibt (Sesam merkt sie sich als Orte), und der
+  eigene Ordner «Auf meinem iPad › Sesam Remote». Dateien aus iCloud, die nicht geladen sind, öffnet iPadOS erst nach dem Laden.
 - **Zwischenablage:** nur solange Sesam vorne ist; iOS kann beim Einfügen um Bestätigung bitten.
 - **Kein lokales Terminal, keine Verknüpfungen auf dem Schreibtisch**; ersetzt durch den Kurzbefehl «Verbindung öffnen».
 

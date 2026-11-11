@@ -105,6 +105,40 @@ const localName = isMobile ? "Auf meinem iPad" : "Dieser Computer";
 /** Apple-Tastenkürzel (⌘) auf Mac und iPad mit Tastatur. */
 const isMacUi = navigator.userAgent.includes("Mac");
 let localRoot = "";
+/** iPad: Orte aus «Dateien» (Ordnerauswahl mit Lesezeichen), lokal gemerkt; `path` gilt erst nach folderOpen. */
+interface Place {
+  name: string;
+  bookmark: string;
+  path: string;
+  gone?: boolean;
+}
+const PLACES = "sesam.places";
+let places: Place[] = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(PLACES) ?? "[]");
+  } catch {
+    return [];
+  }
+})();
+const savePlaces = () => {
+  try {
+    localStorage.setItem(PLACES, JSON.stringify(places.map(({ name, bookmark, path }) => ({ name, bookmark, path }))));
+  } catch {}
+};
+/** Lesezeichen auflösen (Zugriff starten); veraltete erneuern, unerreichbare markieren. Einmal je App-Start. */
+let placesReady: Promise<void> | null = null;
+const openPlaces = () =>
+  (placesReady ??= (async () => {
+    for (const pl of places) {
+      try {
+        const f = await api.folderOpen(pl.bookmark);
+        Object.assign(pl, { path: f.path, bookmark: f.bookmark, gone: false });
+      } catch {
+        pl.gone = true;
+      }
+    }
+    savePlaces();
+  })());
   const panes: Record<Side, Pane> = {
     local: makePane("local", localName, isWin ? "\\" : "/"),
     remote: makePane("remote", c.name, "/"),
@@ -112,7 +146,7 @@ let localRoot = "";
   const transfers = el("section", "transfers");
   transfers.setAttribute("aria-label", "Übertragungen");
   const transferHead = el("div", "transfers-head");
-  transferHead.append(el("h2", "", "Übertragungen"), el("span", "sub", isMobile ? "Zwischen den Seiten ziehen oder doppeltippen; «Hochladen» ohne Auswahl öffnet die Dateiauswahl. Heruntergeladenes liegt in der App «Dateien» unter «Auf meinem iPad › Sesam Remote»." : "Zwischen den Seiten ziehen, Dateien aus dem Explorer/Finder rechts ablegen, oder doppelklicken."));
+  transferHead.append(el("h2", "", "Übertragungen"), el("span", "sub", isMobile ? "Links: Haus-Knopf öffnet die Orte, auch Ordner aus «Dateien» (iCloud Drive, Auf meinem iPad, USB, Server). Zwischen den Seiten ziehen oder doppeltippen." : "Zwischen den Seiten ziehen, Dateien aus dem Explorer/Finder rechts ablegen, oder doppelklicken."));
   const transferList = el("div", "transfer-list");
   transfers.append(transferHead, transferList);
   const grid = el("div", "panes");
@@ -276,7 +310,8 @@ let localRoot = "";
     back.onclick = () => step(pane, "back");
     fwd.onclick = () => step(pane, "fwd");
     // Server: "" ist der Ordner nach dem Anmelden.
-    home.onclick = async () => load(pane, side === "local" ? await api.localHome() : "", "go");
+    home.onclick = async () => (side === "local" && isMobile ? placesMenu(pane, home) : load(pane, side === "local" ? await api.localHome() : "", "go"));
+    if (side === "local" && isMobile) home.title = "Orte: Sesam-Ordner und Ordner aus «Dateien»";
     edit.onclick = () => editPath(pane);
     // Tastatur, solange die Seite den Fokus hat.
     root.tabIndex = -1;
@@ -386,11 +421,12 @@ let localRoot = "";
     const drives = p.side === "local" && isWin;
     if (drives) p.pathEl.append(crumb(p, "Laufwerke", ""));
     if (!path) return;
-    // iPad: Pfad ab dem Ordner der App, ohne den Container davor.
-    if (p.side === "local" && isMobile && localRoot && path.startsWith(localRoot)) {
-      p.pathEl.append(crumb(p, "Sesam Remote", localRoot));
-      let acc = localRoot;
-      for (const part of path.slice(localRoot.length).split("/").filter(Boolean)) {
+    // iPad: Pfad ab dem Ort (Sesam-Ordner oder Ordner aus «Dateien»), ohne den Container davor.
+    const place = p.side === "local" && isMobile ? [{ name: "Sesam Remote", path: localRoot }, ...places.filter((x) => !x.gone)].filter((x) => x.path && (path === x.path || path.startsWith(`${x.path}/`))).sort((a, b) => b.path.length - a.path.length)[0] : undefined;
+    if (place) {
+      p.pathEl.append(crumb(p, place.name, place.path));
+      let acc = place.path;
+      for (const part of path.slice(place.path.length).split("/").filter(Boolean)) {
         acc = `${acc}/${part}`;
         p.pathEl.append(el("span", "crumb-sep", "›"), crumb(p, part, acc));
       }
@@ -492,8 +528,74 @@ let localRoot = "";
     const tr = el("tr");
     const td = el("td", "empty", why);
     td.colSpan = 4;
+    // iPad: leerer Sesam-Ordner → erklären, wie man an eigene Dateien kommt.
+    if (isMobile && p.side === "local" && p.listing?.path === localRoot && !p.listing.entries.length) {
+      td.textContent = "Hier liegt nur der Ordner von Sesam. Öffne einen Ordner aus «Dateien» (iCloud Drive, Auf meinem iPad, USB-Stick, Server) oder hole einzelne Dateien hierher.";
+      const row = el("div", "empty-actions");
+      const open = el("button", "primary", "Ordner öffnen …") as HTMLButtonElement;
+      const pick = el("button", "", "Dateien wählen …") as HTMLButtonElement;
+      open.type = pick.type = "button";
+      open.onclick = () => void addPlace(p);
+      pick.onclick = () => void importFiles(p);
+      row.append(open, pick);
+      td.append(row);
+    }
     tr.append(td);
     p.body.append(tr);
+  }
+
+  /** iPad: Ordner in «Dateien» wählen, als Ort merken und öffnen. */
+  async function addPlace(p: Pane) {
+    try {
+      const f = await api.folderPick();
+      if (!f) return;
+      const name = f.path.split("/").filter(Boolean).pop() ?? f.path;
+      places = [...places.filter((x) => x.path !== f.path), { name, bookmark: f.bookmark, path: f.path }];
+      savePlaces();
+      load(p, f.path, "go");
+    } catch (e) {
+      tell("Ordner nicht geöffnet", String(e));
+    }
+  }
+
+  /** iPad: einzelne Dateien aus «Dateien» in den offenen Ordner links kopieren. */
+  async function importFiles(p: Pane) {
+    const dir = p.listing?.path || localRoot;
+    const picked = await openDialog({ multiple: true, title: "Dateien wählen" }).catch(() => null);
+    const files = (Array.isArray(picked) ? picked : picked ? [picked] : []).map(String);
+    if (!files.length) return;
+    try {
+      await api.localImport(files, dir);
+      await load(p, dir);
+      status.textContent = `${files.length} ${files.length === 1 ? "Datei" : "Dateien"} nach links geholt.`;
+    } catch (e) {
+      tell("Nicht geholt", String(e));
+    }
+  }
+
+  /** iPad: Menü «Orte» am Haus-Knopf links. */
+  async function placesMenu(p: Pane, anchor: HTMLElement) {
+    await openPlaces();
+    const items: MenuItem[] = [
+      { value: "home", label: "Sesam Remote (Auf meinem iPad)", icon: ICON.home, section: "Orte" },
+      ...places.map((pl, i) => ({ value: `place:${i}`, label: pl.gone ? `${pl.name} (nicht erreichbar)` : pl.name, icon: ICON.folder, disabled: pl.gone })),
+      { value: "open", label: "Ordner öffnen …", icon: ICON.newFolder, separator: true },
+      { value: "pick", label: "Dateien wählen …", icon: ICON.plus },
+    ];
+    if (places.length) items.push({ value: "remove", label: "Ort entfernen …", icon: ICON.trash });
+    const v = await openMenu(anchor, items);
+    if (v === "home") load(p, localRoot, "go");
+    else if (v?.startsWith("place:")) load(p, places[Number(v.slice(6))].path, "go");
+    else if (v === "open") void addPlace(p);
+    else if (v === "pick") void importFiles(p);
+    else if (v === "remove") {
+      const r = await openMenu(anchor, places.map((pl, i) => ({ value: String(i), label: pl.name, icon: ICON.trash })));
+      if (r === null) return;
+      const [gone] = places.splice(Number(r), 1);
+      savePlaces();
+      api.folderClose(gone.path).catch(() => {});
+      if (p.listing?.path.startsWith(gone.path)) load(p, localRoot, "go");
+    }
   }
 
   /** Zeile eines vorhandenen Eintrags; `name` ist der Pfad relativ zum offenen Ordner (im Vergleich auch in Unterordnern). */
@@ -1724,7 +1826,10 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
 
   // ---------- Verbinden ----------
   const connect = async () => {
-  if (isMobile) localRoot = await api.localHome().catch(() => "");
+  if (isMobile) {
+    localRoot = await api.localHome().catch(() => "");
+    void openPlaces();
+  }
   if (!panes.local.listing) load(panes.local, await api.localHome());
   let trust: string | null = null;
   let remember = true;

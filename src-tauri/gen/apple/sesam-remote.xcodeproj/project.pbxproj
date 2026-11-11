@@ -38,13 +38,16 @@
 		2C1FBBE0EAC4924E4EAB2CF9 /* auth.rs */ = {isa = PBXFileReference; path = auth.rs; sourceTree = "<group>"; };
 		31990A5BBB0D40F4E1563297 /* tls.rs */ = {isa = PBXFileReference; path = tls.rs; sourceTree = "<group>"; };
 		330CBF942AC2998E8FAF25A6 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		369366D1AA45E08EFA6C6A33 /* folders.rs */ = {isa = PBXFileReference; path = folders.rs; sourceTree = "<group>"; };
 		44A0A9BAFFDE0B8361E6C3BF /* rdp.rs */ = {isa = PBXFileReference; path = rdp.rs; sourceTree = "<group>"; };
 		494687E65C654551DE3B5F8F /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		49D9797AC7F1DD32182A8DB0 /* jumps.rs */ = {isa = PBXFileReference; path = jumps.rs; sourceTree = "<group>"; };
 		49F9EB0CC6A8110EEA83DE51 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4C1CF92AA2B8E0E66FEFB91F /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		4CBF32A002E612E524E1A41D /* rdp_redir.rs */ = {isa = PBXFileReference; path = rdp_redir.rs; sourceTree = "<group>"; };
 		5B3DD7CCE913BECAE4067222 /* sftp.rs */ = {isa = PBXFileReference; path = sftp.rs; sourceTree = "<group>"; };
 		5FA3EB0DF1CB8254B8881CB7 /* ftp.rs */ = {isa = PBXFileReference; path = ftp.rs; sourceTree = "<group>"; };
+		651B99FC15B7234B431E650F /* auth.rs */ = {isa = PBXFileReference; path = auth.rs; sourceTree = "<group>"; };
 		6ACCB8093A9B5554BC063C6B /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		6B8EE98A6CA7A62CE00F7A88 /* rdstls.rs */ = {isa = PBXFileReference; path = rdstls.rs; sourceTree = "<group>"; };
 		79D34973B69DCB07BC79BD64 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
@@ -102,14 +105,17 @@
 		1DC0C105AF7F00E928503047 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				651B99FC15B7234B431E650F /* auth.rs */,
 				998AC9C5C1D05D5A15BC5DD3 /* backup.rs */,
 				E2A39FFBD67DC4550BDFC273 /* clipshare.rs */,
 				270A7EA387288F8D09BFFE59 /* creds.rs */,
 				9B2C38CF2F4D66BB087066D2 /* diag.rs */,
 				D169D05511F7A761EB20A6B2 /* firstaid.rs */,
+				369366D1AA45E08EFA6C6A33 /* folders.rs */,
 				2B37E2794060DAA6AF321E55 /* forward.rs */,
 				5FA3EB0DF1CB8254B8881CB7 /* ftp.rs */,
 				04A6768FEBDDCBFEDE1A9194 /* h264.rs */,
+				49D9797AC7F1DD32182A8DB0 /* jumps.rs */,
 				0A33EB21E8BB6F025F334C35 /* kbhook.rs */,
 				F35524BF4ACA5EDAF2B468BD /* kdc.rs */,
 				C4A07F3C2DA770B8FF5769D9 /* lib.rs */,
@@ -230,18 +236,18 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		"TEMP_49D1BB9C-5526-460A-8851-49AD780072B6" /* x86_64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = x86_64;
-			sourceTree = "<group>";
-		};
-		"TEMP_849F76D9-AD53-499C-8715-0ED751ADF60B" /* arm64 */ = {
+		"TEMP_70B766E5-4143-41CD-907A-95E5D98BCAF7" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
+			sourceTree = "<group>";
+		};
+		"TEMP_A2285CE0-A73F-4F47-807E-161C17AC4084" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
