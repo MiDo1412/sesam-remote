@@ -579,6 +579,15 @@ pub enum Progress {
 
 /// Endung, unter der eine Datei geschrieben wird, bis sie vollständig ist.
 pub const PARTIAL: &str = ".sesam-teil";
+/// Daneben: Grösse und Änderungszeit der Quelle beim Start. Nur wenn sie noch stimmen, setzt ein neuer Versuch fort.
+const PARTIAL_INFO: &str = ".sesam-teil.info";
+
+/// Verbindung weg (Netz, Schlaf, Server neu gestartet): die halbe Datei bleibt für «Wiederholen» liegen.
+/// Andere Fehler (Platte voll, keine Rechte) räumen sie weg.
+pub(crate) fn is_disconnect(e: &str) -> bool {
+    let e = e.to_lowercase();
+    ["closed", "eof", "broken pipe", "reset", "timeout", "timed out", "not connected", "getrennt", "geschlossen", "unexpected end"].iter().any(|k| e.contains(k))
+}
 
 /// Löscht eine halb geschriebene Datei, wenn die Übertragung scheitert oder abgebrochen wird
 /// (auch beim Abbruch der Aufgabe, darum im Drop).
@@ -647,6 +656,20 @@ impl<F: Fn(Progress)> Meter<F> {
     }
 }
 
+async fn read_remote_small(sftp: &Sftp, path: &str) -> Option<String> {
+    let mut f = sftp.s.open(path).await.ok()?;
+    let mut s = String::new();
+    tokio::io::AsyncReadExt::read_to_string(&mut f, &mut s).await.ok()?;
+    Some(s)
+}
+
+async fn write_remote_small(sftp: &Sftp, path: &str, text: &str) {
+    if let Ok(mut f) = sftp.s.create(path).await {
+        let _ = tokio::io::AsyncWriteExt::write_all(&mut f, text.as_bytes()).await;
+        let _ = tokio::io::AsyncWriteExt::shutdown(&mut f).await;
+    }
+}
+
 tokio::task_local! {
     /// Pause einer Übertragung (transfer_pause): gesetzt, liest die Schleife nicht weiter; Dateien und Stelle bleiben offen.
     pub static PAUSE: std::sync::Arc<std::sync::atomic::AtomicBool>;
@@ -707,10 +730,36 @@ pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, replace: b
             sftp.s.create_dir(&it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
         } else {
             let tmp = format!("{}{PARTIAL}", it.dst);
-            let r = tokio::fs::File::open(&it.src).await.map_err(|e| format!("{}: {e}", it.src))?;
-            let w = sftp.s.create(&tmp).await.map_err(|e| format!("{}: {e}", it.dst))?;
+            let info = format!("{}{PARTIAL_INFO}", it.dst);
+            let mut r = tokio::fs::File::open(&it.src).await.map_err(|e| format!("{}: {e}", it.src))?;
+            let len = r.metadata().await.map(|m| m.len()).unwrap_or(0);
+            let want = format!("{len} {}", it.mtime.unwrap_or(0));
+            // Fortsetzen: halbe Datei vom letzten Versuch, Quelle unverändert, nicht grösser als die Quelle.
+            let have = sftp.s.metadata(&tmp).await.ok().map(|m| m.len()).unwrap_or(0);
+            let same = have > 0 && have <= len && read_remote_small(sftp, &info).await.as_deref() == Some(want.as_str());
+            let mut w = if same {
+                sftp.s.open_with_flags(&tmp, russh_sftp::protocol::OpenFlags::WRITE).await.map_err(|e| format!("{}: {e}", it.dst))?
+            } else {
+                write_remote_small(sftp, &info, &want).await;
+                sftp.s.create(&tmp).await.map_err(|e| format!("{}: {e}", it.dst))?
+            };
+            let offset = if same { have } else { 0 };
+            if offset > 0 {
+                use tokio::io::AsyncSeekExt;
+                r.seek(std::io::SeekFrom::Start(offset)).await.map_err(err)?;
+                w.seek(std::io::SeekFrom::Start(offset)).await.map_err(err)?;
+                m.add(offset, &it.src);
+            }
             let mut guard = Partial(Some(Cleanup::Remote(sftp.clone(), tmp.clone())));
-            pump(r, w, &mut m, &it.src).await?;
+            if let Err(e) = pump(r, w, &mut m, &it.src).await {
+                if is_disconnect(&e) {
+                    guard.0 = None;
+                } else {
+                    let _ = sftp.s.remove_file(&info).await;
+                }
+                return Err(e);
+            }
+            let _ = sftp.s.remove_file(&info).await;
             if replace {
                 // SFTP-Umbenennen überschreibt nicht; die alte Datei erst weg, wenn die neue vollständig da ist.
                 let _ = sftp.s.remove_file(&it.dst).await;
@@ -764,10 +813,34 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
             tokio::fs::create_dir_all(&it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
         } else {
             let tmp = PathBuf::from(format!("{}{PARTIAL}", it.dst));
-            let r = sftp.s.open(&it.src).await.map_err(|e| format!("{}: {e}", it.src))?;
-            let w = tokio::fs::File::create(&tmp).await.map_err(|e| format!("{}: {e}", it.dst))?;
+            let info = PathBuf::from(format!("{}{PARTIAL_INFO}", it.dst));
+            let mut r = sftp.s.open(&it.src).await.map_err(|e| format!("{}: {e}", it.src))?;
+            let len = sftp.s.metadata(&it.src).await.map(|m| m.len()).unwrap_or(0);
+            let want = format!("{len} {}", it.mtime.unwrap_or(0));
+            let have = std::fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0);
+            let same = have > 0 && have <= len && std::fs::read_to_string(&info).ok().as_deref() == Some(want.as_str());
+            let mut w = if same {
+                tokio::fs::OpenOptions::new().write(true).open(&tmp).await.map_err(|e| format!("{}: {e}", it.dst))?
+            } else {
+                let _ = std::fs::write(&info, &want);
+                tokio::fs::File::create(&tmp).await.map_err(|e| format!("{}: {e}", it.dst))?
+            };
+            if same {
+                use tokio::io::AsyncSeekExt;
+                r.seek(std::io::SeekFrom::Start(have)).await.map_err(err)?;
+                w.seek(std::io::SeekFrom::Start(have)).await.map_err(err)?;
+                m.add(have, &it.src);
+            }
             let mut guard = Partial(Some(Cleanup::Local(tmp.clone())));
-            pump(r, w, &mut m, &it.src).await?;
+            if let Err(e) = pump(r, w, &mut m, &it.src).await {
+                if is_disconnect(&e) {
+                    guard.0 = None;
+                } else {
+                    let _ = std::fs::remove_file(&info);
+                }
+                return Err(e);
+            }
+            let _ = std::fs::remove_file(&info);
             tokio::fs::rename(&tmp, &it.dst).await.map_err(|e| format!("{}: {e}", it.dst))?;
             guard.0 = None;
             set_local_mtime(&it.dst, it.mtime);
@@ -962,6 +1035,58 @@ mod tests {
         let _ = sftp.to_trash("/home/a.txt").await.unwrap();
         assert_eq!(sftp.trash_cleanup(7).await.unwrap(), 1);
         assert_eq!(sftp.trash_cleanup(0).await.unwrap(), 1, "Zeitstempel dieser Sekunde zählt noch nicht als alt");
+    }
+
+    /// Nach einem Abbruch setzt ein neuer Versuch an der halben Datei fort, wenn die Quelle unverändert ist; sonst von vorn.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn fortsetzen_nach_abbruch() {
+        let fs = Arc::new(Mutex::new(MemFs::default()));
+        fs.lock().unwrap().nodes.insert("/home".into(), None);
+        let (client, server) = tokio::io::duplex(1 << 20);
+        russh_sftp::server::run(server, Server { fs: fs.clone(), listed: HashSet::new() }).await;
+        let sftp = Arc::new(Sftp { s: SftpSession::new(client).await.unwrap(), ssh: None });
+        let dir = std::env::temp_dir().join(format!("sesam-resume-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("f.bin");
+        let big: Vec<u8> = (0..800_000u32).map(|i| (i * 7 % 251) as u8 | 1).collect();
+        std::fs::write(&file, &big).unwrap();
+        let mtime = unix_secs(std::fs::metadata(&file).unwrap().modified()).unwrap_or(0);
+
+        // Hochladen: Teil mit Nullen (statt Daten) und passender Info → nur der Rest wird geschrieben.
+        let info = format!("{} {mtime}", big.len());
+        fs.lock().unwrap().nodes.insert(format!("/home/f.bin{PARTIAL}"), Some(vec![0u8; 300_000]));
+        fs.lock().unwrap().nodes.insert(format!("/home/f.bin{PARTIAL_INFO}"), Some(info.into_bytes()));
+        upload(&sftp, &file, "/home", false, |_| {}).await.unwrap();
+        {
+            let fs = fs.lock().unwrap();
+            let got = fs.nodes["/home/f.bin"].as_deref().unwrap();
+            assert_eq!(got.len(), big.len());
+            assert!(got[..300_000].iter().all(|&b| b == 0), "Anfang nicht neu geschrieben = fortgesetzt");
+            assert_eq!(&got[300_000..], &big[300_000..]);
+            assert!(!fs.nodes.keys().any(|k| k.contains(PARTIAL)), "Teil und Info aufgeräumt");
+        }
+
+        // Quelle seither geändert (andere Info): von vorn.
+        fs.lock().unwrap().nodes.insert(format!("/home/g.bin{PARTIAL}"), Some(vec![0u8; 300_000]));
+        fs.lock().unwrap().nodes.insert(format!("/home/g.bin{PARTIAL_INFO}"), Some(b"1 1".to_vec()));
+        std::fs::copy(&file, dir.join("g.bin")).unwrap();
+        upload(&sftp, &dir.join("g.bin"), "/home", false, |_| {}).await.unwrap();
+        assert_eq!(fs.lock().unwrap().nodes["/home/g.bin"].as_deref(), Some(big.as_slice()));
+
+        // Herunterladen: lokale halbe Datei mit passender Info → fortgesetzt.
+        let down = dir.join("down");
+        std::fs::create_dir_all(&down).unwrap();
+        let rm = sftp.s.metadata("/home/f.bin").await.unwrap().mtime.unwrap_or(0);
+        let fbig = fs.lock().unwrap().nodes["/home/f.bin"].clone().unwrap();
+        std::fs::write(down.join(format!("f.bin{PARTIAL}")), vec![9u8; 200_000]).unwrap();
+        std::fs::write(down.join(format!("f.bin{PARTIAL_INFO}")), format!("{} {rm}", fbig.len())).unwrap();
+        download(&sftp, "/home/f.bin", &down, false, |_| {}).await.unwrap();
+        let got = std::fs::read(down.join("f.bin")).unwrap();
+        assert!(got[..200_000].iter().all(|&b| b == 9) && got[200_000..] == fbig[200_000..]);
+        assert!(!down.join(format!("f.bin{PARTIAL_INFO}")).exists());
+        assert!(is_disconnect("channel closed") && is_disconnect("Broken pipe") && !is_disconnect("Failure"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// Pause hält die Übertragung an derselben Stelle an, Fortsetzen macht sie fertig (Inhalt vollständig).
