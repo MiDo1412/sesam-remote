@@ -1,0 +1,1 @@
+export default async (p) => { await p.locator('.card', { hasText: 'Werkstatt-PC' }).click(); await p.waitForTimeout(300); await p.getByRole('button', { name: 'Desktop öffnen' }).click(); await p.waitForTimeout(2000); };

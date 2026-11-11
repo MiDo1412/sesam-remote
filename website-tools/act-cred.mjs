@@ -1,0 +1,1 @@
+export default async (p) => { await p.getByRole('button', { name: 'Einstellungen' }).first().click(); await p.waitForTimeout(600); await p.getByRole('tab', { name: 'Zugangsdaten' }).click(); await p.waitForTimeout(800); };

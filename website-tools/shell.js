@@ -1,0 +1,15 @@
+window.__shellText = [
+"Welcome to Ubuntu 26.04 LTS (GNU/Linux 6.17.0-8-generic x86_64)\r\n\r\n",
+"Last login: Wed Nov 11 15:58:02 2026 from 192.168.10.31\r\n",
+"\x1b[1;32mdeploy@web01\x1b[0m:\x1b[1;34m~\x1b[0m$ systemctl status nginx --no-pager\r\n",
+"\x1b[1;32m●\x1b[0m nginx.service - A high performance web server and a reverse proxy server\r\n",
+"     Loaded: loaded (/usr/lib/systemd/system/nginx.service; \x1b[1;32menabled\x1b[0m; preset: \x1b[1;32menabled\x1b[0m)\r\n",
+"     Active: \x1b[1;32mactive (running)\x1b[0m since Mon 2026-11-09 07:12:44 CET; 2 days ago\r\n",
+"   Main PID: 1184 (nginx)\r\n      Tasks: 5 (limit: 9374)\r\n     Memory: 14.2M (peak: 18.9M)\r\n\r\n",
+"\x1b[1;32mdeploy@web01\x1b[0m:\x1b[1;34m~\x1b[0m$ df -h /var/www\r\n",
+"Filesystem      Size  Used Avail Use% Mounted on\r\n/dev/sda2        98G   31G   62G  34% /\r\n\r\n",
+"\x1b[1;32mdeploy@web01\x1b[0m:\x1b[1;34m~\x1b[0m$ ls -la /var/www/shop\r\n",
+"total 28\r\ndrwxr-xr-x  5 deploy www-data 4096 Nov 11 14:02 \x1b[1;34m.\x1b[0m\r\ndrwxr-xr-x  4 root   root     4096 Okt 20 09:15 \x1b[1;34m..\x1b[0m\r\n",
+"drwxr-xr-x  8 deploy www-data 4096 Nov 11 14:02 \x1b[1;34massets\x1b[0m\r\n-rw-r--r--  1 deploy www-data 6212 Nov 11 14:02 index.html\r\n",
+"drwxr-xr-x  2 deploy www-data 4096 Nov 10 18:40 \x1b[1;34mapi\x1b[0m\r\n-rw-r--r--  1 deploy www-data  611 Nov  3 10:22 robots.txt\r\n\r\n",
+"\x1b[1;32mdeploy@web01\x1b[0m:\x1b[1;34m~\x1b[0m$ "].join("");
