@@ -1034,15 +1034,49 @@ enum FileSession {
     Ftp(Arc<ftp::Ftp>),
 }
 
+impl FileSession {
+    fn closed(&self) -> bool {
+        match self {
+            FileSession::Sftp(s) => s.closed(),
+            FileSession::Scp(s) => s.closed(),
+            FileSession::Ftp(_) => false, // FTP meldet den Abbruch beim nächsten Befehl selbst
+        }
+    }
+}
+
+/// Offene Dateisitzungen und, für SSH, die Verbindung, mit der sie sich nach einem Abbruch neu aufbauen.
 #[derive(Default)]
-struct Files(Mutex<HashMap<String, FileSession>>);
+struct Files(Mutex<HashMap<String, FileSession>>, Mutex<HashMap<String, Connection>>);
 
 #[derive(Default)]
 /// Laufende Übertragungen: Aufgabe und Pause-Schalter.
 struct Transfers(Arc<Mutex<HashMap<String, (tauri::async_runtime::JoinHandle<()>, Arc<std::sync::atomic::AtomicBool>)>>>);
 
-fn files_get(files: &Files, sid: &str) -> Result<FileSession, String> {
-    files.0.lock().unwrap().get(sid).cloned().ok_or_else(|| "Dateisitzung geschlossen".into())
+/// Sitzung zu `sid`. Ist ihre SSH-Verbindung weg (Server neu gestartet, Netzwechsel), baut Sesam sie einmal unter
+/// derselben Kennung neu auf, damit Vorschau, Bearbeiten, Übertragungen usw. einfach weiterlaufen.
+async fn files_get(files: &Files, sid: &str) -> Result<FileSession, String> {
+    files_live(files, sid, FileSession::closed, |c| async move { ssh_files_open(&c, None).await }).await
+}
+
+async fn files_live<F, Fut>(files: &Files, sid: &str, closed: fn(&FileSession) -> bool, reopen: F) -> Result<FileSession, String>
+where
+    F: FnOnce(Connection) -> Fut,
+    Fut: std::future::Future<Output = Result<FileSession, String>>,
+{
+    let s = files.0.lock().unwrap().get(sid).cloned().ok_or("Dateisitzung geschlossen")?;
+    if !closed(&s) {
+        return Ok(s);
+    }
+    let Some(c) = files.1.lock().unwrap().get(sid).cloned() else { return Ok(s) };
+    tracing::info!("Dateisitzung {sid}: Verbindung weg, baue sie neu auf");
+    let fresh = reopen(c).await?;
+    // Wurde der Tab inzwischen geschlossen, nicht wieder eintragen.
+    let mut map = files.0.lock().unwrap();
+    if !map.contains_key(sid) {
+        return Err("Dateisitzung geschlossen".into());
+    }
+    map.insert(sid.to_string(), fresh.clone());
+    Ok(fresh)
 }
 
 #[derive(serde::Serialize)]
@@ -1088,8 +1122,19 @@ async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: St
         files.0.lock().unwrap().insert(sid.clone(), FileSession::Ftp(Arc::new(s)));
         return Ok(FilesOpened { sid, scp: false });
     }
-    let h = ssh::connect(&ssh_target(&c, trust)?).await?;
-    let session = match c.file_transfer.as_str() {
+    let session = ssh_files_open(&c, trust).await?;
+    let sid = new_sid(&c.id);
+    touch(&path, &c.id);
+    let scp = matches!(session, FileSession::Scp(_));
+    files.0.lock().unwrap().insert(sid.clone(), session);
+    files.1.lock().unwrap().insert(sid.clone(), c);
+    Ok(FilesOpened { sid, scp })
+}
+
+/// SSH-Dateisitzung: SFTP, sonst (wenn erlaubt) SCP.
+async fn ssh_files_open(c: &Connection, trust: Option<String>) -> Result<FileSession, String> {
+    let h = ssh::connect(&ssh_target(c, trust)?).await?;
+    Ok(match c.file_transfer.as_str() {
         "scp" => FileSession::Scp(Arc::new(scp::Scp::new(h))),
         mode => match sftp::start(h).await {
             Ok(s) => FileSession::Sftp(Arc::new(s)),
@@ -1099,17 +1144,12 @@ async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: St
                 FileSession::Scp(Arc::new(scp::Scp::new(h)))
             }
         },
-    };
-    let sid = new_sid(&c.id);
-    touch(&path, &c.id);
-    let scp = matches!(session, FileSession::Scp(_));
-    files.0.lock().unwrap().insert(sid.clone(), session);
-    Ok(FilesOpened { sid, scp })
+    })
 }
 
 #[tauri::command]
 async fn sftp_list(files: State<'_, Files>, sid: String, path: String) -> Result<sftp::Listing, String> {
-    match files_get(&files, &sid)? {
+    match files_get(&files, &sid).await? {
         FileSession::Sftp(s) => s.list(&path).await,
         FileSession::Scp(s) => s.list(&path).await,
         FileSession::Ftp(s) => s.list(&path).await,
@@ -1118,7 +1158,7 @@ async fn sftp_list(files: State<'_, Files>, sid: String, path: String) -> Result
 
 #[tauri::command]
 async fn sftp_mkdir(files: State<'_, Files>, sid: String, dir: String, name: String) -> Result<String, String> {
-    match files_get(&files, &sid)? {
+    match files_get(&files, &sid).await? {
         FileSession::Sftp(s) => s.mkdir(&dir, &name).await,
         FileSession::Scp(s) => s.mkdir(&dir, &name).await,
         FileSession::Ftp(s) => s.mkdir(&dir, &name).await,
@@ -1127,7 +1167,7 @@ async fn sftp_mkdir(files: State<'_, Files>, sid: String, dir: String, name: Str
 
 #[tauri::command]
 async fn sftp_rename(files: State<'_, Files>, sid: String, path: String, name: String) -> Result<String, String> {
-    match files_get(&files, &sid)? {
+    match files_get(&files, &sid).await? {
         FileSession::Sftp(s) => s.rename(&path, &name).await,
         FileSession::Ftp(s) => s.rename(&path, &name).await,
         FileSession::Scp(_) => Err(scp::LIMITED.into()),
@@ -1136,7 +1176,7 @@ async fn sftp_rename(files: State<'_, Files>, sid: String, path: String, name: S
 
 #[tauri::command]
 async fn sftp_remove(files: State<'_, Files>, sid: String, path: String) -> Result<(), String> {
-    match files_get(&files, &sid)? {
+    match files_get(&files, &sid).await? {
         FileSession::Sftp(s) => s.remove(&path).await,
         FileSession::Ftp(s) => s.remove(&path).await,
         FileSession::Scp(_) => Err(scp::LIMITED.into()),
@@ -1145,15 +1185,15 @@ async fn sftp_remove(files: State<'_, Files>, sid: String, path: String) -> Resu
 
 #[tauri::command]
 async fn sftp_chmod(files: State<'_, Files>, sid: String, path: String, mode: u32) -> Result<(), String> {
-    match files_get(&files, &sid)? {
+    match files_get(&files, &sid).await? {
         FileSession::Sftp(s) => s.chmod(&path, mode).await,
         FileSession::Ftp(s) => s.chmod(&path, mode).await,
         FileSession::Scp(_) => Err(scp::LIMITED.into()),
     }
 }
 
-fn ssh_files(files: &Files, sid: &str) -> Result<Arc<sftp::Sftp>, String> {
-    match files_get(files, sid)? {
+async fn ssh_files(files: &Files, sid: &str) -> Result<Arc<sftp::Sftp>, String> {
+    match files_get(files, sid).await? {
         FileSession::Sftp(s) => Ok(s),
         _ => Err("Nur bei Dateien über SSH möglich".into()),
     }
@@ -1163,7 +1203,7 @@ fn ssh_files(files: &Files, sid: &str) -> Result<Arc<sftp::Sftp>, String> {
 #[tauri::command]
 async fn sftp_owner(files: State<'_, Files>, sid: String, path: String) -> Result<String, String> {
     let q = scp::quote(&path)?;
-    ssh_files(&files, &sid)?.exec(&format!("stat -c '%U:%G' -- {q} 2>/dev/null || stat -f '%Su:%Sg' -- {q}"), false, None).await
+    ssh_files(&files, &sid).await?.exec(&format!("stat -c '%U:%G' -- {q} 2>/dev/null || stat -f '%Su:%Sg' -- {q}"), false, None).await
 }
 
 /// Rechte und Besitzer setzen, auf Wunsch rekursiv und mit sudo (nur nach Bestätigung in der Oberfläche).
@@ -1171,52 +1211,52 @@ async fn sftp_owner(files: State<'_, Files>, sid: String, path: String) -> Resul
 #[allow(clippy::too_many_arguments)]
 async fn sftp_set_perms(files: State<'_, Files>, sid: String, path: String, mode: Option<u32>, owner: Option<String>, recursive: bool, sudo: bool, password: Option<String>) -> Result<(), String> {
     let script = sftp::perms_script(&path, mode, owner.as_deref(), recursive)?;
-    ssh_files(&files, &sid)?.exec(&script, sudo, password.as_deref()).await.map(|_| ())
+    ssh_files(&files, &sid).await?.exec(&script, sudo, password.as_deref()).await.map(|_| ())
 }
 
 /// Temporärer Ordner auf dem Server (für Hochladen mit Administratorrechten).
 #[tauri::command]
 async fn sftp_tempdir(files: State<'_, Files>, sid: String) -> Result<String, String> {
-    ssh_files(&files, &sid)?.exec("mktemp -d", false, None).await
+    ssh_files(&files, &sid).await?.exec("mktemp -d", false, None).await
 }
 
 /// Hochgeladenes aus dem temporären Ordner mit sudo an den Zielort verschieben (nie überschreiben).
 #[tauri::command]
 async fn sftp_sudo_move(files: State<'_, Files>, sid: String, from: String, dest_dir: String, replace: bool, password: Option<String>) -> Result<(), String> {
     let script = sftp::move_script(&from, &dest_dir, replace)?;
-    ssh_files(&files, &sid)?.exec(&script, true, password.as_deref()).await.map(|_| ())
+    ssh_files(&files, &sid).await?.exec(&script, true, password.as_deref()).await.map(|_| ())
 }
 
 /// In den Papierkorb auf dem Server statt löschen; gibt den Pfad im Papierkorb zurück.
 #[tauri::command]
 async fn sftp_trash(files: State<'_, Files>, sid: String, path: String) -> Result<String, String> {
-    ssh_files(&files, &sid)?.to_trash(&path).await
+    ssh_files(&files, &sid).await?.to_trash(&path).await
 }
 
 /// Zeitstempel-Ordner im Papierkorb anlegen (für die Erhöhung mit sudo).
 #[tauri::command]
 async fn sftp_trash_slot(files: State<'_, Files>, sid: String) -> Result<String, String> {
-    ssh_files(&files, &sid)?.trash_slot().await
+    ssh_files(&files, &sid).await?.trash_slot().await
 }
 
 /// Grösse (für das Grössenlimit des Papierkorbs).
 #[tauri::command]
 async fn sftp_size(files: State<'_, Files>, sid: String, path: String) -> Result<u64, String> {
-    ssh_files(&files, &sid)?.size(&path).await
+    ssh_files(&files, &sid).await?.size(&path).await
 }
 
 /// Rückgängig: aus dem Papierkorb an den alten Ort.
 #[tauri::command]
 async fn sftp_restore(files: State<'_, Files>, sid: String, trashed: String, original: String) -> Result<(), String> {
-    ssh_files(&files, &sid)?.restore(&trashed, &original).await
+    ssh_files(&files, &sid).await?.restore(&trashed, &original).await
 }
 
 /// Papierkorb aufräumen (älter als `days` Tage).
 #[tauri::command]
 async fn sftp_trash_cleanup(files: State<'_, Files>, sid: String, days: u32) -> Result<usize, String> {
-    match files_get(&files, &sid)? {
+    match files_get(&files, &sid).await? {
         FileSession::Ftp(f) => Ok(f.backup_cleanup(days)),
-        _ => ssh_files(&files, &sid)?.trash_cleanup(days).await,
+        _ => ssh_files(&files, &sid).await?.trash_cleanup(days).await,
     }
 }
 
@@ -1224,12 +1264,12 @@ async fn sftp_trash_cleanup(files: State<'_, Files>, sid: String, days: u32) -> 
 #[tauri::command]
 async fn sftp_sudo_op(files: State<'_, Files>, sid: String, op: String, path: String, arg: String, password: Option<String>) -> Result<(), String> {
     let script = sftp::sudo_op_script(&op, &path, &arg)?;
-    ssh_files(&files, &sid)?.exec(&script, true, password.as_deref()).await.map(|_| ())
+    ssh_files(&files, &sid).await?.exec(&script, true, password.as_deref()).await.map(|_| ())
 }
 
 #[tauri::command]
 async fn sftp_touch(files: State<'_, Files>, sid: String, dir: String, name: String) -> Result<String, String> {
-    match files_get(&files, &sid)? {
+    match files_get(&files, &sid).await? {
         FileSession::Sftp(s) => s.touch(&dir, &name).await,
         FileSession::Ftp(s) => s.touch(&dir, &name).await,
         FileSession::Scp(_) => Err(scp::LIMITED.into()),
@@ -1239,7 +1279,7 @@ async fn sftp_touch(files: State<'_, Files>, sid: String, dir: String, name: Str
 /// Prüfsumme einer Datei auf dem Server (für «Inhalt prüfen» im Vergleich).
 #[tauri::command]
 async fn sftp_sha256(files: State<'_, Files>, sid: String, path: String) -> Result<String, String> {
-    match files_get(&files, &sid)? {
+    match files_get(&files, &sid).await? {
         FileSession::Sftp(s) => s.sha256(&path).await,
         FileSession::Scp(s) => s.sha256(&path).await,
         FileSession::Ftp(_) => Err("Inhalt prüfen geht bei FTP nicht (keine Prüfsummen auf dem Server); verglichen wird nach Grösse und Datum.".into()),
@@ -1511,6 +1551,7 @@ async fn open_detached(app: AppHandle, token: String, title: String) -> Result<(
 #[tauri::command]
 fn sftp_close(files: State<Files>, sid: String) {
     files.0.lock().unwrap().remove(&sid);
+    files.1.lock().unwrap().remove(&sid);
 }
 
 /// Setup-Script für GNOME Remote Desktop, unverändert eingebettet (LF, ohne BOM).
@@ -1800,9 +1841,9 @@ fn percent_decode(s: &str) -> String {
 
 /// Startet eine Übertragung im Hintergrund; Fortschritt über `on_progress`. Gibt die Übertragungs-ID zurück.
 #[tauri::command]
-fn transfer_start(
-    files: State<Files>,
-    transfers: State<Transfers>,
+async fn transfer_start(
+    files: State<'_, Files>,
+    transfers: State<'_, Transfers>,
     sid: String,
     upload: bool,
     src: String,
@@ -1812,7 +1853,7 @@ fn transfer_start(
     backup: Option<bool>,
     on_progress: Channel<sftp::Progress>,
 ) -> Result<String, String> {
-    let s = files_get(&files, &sid)?;
+    let s = files_get(&files, &sid).await?;
     let tid = new_sid("t");
     let (map, key) = (transfers.0.clone(), tid.clone());
     let mut running = transfers.0.lock().unwrap();
@@ -2616,6 +2657,63 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod files_reconnect_tests {
+    use super::*;
+
+    fn conn() -> Connection {
+        Connection { id: "c1".into(), address: "server".into(), ..Default::default() }
+    }
+
+    /// Nach einem Server-Neustart ist die SSH-Verbindung der Dateisitzung weg: die nächste Aktion (z. B. Vorschau)
+    /// baut sie einmal unter derselben Kennung neu auf und läuft dann mit der neuen Sitzung.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn tote_sitzung_wird_unter_gleicher_kennung_ersetzt() {
+        let files = Files::default();
+        let alt = FileSession::Sftp(Arc::new(sftp::tests::memory(&[("alt.txt", b"alt")]).await));
+        files.0.lock().unwrap().insert("s1".into(), alt);
+        files.1.lock().unwrap().insert("s1".into(), conn());
+        let neu = Arc::new(sftp::tests::memory(&[("neu.txt", b"neu")]).await);
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (n, c2) = (neu.clone(), calls.clone());
+        // Erste Abfrage: Sitzung gilt als tot → neu aufbauen.
+        let s = files_live(&files, "s1", |_| true, move |c| async move {
+            assert_eq!(c.id, "c1");
+            c2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(FileSession::Sftp(n))
+        })
+        .await
+        .unwrap();
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        let FileSession::Sftp(s) = s else { panic!("SFTP erwartet") };
+        assert!(Arc::ptr_eq(&s, &neu));
+        assert_eq!(s.list("/home").await.unwrap().entries.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), ["neu.txt"]);
+        // Eingetragen: weitere Aktionen nehmen die neue Sitzung, ohne erneut zu verbinden.
+        let s = files_live(&files, "s1", |_| false, |_| async { Err::<FileSession, String>("darf nicht verbinden".into()) }).await.unwrap();
+        assert!(matches!(s, FileSession::Sftp(x) if Arc::ptr_eq(&x, &neu)));
+    }
+
+    /// Lebende Sitzungen und solche ohne gespeicherte Verbindung bleiben unberührt; ein geschlossener Tab bleibt zu.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn nur_tote_ssh_sitzungen_werden_ersetzt() {
+        let files = Files::default();
+        let s = Arc::new(sftp::tests::memory(&[]).await);
+        files.0.lock().unwrap().insert("lebt".into(), FileSession::Sftp(s.clone()));
+        files.1.lock().unwrap().insert("lebt".into(), conn());
+        let r = files_live(&files, "lebt", |_| false, |_| async { Err::<FileSession, String>("darf nicht verbinden".into()) }).await.unwrap();
+        assert!(matches!(r, FileSession::Sftp(x) if Arc::ptr_eq(&x, &s)));
+        // Ohne gespeicherte Verbindung (z. B. FTP): alte Sitzung zurück, der Fehler kommt vom Befehl selbst.
+        files.0.lock().unwrap().insert("ohne".into(), FileSession::Sftp(s.clone()));
+        let r = files_live(&files, "ohne", |_| true, |_| async { Err::<FileSession, String>("darf nicht verbinden".into()) }).await.unwrap();
+        assert!(matches!(r, FileSession::Sftp(x) if Arc::ptr_eq(&x, &s)));
+        // Neu aufbauen scheitert: Fehler geht an die Oberfläche (Tab bietet «Neu verbinden» an).
+        let e = files_live(&files, "lebt", |_| true, |_| async { Err::<FileSession, String>("Connection refused".into()) }).await.err().unwrap();
+        assert_eq!(e, "Connection refused");
+        // Unbekannte Kennung: geschlossen.
+        assert!(files_live(&files, "weg", |_| true, |_| async { Err::<FileSession, String>(String::new()) }).await.is_err());
+    }
 }
 
 #[cfg(test)]

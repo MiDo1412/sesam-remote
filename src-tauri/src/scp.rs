@@ -185,6 +185,13 @@ pub fn parse_ls(text: &str) -> Vec<Entry> {
 /// Entfernte Teildatei bei Fehler oder Abbruch löschen.
 struct RemoteTmp<R: Remote>(Option<(Arc<Scp<R>>, String)>);
 
+impl Scp<Handle<Client>> {
+    /// SSH-Verbindung darunter weg?
+    pub fn closed(&self) -> bool {
+        self.r.is_closed()
+    }
+}
+
 impl<R: Remote> Drop for RemoteTmp<R> {
     fn drop(&mut self) {
         if let Some((s, p)) = self.0.take()

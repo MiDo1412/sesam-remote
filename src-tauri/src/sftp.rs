@@ -125,6 +125,11 @@ pub(crate) fn valid_name(name: &str) -> Result<(), String> {
 // ---------- Auflisten ----------
 
 impl Sftp {
+    /// SSH-Verbindung darunter weg (Server neu gestartet, Netz, Schlaf)?
+    pub fn closed(&self) -> bool {
+        self.ssh.as_ref().is_some_and(|h| h.is_closed())
+    }
+
     pub async fn list(&self, path: &str) -> Result<Listing, String> {
         let path = self.s.canonicalize(if path.is_empty() { "." } else { path }).await.map_err(err)?;
         let mut entries = Vec::new();
@@ -857,8 +862,20 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// SFTP im Arbeitsspeicher mit einem Ordner `/home` und den Dateien darin (für Tests ausserhalb dieses Moduls).
+    pub(crate) async fn memory(files: &[(&str, &[u8])]) -> Sftp {
+        let fs = Arc::new(Mutex::new(MemFs::default()));
+        fs.lock().unwrap().nodes.insert("/home".into(), None);
+        for (name, data) in files {
+            fs.lock().unwrap().nodes.insert(format!("/home/{name}"), Some(data.to_vec()));
+        }
+        let (client, server) = tokio::io::duplex(1 << 20);
+        russh_sftp::server::run(server, Server { fs, listed: HashSet::new() }).await;
+        Sftp { s: SftpSession::new(client).await.unwrap(), ssh: None }
+    }
 
     #[test]
     fn mtime_bleibt_erhalten() {
