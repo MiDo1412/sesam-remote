@@ -1208,17 +1208,14 @@ async fn sftp_size(files: State<'_, Files>, sid: String, path: String) -> Result
 /// Rückgängig: aus dem Papierkorb an den alten Ort.
 #[tauri::command]
 async fn sftp_restore(files: State<'_, Files>, sid: String, trashed: String, original: String) -> Result<(), String> {
-    match files_get(&files, &sid)? {
-        FileSession::Ftp(f) => f.restore(&trashed, &original).await,
-        _ => ssh_files(&files, &sid)?.restore(&trashed, &original).await,
-    }
+    ssh_files(&files, &sid)?.restore(&trashed, &original).await
 }
 
 /// Papierkorb aufräumen (älter als `days` Tage).
 #[tauri::command]
 async fn sftp_trash_cleanup(files: State<'_, Files>, sid: String, days: u32) -> Result<usize, String> {
     match files_get(&files, &sid)? {
-        FileSession::Ftp(f) => f.trash_cleanup(days).await,
+        FileSession::Ftp(f) => Ok(f.backup_cleanup(days)),
         _ => ssh_files(&files, &sid)?.trash_cleanup(days).await,
     }
 }
@@ -1768,6 +1765,8 @@ fn transfer_start(
     src: String,
     dest_dir: String,
     replace: Option<bool>,
+    // FTP-Ersetzen: alte Fassung vorher auf diesen Computer sichern (Standard); false beim Zurückholen.
+    backup: Option<bool>,
     on_progress: Channel<sftp::Progress>,
 ) -> Result<String, String> {
     let s = files_get(&files, &sid)?;
@@ -1789,7 +1788,7 @@ fn transfer_start(
             (FileSession::Scp(s), true) => scp::upload(s, local, remote, replace, report).await,
             (FileSession::Scp(s), false) => scp::download(s, remote, local, replace, report).await,
             // FTP: «Ersetzen» gibt es nicht, es bleibt bei «Name (2)».
-            (FileSession::Ftp(s), true) if replace => ftp::upload_replace(s, local, remote, report).await,
+            (FileSession::Ftp(s), true) if replace => ftp::upload_replace(s, local, remote, backup.unwrap_or(true), report).await,
             (FileSession::Ftp(s), true) => ftp::upload(s, local, remote, report).await,
             (FileSession::Ftp(s), false) => ftp::download(s, remote, local, replace, report).await,
         };

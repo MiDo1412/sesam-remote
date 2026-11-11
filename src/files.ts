@@ -1060,6 +1060,9 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         } catch (err) {
           status.textContent = `«${e.name}» nicht zusammengeführt: ${err}`;
         }
+      } else if (upload && ftp && dst.size > trashMax()) {
+        // FTP: die alte Fassung wird auf diesem Computer gesichert, ausser sie ist grösser als die Grenze.
+        if (await ask("Ohne Sicherung ersetzen?", `Die bisherige «${e.name}» ist grösser als ${mb()} und wird nicht gesichert. Trotzdem ersetzen, ohne Rückgängig?`, "Ersetzen")) start(true, src, destDir, e.name, true, undefined, false);
       } else start(upload, src, destDir, e.name, true);
     }
     return true;
@@ -1156,7 +1159,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     }
   }
 
-  function start(upload: boolean, src: string, destDir: string, name: string, replace: boolean | "force" = false, then?: () => void) {
+  function start(upload: boolean, src: string, destDir: string, name: string, replace: boolean | "force" = false, then?: () => void, backup = true) {
     // Ersetzen auf dem Server: die alte Fassung zuerst in den Papierkorb, dann normal hochladen («force» = ohne).
     if (upload && replace === true && !ftp && sid) {
       const target = `${destDir.replace(/\/$/, "")}/${name}`;
@@ -1218,7 +1221,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         // Wiederholen: dieselbe Übertragung neu starten (Ersetzen bleibt Ersetzen).
         const again = el("button", "plain", "Wiederholen") as HTMLButtonElement;
         again.type = "button";
-        again.onclick = () => (row.remove(), start(upload, src, destDir, name, replace, then));
+        again.onclick = () => (row.remove(), start(upload, src, destDir, name, replace, then, backup));
         row.append(again);
       }
       settled();
@@ -1242,7 +1245,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
           bar.value = 1;
           finish("Fertig", true);
           // FTP: die alte Fassung hat der Server-Teil selbst in den Papierkorb gelegt.
-          if (p.trashed) undoRow(`↺ ${name} (ersetzt)`, p.trashed, p.target);
+          if (p.trashed) undoRow(`↺ ${name} (ersetzt)`, p.trashed, p.target, false, true);
           if (then) return then();
           const to = upload ? panes.remote : panes.local;
           if (comparing) refreshCompareSoon();
@@ -1259,7 +1262,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
             row.append(again);
           }
         }
-      }, !!replace)
+      }, !!replace, backup)
       .then((id) => {
         tid = id;
         running.add(id);
@@ -1633,7 +1636,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
 
   // ---------- Papierkorb auf dem Server und Rückgängig ----------
   // Was Sesam löscht oder ersetzt, kommt zuerst nach ~/.sesam-papierkorb (Zeitstempel-Ordner); ⌘Z bzw. Strg+Z holt es zurück.
-  const undoStack: { trashed: string; original: string; label: string; row: HTMLElement; sudo: boolean }[] = [];
+  const undoStack: { trashed: string; original: string; label: string; row: HTMLElement; sudo: boolean; local: boolean }[] = [];
   const trashDays = () => Math.max(1, Number(localStorage.getItem("sesam.trashDays")) || 7);
   const trashMax = () => (Number(localStorage.getItem("sesam.trashMaxMb")) || 500) * 1e6;
   /** `true`, wenn das Element zu gross für den Papierkorb ist (Grösse unbekannt: nein). */
@@ -1641,15 +1644,16 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   const mb = () => (trashMax() >= 1e9 ? `${trashMax() / 1e9} GB` : `${trashMax() / 1e6} MB`);
 
   /** Eintrag in der Übertragungsliste mit «Rückgängig». */
-  function undoRow(label: string, trashed: string, original: string, sudo = false) {
+  /** `local`: FTP – die alte Fassung liegt auf diesem Computer (nie auf dem Server, dort wäre sie oft per Web abrufbar). */
+  function undoRow(label: string, trashed: string, original: string, sudo = false, local = false) {
     const row = el("div", "transfer");
     const name = el("span", "transfer-name", label);
-    const state = el("span", "transfer-state", `im Papierkorb auf ${c.name} (${trashDays()} Tage)`);
+    const state = el("span", "transfer-state", local ? `gesichert auf diesem Computer (${trashDays()} Tage)` : `im Papierkorb auf ${c.name} (${trashDays()} Tage)`);
     state.title = trashed;
     const btn = el("button", "plain", "Rückgängig");
     btn.type = "button";
     btn.title = `Rückgängig (${navigator.userAgent.includes("Mac") ? "⌘Z" : "Strg+Z"})`;
-    const entry = { trashed, original, label, row, sudo };
+    const entry = { trashed, original, label, row, sudo, local };
     btn.onclick = () => void undo(entry);
     row.append(name, el("span"), state, btn);
     transferList.prepend(row);
@@ -1662,6 +1666,18 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       const s = sid;
       // Mit sudo Gesichertes (z. B. aus /etc) mit sudo zurück, samt Besitzer und Rechten.
       const restore = (pw?: string) => api.sftpSudoOp(s, "restore", entry.trashed, entry.original, pw);
+      if (entry.local) {
+        // FTP: die gesicherte Fassung von diesem Computer wieder hochladen (sicher ersetzen, ohne neue Sicherung).
+        const dir = entry.original.slice(0, entry.original.lastIndexOf("/")) || "/";
+        undoStack.splice(undoStack.indexOf(entry), 1);
+        entry.row.querySelector("button")?.remove();
+        entry.row.querySelector(".transfer-state")!.textContent = "wird zurückgeholt …";
+        start(true, entry.trashed, dir, entry.original.split("/").pop()!, true, () => {
+          entry.row.querySelector(".transfer-state")!.textContent = "zurückgeholt";
+          if (panes.remote.listing?.path === dir) load(panes.remote, dir);
+        }, false);
+        return;
+      }
       if (entry.sudo) {
         if (!(await withSudo("Zurückholen", (_, pw) => restore(pw), true))) return;
       } else await api.sftpRestore(s, entry.trashed, entry.original);

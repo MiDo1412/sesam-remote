@@ -287,10 +287,11 @@ export const api = {
   folderClose: (path: string) => invoke<void>("folder_close", { path }),
   localImport: (paths: string[], dir: string) => invoke<string[]>("local_import", { paths, dir }),
   /** upload: lokal → Server; sonst Server → lokal. `replace`: gleichnamige Datei ersetzen (nur nach Rückfrage). Gibt die Übertragungs-ID zurück. */
-  transferStart: (sid: string, upload: boolean, src: string, destDir: string, onProgress: (p: Progress) => void, replace = false) => {
+  /** `backup` (FTP-Ersetzen): alte Fassung vorher auf diesen Computer sichern; false beim Zurückholen. */
+  transferStart: (sid: string, upload: boolean, src: string, destDir: string, onProgress: (p: Progress) => void, replace = false, backup = true) => {
     const ch = new Channel<Progress>();
     ch.onmessage = onProgress;
-    return invoke<string>("transfer_start", { sid, upload, src, destDir, replace, onProgress: ch });
+    return invoke<string>("transfer_start", { sid, upload, src, destDir, replace, backup, onProgress: ch });
   },
   transferCancel: (tid: string) => invoke<void>("transfer_cancel", { tid }),
   transferPause: (tid: string, paused: boolean) => invoke<void>("transfer_pause", { tid, paused }),

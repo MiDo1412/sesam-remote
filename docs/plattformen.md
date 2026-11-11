@@ -102,6 +102,15 @@ Mit dem bezahlten Team:
    `com.apple.widgetkit-extension`, eigene Entitlements mit derselben App Group) anlegen, im App-Ziel unter
    `dependencies` mit `embed: true` eintragen, dann `xcodegen generate` (ohne Team-ID im Repository).
 
+## Papierkorb und Web-Verzeichnis
+
+- **SFTP:** Gelöschtes und Ersetztes landet in `~/.sesam-papierkorb/` im Home des Benutzers. Das ist bei
+  normalen Servern ausserhalb des Web-Verzeichnisses. Ist das Home selbst das Web-Verzeichnis (manche
+  Webhoster: Home = `public_html`, `www` oder `htdocs`), wäre der Papierkorb über das Web erreichbar; dann im
+  Webserver `.sesam-papierkorb` sperren oder den Papierkorb in den Einstellungen auf 0 MB stellen.
+- **FTP:** kein Papierkorb auf dem Server. Alte Fassungen beim Ersetzen sichert Sesam auf diesem Computer
+  (Daten der App, je Server, gleiche Aufbewahrung wie der Papierkorb).
+
 ## Nächste Schritte
 
 - iPad: Widget einschalten, sobald das bezahlte Programm da ist (siehe oben).

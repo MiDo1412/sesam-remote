@@ -511,47 +511,33 @@ mod tests {
 }
 
 // ---------- Ersetzen ohne Risiko ----------
-// Nie zuerst löschen: erst die neue Fassung unter Zwischennamen hochladen und die Grösse prüfen, dann die alte in den
-// Papierkorb (~/.sesam-papierkorb/<Zeit>/ wie bei SFTP) und die neue an ihren Platz. Kann der Server nicht
-// umbenennen oder keine Ordner anlegen, wird die alte direkt überschrieben (STOR), aber nie vorher entfernt.
+// Nie zuerst löschen und nie eine alte Fassung auf dem Server liegen lassen: Bei vielen Webhostern ist der
+// FTP-Startordner das Web-Verzeichnis, ein Papierkorb dort wäre über HTTP abrufbar (z. B. alte Konfiguration mit
+// Passwörtern). Darum: alte Fassung auf diesen Computer sichern (Daten der App, je Server), neue unter Zwischennamen
+// hochladen, Grösse prüfen, dann an ihren Platz (Umbenennen, sonst direkt überschreiben).
 
 /// Die Schritte auf dem Server, getrennt von FTP, damit die Reihenfolge testbar ist.
 pub(crate) trait ReplaceOps {
     async fn size(&mut self, p: &str) -> Result<u64, String>;
-    async fn mkdir(&mut self, p: &str) -> Result<(), String>;
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), String>;
     async fn rm(&mut self, p: &str) -> Result<(), String>;
-    /// Lokale Datei vollständig nach `p` schreiben (überschreibt).
+    /// Lokale (neue) Datei vollständig nach `p` schreiben (überschreibt).
     async fn stor(&mut self, p: &str) -> Result<(), String>;
 }
 
-/// `tmp` ist schon hochgeladen. Gibt den Pfad der alten Fassung im Papierkorb zurück (None = ohne Papierkorb ersetzt).
-pub(crate) async fn finish_replace<O: ReplaceOps>(o: &mut O, tmp: &str, dst: &str, want: u64, slot: &str) -> Result<Option<String>, String> {
-    let name = dst.rsplit('/').next().unwrap_or(dst);
+/// `tmp` ist schon hochgeladen. Setzt die neue Fassung an ihren Platz, ohne die alte vorher zu entfernen.
+pub(crate) async fn finish_replace<O: ReplaceOps>(o: &mut O, tmp: &str, dst: &str, want: u64) -> Result<(), String> {
     if o.size(tmp).await.ok() != Some(want) {
         let _ = o.rm(tmp).await;
         return Err(format!("{dst}: Die hochgeladene Fassung ist unvollständig; die bisherige Datei bleibt unverändert."));
     }
-    if let Some(root) = rparent(slot) {
-        let _ = o.mkdir(&root).await; // gibt es meist schon
-    }
-    let old = rjoin(slot, name);
-    if o.mkdir(slot).await.is_ok() && o.rename(dst, &old).await.is_ok() {
-        if let Err(e) = o.rename(tmp, dst).await {
-            // Neue Fassung nicht an ihren Platz: alte zurück, Zwischendatei weg.
-            let _ = o.rename(&old, dst).await;
-            let _ = o.rm(tmp).await;
-            return Err(format!("{dst}: {e}; die bisherige Datei ist wieder an ihrem Platz."));
-        }
-        return Ok(Some(old));
-    }
-    // Ohne Papierkorb: umbenennen über die alte (manche Server ersetzen dabei), sonst direkt überschreiben.
+    // Die meisten Server ersetzen beim Umbenennen; sonst die alte direkt überschreiben.
     if o.rename(tmp, dst).await.is_ok() {
-        return Ok(None);
+        return Ok(());
     }
     let r = o.stor(dst).await;
     let _ = o.rm(tmp).await;
-    r.map(|_| None)
+    r
 }
 
 struct FtpOps<'a> {
@@ -562,9 +548,6 @@ struct FtpOps<'a> {
 impl ReplaceOps for FtpOps<'_> {
     async fn size(&mut self, p: &str) -> Result<u64, String> {
         self.s.size(p).await.map(|n| n as u64).map_err(err)
-    }
-    async fn mkdir(&mut self, p: &str) -> Result<(), String> {
-        self.s.mkdir(p).await.map_err(err)
     }
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), String> {
         self.s.rename(from, to).await.map_err(err)
@@ -580,8 +563,16 @@ impl ReplaceOps for FtpOps<'_> {
     }
 }
 
-/// Eine Datei ersetzen (nach Rückfrage): über Zwischennamen, alte Fassung in den Papierkorb.
-pub async fn upload_replace(ftp: &Arc<Ftp>, local: &Path, remote_dir: &str, report: impl Fn(Progress)) -> Result<String, String> {
+/// Ordner für gesicherte alte Fassungen dieses Servers (Daten der App), z. B. `…/ftp-papierkorb/web@example.com`.
+pub fn backup_root(ftp: &Ftp) -> Option<PathBuf> {
+    let base = crate::LIBRARY_FILE.get()?.parent()?.join("ftp-papierkorb");
+    let id: String = format!("{}@{}", ftp.t.user, ftp.t.host).chars().map(|c| if c.is_ascii_alphanumeric() || "@.-_".contains(c) { c } else { '_' }).collect();
+    Some(base.join(id))
+}
+
+/// Eine Datei ersetzen (nach Rückfrage). `backup`: alte Fassung vorher auf diesen Computer sichern; zurück kommt
+/// deren Pfad (für «Rückgängig»). Ohne `backup` (z. B. beim Zurückholen) wird nur sicher ersetzt.
+pub async fn upload_replace(ftp: &Arc<Ftp>, local: &Path, remote_dir: &str, backup: bool, report: impl Fn(Progress)) -> Result<String, String> {
     if !local.is_file() {
         return Err("Ersetzen geht bei FTP nur für einzelne Dateien".into());
     }
@@ -590,8 +581,17 @@ pub async fn upload_replace(ftp: &Arc<Ftp>, local: &Path, remote_dir: &str, repo
     let tmp = format!("{dst}{PARTIAL}");
     let want = std::fs::metadata(local).map_err(|e| format!("{}: {e}", local.display()))?.len();
     let mut s = connect(&ftp.t).await?.0;
-    let home = s.pwd().await.map_err(err)?;
-    let slot = rjoin(&rjoin(&home, crate::sftp::TRASH), &chrono::Local::now().format("%Y%m%d-%H%M%S-%3f").to_string());
+    let mut trashed = None;
+    if backup && s.size(&dst).await.is_ok() {
+        let slot = backup_root(ftp).ok_or("Kein Ordner für die Sicherung")?.join(chrono::Local::now().format("%Y%m%d-%H%M%S-%3f").to_string());
+        std::fs::create_dir_all(&slot).map_err(|e| format!("Sicherung {}: {e}", slot.display()))?;
+        let old = slot.join(&name);
+        let mut r = s.retr_as_stream(&dst).await.map_err(|e| format!("Alte Fassung sichern: {}", err(e)))?;
+        let mut w = tokio::fs::File::create(&old).await.map_err(|e| format!("Sicherung {}: {e}", old.display()))?;
+        tokio::io::copy(&mut r, &mut w).await.map_err(|e| format!("Alte Fassung sichern: {e}"))?;
+        r.finish().await.map_err(|e| format!("Alte Fassung sichern: {}", err(e)))?;
+        trashed = Some(old.to_string_lossy().into_owned());
+    }
     let mut m = Meter { done: 0, total: want, last: Instant::now(), report };
     {
         let mut r = tokio::fs::File::open(local).await.map_err(|e| format!("{}: {e}", local.display()))?;
@@ -601,41 +601,26 @@ pub async fn upload_replace(ftp: &Arc<Ftp>, local: &Path, remote_dir: &str, repo
         w.finish().await.map_err(|e| format!("{dst}: {}", err(e)))?;
         guard.0 = None;
     }
-    let trashed = finish_replace(&mut FtpOps { s: &mut s, local }, &tmp, &dst, want, &slot).await?;
+    finish_replace(&mut FtpOps { s: &mut s, local }, &tmp, &dst, want).await?;
     (m.report)(Progress::Done { target: dst.clone(), trashed });
     Ok(dst)
 }
 
 impl Ftp {
-    /// Aus dem Papierkorb zurück (wie SFTP): eine neuere Fassung am alten Ort weicht.
-    pub async fn restore(&self, trashed: &str, original: &str) -> Result<(), String> {
-        if !trashed.contains(&format!("/{}/", crate::sftp::TRASH)) {
-            return Err("Nur aus dem Papierkorb von Sesam".into());
-        }
-        let mut g = self.ctl().await?;
-        let _ = g.s.rm(original).await;
-        g.s.rename(trashed, original).await.map_err(|e| format!("Zurückholen: {}", err(e)))?;
-        if let Some(slot) = rparent(trashed) {
-            let _ = g.s.rmdir(&slot).await;
-        }
-        Ok(())
-    }
-
-    /// Papierkorb aufräumen wie bei SFTP: Zeitstempel-Ordner älter als `days` Tage.
-    pub async fn trash_cleanup(&self, days: u32) -> Result<usize, String> {
-        let home = self.ctl().await?.s.pwd().await.map_err(err)?;
-        let root = rjoin(&home, crate::sftp::TRASH);
-        let Ok(l) = self.list(&root).await else { return Ok(0) };
+    /// Lokale Sicherungen dieses Servers aufräumen: Zeitstempel-Ordner älter als `days` Tage.
+    pub fn backup_cleanup(&self, days: u32) -> usize {
+        let Some(root) = backup_root(self) else { return 0 };
         let cut = (chrono::Local::now() - chrono::Duration::days(i64::from(days))).format("%Y%m%d-%H%M%S").to_string();
         let mut left = 0;
-        for e in l.entries {
-            if e.name.len() >= 15 && e.name[..15] < *cut {
-                let _ = self.remove(&rjoin(&root, &e.name)).await;
+        for e in std::fs::read_dir(&root).into_iter().flatten().flatten() {
+            let n = e.file_name().to_string_lossy().into_owned();
+            if n.len() >= 15 && n[..15] < *cut {
+                let _ = std::fs::remove_dir_all(e.path());
             } else {
                 left += 1;
             }
         }
-        Ok(left)
+        left
     }
 }
 
@@ -644,36 +629,33 @@ mod replace_tests {
     use super::*;
     use std::collections::{BTreeMap, HashSet as Set};
 
-    /// Server im Speicher; `deny` verbietet einzelne Befehle (z. B. "rename", "mkdir").
+    /// Server im Speicher; `deny` verbietet einzelne Befehle (z. B. "rename").
     #[derive(Default)]
     struct Fake {
         files: BTreeMap<String, Vec<u8>>,
-        dirs: Set<String>,
         deny: Set<&'static str>,
         new: Vec<u8>,
+        log: Vec<String>,
     }
     impl ReplaceOps for Fake {
         async fn size(&mut self, p: &str) -> Result<u64, String> {
             self.files.get(p).map(|f| f.len() as u64).ok_or("550".into())
         }
-        async fn mkdir(&mut self, p: &str) -> Result<(), String> {
-            if self.deny.contains("mkdir") || !self.dirs.insert(p.into()) {
-                return Err("550".into());
-            }
-            Ok(())
-        }
         async fn rename(&mut self, from: &str, to: &str) -> Result<(), String> {
             if self.deny.contains("rename") {
                 return Err("502".into());
             }
+            self.log.push(format!("rename {from} {to}"));
             let f = self.files.remove(from).ok_or("550")?;
             self.files.insert(to.into(), f);
             Ok(())
         }
         async fn rm(&mut self, p: &str) -> Result<(), String> {
+            self.log.push(format!("rm {p}"));
             self.files.remove(p).map(|_| ()).ok_or("550".into())
         }
         async fn stor(&mut self, p: &str) -> Result<(), String> {
+            self.log.push(format!("stor {p}"));
             self.files.insert(p.into(), self.new.clone());
             Ok(())
         }
@@ -681,41 +663,34 @@ mod replace_tests {
 
     fn fake(deny: &[&'static str]) -> Fake {
         let mut f = Fake { deny: deny.iter().copied().collect(), new: b"neu".to_vec(), ..Default::default() };
-        f.dirs.insert("/home/.sesam-papierkorb".into());
-        f.files.insert("/www/index.html".into(), b"alt".to_vec());
-        f.files.insert(format!("/www/index.html{PARTIAL}"), b"neu".to_vec());
+        f.files.insert("/www/config.php".into(), b"alt".to_vec());
+        f.files.insert(format!("/www/config.php{PARTIAL}"), b"neu".to_vec());
         f
     }
-    const SLOT: &str = "/home/.sesam-papierkorb/20261111-1";
 
     #[tokio::test]
-    async fn ersetzen_mit_papierkorb() {
+    async fn ersetzen_ohne_alte_fassung_auf_dem_server() {
         let mut f = fake(&[]);
-        let t = finish_replace(&mut f, &format!("/www/index.html{PARTIAL}"), "/www/index.html", 3, SLOT).await.unwrap();
-        assert_eq!(t.as_deref(), Some("/home/.sesam-papierkorb/20261111-1/index.html"));
-        assert_eq!(f.files["/www/index.html"], b"neu");
-        assert_eq!(f.files[t.as_deref().unwrap()], b"alt");
-        assert!(!f.files.keys().any(|k| k.ends_with(PARTIAL)));
+        finish_replace(&mut f, &format!("/www/config.php{PARTIAL}"), "/www/config.php", 3).await.unwrap();
+        assert_eq!(f.files["/www/config.php"], b"neu");
+        assert_eq!(f.files.len(), 1, "keine Zwischendatei, keine alte Fassung, kein Papierkorb auf dem Server");
+        assert!(!f.log.iter().any(|l| l == "rm /www/config.php"), "alte nie gelöscht");
     }
 
     #[tokio::test]
     async fn unvollstaendig_laesst_alte_stehen() {
         let mut f = fake(&[]);
-        assert!(finish_replace(&mut f, &format!("/www/index.html{PARTIAL}"), "/www/index.html", 99, SLOT).await.is_err());
-        assert_eq!(f.files["/www/index.html"], b"alt");
-        assert!(!f.files.keys().any(|k| k.ends_with(PARTIAL)));
+        assert!(finish_replace(&mut f, &format!("/www/config.php{PARTIAL}"), "/www/config.php", 99).await.is_err());
+        assert_eq!(f.files["/www/config.php"], b"alt");
+        assert_eq!(f.files.len(), 1);
     }
 
     #[tokio::test]
-    async fn ohne_ordner_und_umbenennen_wird_ueberschrieben_nie_geloescht() {
-        // Kein mkdir: ohne Papierkorb, Umbenennen über die alte.
-        let mut f = fake(&["mkdir"]);
-        assert_eq!(finish_replace(&mut f, &format!("/www/index.html{PARTIAL}"), "/www/index.html", 3, SLOT).await.unwrap(), None);
-        assert_eq!(f.files["/www/index.html"], b"neu");
-        // Weder mkdir noch rename: direkt überschreiben (STOR), Zwischendatei weg.
-        let mut f = fake(&["mkdir", "rename"]);
-        assert_eq!(finish_replace(&mut f, &format!("/www/index.html{PARTIAL}"), "/www/index.html", 3, SLOT).await.unwrap(), None);
-        assert_eq!(f.files["/www/index.html"], b"neu");
-        assert!(!f.files.keys().any(|k| k.ends_with(PARTIAL)));
+    async fn ohne_umbenennen_wird_ueberschrieben_nie_geloescht() {
+        let mut f = fake(&["rename"]);
+        finish_replace(&mut f, &format!("/www/config.php{PARTIAL}"), "/www/config.php", 3).await.unwrap();
+        assert_eq!(f.files["/www/config.php"], b"neu");
+        assert_eq!(f.files.len(), 1);
+        assert_eq!(f.log, ["stor /www/config.php".to_string(), format!("rm /www/config.php{PARTIAL}")], "erst überschreiben, dann nur die Zwischendatei weg");
     }
 }
