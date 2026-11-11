@@ -17,6 +17,8 @@ export interface MenuItem {
   section?: string;
   /** Trennlinie vor diesem Eintrag. */
   separator?: boolean;
+  /** Häkchen bei diesem Eintrag (eingeschaltet), auch ohne `opts.checked`. */
+  checked?: boolean;
 }
 
 export const ICON_CHEVRON = onApple ? sf("chevron.down", 12) : fl(chevronDown, 12);
@@ -25,8 +27,13 @@ export const ICON_CHECK = onApple ? sf("checkmark", 14) : fl(checkmark, 14);
 let current: { close: (value: string | null) => void } | null = null;
 
 /** Menü an `anchor` öffnen; liefert den gewählten Wert oder null. */
+/** Ersatz-Anker, wenn der eigentliche Knopf ausgeblendet ist (kompakte Leiste: Aktion aus dem Menü «…»). */
+export let fallbackAnchor: HTMLElement | null = null;
+export const setFallbackAnchor = (el: HTMLElement | null) => (fallbackAnchor = el);
+
 export function openMenu(anchor: HTMLElement, items: MenuItem[], opts: { checked?: string; listbox?: boolean } = {}): Promise<string | null> {
   current?.close(null);
+  if (!anchor.getClientRects().length && fallbackAnchor?.getClientRects().length) anchor = fallbackAnchor;
   return new Promise((resolve) => {
     const menu = document.createElement("div");
     menu.className = "menu";
@@ -42,7 +49,7 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], opts: { checked
       if (opts.checked !== undefined) row.setAttribute(opts.listbox ? "aria-selected" : "aria-checked", String(it.value === opts.checked));
       if (it.disabled) row.setAttribute("aria-disabled", "true");
       row.dataset.value = it.value;
-      row.innerHTML = `<span class="menu-check">${opts.checked !== undefined && it.value === opts.checked ? ICON_CHECK : ""}</span>${
+      row.innerHTML = `<span class="menu-check">${(opts.checked !== undefined && it.value === opts.checked) || it.checked ? ICON_CHECK : ""}</span>${
         it.icon ? `<span class="menu-icon">${it.icon}</span>` : ""
       }<span class="menu-label"></span>${it.shortcut ? `<span class="menu-key"></span>` : ""}`;
       row.querySelector(".menu-label")!.textContent = it.label;

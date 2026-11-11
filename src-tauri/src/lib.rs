@@ -1337,6 +1337,37 @@ fn clip_write(text: String) -> Result<(), String> {
     clipshare::set_text(&text)
 }
 
+/// Vollbild auf dem iPad: Statusleiste aus, Home-Leiste blendet sich aus, Wischen vom oberen Rand braucht zwei
+/// Anläufe (die erste Geste geht ans Remote-Bild). Setzt die Eigenschaften des Tao-View-Controllers.
+#[tauri::command]
+fn immersive(window: tauri::WebviewWindow, on: bool) -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    window
+        .with_webview(move |w| {
+            use objc2::{msg_send, runtime::{AnyObject, Bool}, sel};
+            unsafe {
+                let web = w.inner() as *mut AnyObject;
+                let win: *mut AnyObject = msg_send![web, window];
+                if win.is_null() {
+                    return;
+                }
+                let vc: *mut AnyObject = msg_send![win, rootViewController];
+                let Some(vc) = vc.as_ref() else { return };
+                let b = Bool::new(on);
+                if vc.class().responds_to(sel!(setPrefersStatusBarHidden:)) {
+                    let () = msg_send![vc, setPrefersStatusBarHidden: b];
+                    let () = msg_send![vc, setPrefersHomeIndicatorAutoHidden: b];
+                    let edges: usize = if on { 1 } else { 0 }; // UIRectEdgeTop
+                    let () = msg_send![vc, setPreferredScreenEdgesDeferringSystemGestures: edges];
+                }
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    #[cfg(not(target_os = "ios"))]
+    let _ = (window, on);
+    Ok(())
+}
+
 /// «Beenden» aus dem eigenen Menü (Windows/Linux).
 #[tauri::command]
 fn app_exit(app: AppHandle) {
@@ -2302,6 +2333,7 @@ pub fn run() {
             app_exit,
             clip_read,
             clip_write,
+            immersive,
             kbhook_set,
             kbhook_selftest,
             conn_reach,

@@ -303,6 +303,11 @@ pub struct Screen {
     flags: u32,
 }
 
+/// Meldet der Server Bildschirme, die die Fläche deutlich nicht füllen (unter 90 % in Breite oder Höhe)?
+fn fixed_monitor(fw: u16, fh: u16, bw: u16, bh: u16) -> bool {
+    bw > 0 && bh > 0 && ((bw as u32) * 10 < fw as u32 * 9 || (bh as u32) * 10 < fh as u32 * 9)
+}
+
 fn set_desktop_size(w: u16, h: u16, screen: Option<Screen>) -> Vec<u8> {
     let s = screen.unwrap_or(Screen { id: 0, flags: 0 });
     let mut m = vec![251, 0];
@@ -526,14 +531,23 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                             let count = self.rd.read_u8().await.map_err(io)?;
                             self.bytes(3).await?;
                             let mut first = None;
+                            let (mut bw, mut bh) = (0u16, 0u16);
                             for _ in 0..count {
                                 let id = self.rd.read_u32().await.map_err(io)?;
-                                self.bytes(8).await?;
+                                let (x, y, w, h) = (self.rd.read_u16().await.map_err(io)?, self.rd.read_u16().await.map_err(io)?, self.rd.read_u16().await.map_err(io)?, self.rd.read_u16().await.map_err(io)?);
                                 let flags = self.rd.read_u32().await.map_err(io)?;
                                 first.get_or_insert(Screen { id, flags });
+                                (bw, bh) = (bw.max(x.saturating_add(w)), bh.max(y.saturating_add(h)));
+                            }
+                            // Fester Monitor (z. B. Raspberry Pi mit HDMI-Bildschirm): Der Server vergrössert nur die
+                            // Fläche, der Desktop bleibt so gross wie der Monitor, der Rest bleibt schwarz. Dann die alte
+                            // Grösse zurück und ab jetzt skalieren.
+                            let fixed = r.y == 0 && fixed_monitor(r.w, r.h, bw, bh);
+                            if fixed && r.x == 1 {
+                                let _ = self.out.send(set_desktop_size(bw, bh, first));
                             }
                             // x = Grund (1 = Antwort auf unsere Anfrage), y = Status (0 = ok, 1–3 abgelehnt, 4 = weitergeleitet).
-                            let refused = r.x == 1 && matches!(r.y, 1..=3);
+                            let refused = (r.x == 1 && matches!(r.y, 1..=3)) || fixed;
                             let first_refusal = {
                                 let mut sh = self.shared.lock().unwrap();
                                 sh.screen = first.or(sh.screen);
@@ -550,6 +564,7 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                             if refused {
                                 if first_refusal {
                                     let why = match r.y {
+                                        _ if fixed => "fester Bildschirm",
                                         1 => "nicht erlaubt",
                                         2 => "keine Ressourcen frei",
                                         _ => "Grösse passt nicht",
@@ -558,7 +573,9 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                                         return Ok(false);
                                     }
                                 }
-                                continue;
+                                if !fixed {
+                                    continue;
+                                }
                             }
                             if r.w != self.fb.width || r.h != self.fb.height {
                                 new_size = Some((r.w, r.h));
@@ -807,6 +824,10 @@ mod tests {
         assert!(matches!(rx.recv().await, Some(Event::Info(t)) if t.contains("nicht erlaubt") && t.contains("skaliert")));
         s.read_exact(&mut req).await.unwrap();
         assert!(!session.set_size(1280, 720), "nach Ablehnung nicht mehr fragen");
+
+        // Fester Monitor: Fläche 1920×1080, Bildschirm nur 1280×720 → alte Grösse zurück, skalieren.
+        assert!(fixed_monitor(1920, 1080, 1280, 720) && !fixed_monitor(1920, 1080, 1920, 1080) && !fixed_monitor(1920, 1080, 0, 0));
+        assert!(!fixed_monitor(2560, 1440, 2560, 1400) && fixed_monitor(2752, 1800, 1920, 1080));
 
         // Alte ServerCutText-Nachricht (Latin-1).
         s.write_all(&[3, 0, 0, 0, 0, 0, 0, 2, 0xE4, b'!']).await.unwrap();

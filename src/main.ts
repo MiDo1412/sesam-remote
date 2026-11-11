@@ -207,7 +207,7 @@ let shown: Connection[] = [];
 // Darstellung «Kacheln / Liste» und Sortierung der Liste, lokal gemerkt.
 type SortKey = "name" | "address" | "services" | "group" | "lastUsed";
 const VIEW_KEY = "sesam.library";
-let prefs: { view: "grid" | "list"; sort: SortKey; desc: boolean } = { view: "grid", sort: "name", desc: false };
+let prefs: { view: "grid" | "list"; sort: SortKey; desc: boolean; sidebar?: boolean; sidebarPortrait?: boolean; details?: boolean } = { view: "grid", sort: "name", desc: false };
 try {
   prefs = { ...prefs, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") };
 } catch {
@@ -443,6 +443,26 @@ $("conn-rows").onkeydown = (e) => {
 for (const r of document.querySelectorAll<HTMLInputElement>("[name=libView]")) r.onchange = () => ((prefs.view = r.value as typeof prefs.view), savePrefs(), render());
 for (const s of document.querySelectorAll<HTMLElement>(".view-switch .seg-icon, .sidebar-settings .seg-icon")) s.innerHTML = ICON[s.dataset.icon as keyof typeof ICON];
 
+// Seitenleiste und Details ein- und ausblenden (wie die Split View von iPadOS), gemerkt. iPad: Details anfangs aus
+// und als Blatt über den Karten, Seitenleiste im Hochformat anfangs aus (eigene Einstellung je Ausrichtung).
+const portrait = matchMedia("(orientation: portrait)");
+const sideKey = () => (isMobile && portrait.matches ? "sidebarPortrait" : "sidebar");
+const panels = () => {
+  const side = prefs[sideKey()] ?? !(isMobile && portrait.matches);
+  const det = prefs.details ?? !isMobile;
+  document.body.classList.toggle("no-sidebar", !side);
+  document.body.classList.toggle("no-details", !det);
+  $("toggle-sidebar").setAttribute("aria-pressed", String(side));
+  $("toggle-details").setAttribute("aria-pressed", String(det));
+};
+$("toggle-sidebar").innerHTML = ICON.sidebar;
+$("toggle-details").innerHTML = ICON.info;
+$("toggle-sidebar").onclick = () => ((prefs[sideKey()] = document.body.classList.contains("no-sidebar")), savePrefs(), panels());
+const setDetails = (on: boolean) => ((prefs.details = on), savePrefs(), panels());
+$("toggle-details").onclick = () => setDetails(document.body.classList.contains("no-details"));
+portrait.addEventListener("change", panels);
+panels();
+
 /** Kontextmenü der Seitenleiste (Gruppe oder «Neue Gruppe»). */
 async function groupAction(anchor: HTMLElement, g: Group | null) {
   const count = g ? items.filter((c) => c.group === g.name).length : 0;
@@ -480,7 +500,11 @@ function renderDetails() {
     b.onclick = on;
     return b;
   };
+  const closeBtn = el("button", { type: "button", class: "detail-close", "aria-label": "Details schliessen", title: "Details schliessen" }) as HTMLButtonElement;
+  closeBtn.innerHTML = ICON.close;
+  closeBtn.onclick = () => setDetails(false);
   aside.replaceChildren(
+    closeBtn,
     el("div", { class: "detail-title" }, c.name),
     el("div", { class: "sub" }, c.group || "Ohne Gruppe"),
     el(

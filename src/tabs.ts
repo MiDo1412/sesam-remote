@@ -2,7 +2,7 @@
 import { desktopProtocol, filesProtocol, type Connection } from "./api";
 import type { Command } from "./palette";
 import { ICON } from "./icons";
-import { openMenu } from "./menu";
+import { openMenu, setFallbackAnchor } from "./menu";
 import { ask, askText, choose, tell } from "./ui";
 import { GROUP_COLORS, colorMenu, dotSvg, groupDot } from "./groups";
 import { emit, emitTo, listen } from "@tauri-apps/api/event";
@@ -165,13 +165,18 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
   // Eine Leiste statt zwei: Werkzeuge des aktiven Tabs rechts in der Tab-Leiste, mehr Platz fürs Remote-Bild.
   // Titel und Unterzeile (Adresse, Temperatur …) stehen im Tooltip des Tabs.
   // Schmale Fenster: wieder zwei Leisten, damit Tabs und Werkzeuge Platz haben.
+  // Kompakt (iPad, schmales Fenster): nur die häufigen Knöpfe, der Rest im Menü «…».
   const wide = matchMedia("(min-width: 1000px)");
+  const roomy = matchMedia("(min-width: 1280px)");
   const place = () => {
-    document.body.classList.toggle("one-bar", wide.matches);
-    if (wide.matches) document.querySelector(".session-bar")!.insertBefore($("session-toolbar"), document.querySelector(".session-bar .term-btns"));
+    const one = wide.matches || isMobile;
+    document.body.classList.toggle("one-bar", one);
+    document.body.classList.toggle("compact", isMobile || !roomy.matches);
+    if (one) document.querySelector(".session-bar")!.insertBefore($("session-toolbar"), document.querySelector(".session-bar .term-btns"));
     else document.querySelector(".session-head")!.append($("session-toolbar"));
   };
   wide.addEventListener("change", place);
+  roomy.addEventListener("change", place);
   place();
 }
 
@@ -380,7 +385,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   const icons: Record<Kind, string> = { desktop: ICON.desktop, shell: ICON.shell, files: ICON.folder };
   const jumps = (["desktop", "shell", "files"] as Kind[]).filter((k) => k !== kind).flatMap((k) => {
     const c = sameHost(conn, k);
-    if (c) return [toolButton(icons[k], KIND_LABEL[k], () => openTab(c, k), { shortcut: c === conn ? "dieses Gerät" : c.name })];
+    if (c) return [toolButton(icons[k], KIND_LABEL[k], () => openTab(c, k), { shortcut: c === conn ? "dieses Gerät" : c.name, compact: true })];
     // Fehlt der Dienst: anbieten, ihn bei diesem Gerät einzurichten (öffnet «Bearbeiten»).
     if (conn.id.startsWith("local:") || conn.id.startsWith("quick-") || detachedWindow) return [];
     const add = toolButton(icons[k], `${KIND_LABEL[k]} einrichten …`, () => dispatchEvent(new CustomEvent("sesam:edit-connection", { detail: conn.id })), { shortcut: "für dieses Gerät", secondary: true });
@@ -890,7 +895,8 @@ export function runTool(label: string) {
 /** Sekundäre Aktionen (Klasse `secondary`) wandern in ein Überlauf-Menü «…» vor `before`: ruhigere Werkzeugleiste. */
 function overflowMenu(toolbar: HTMLElement, before: Element | null) {
   const items = [...toolbar.querySelectorAll<HTMLButtonElement>("button.tool.secondary")].filter((b) => !b.hidden);
-  if (!items.length) return;
+  const compactable = () => [...toolbar.querySelectorAll<HTMLButtonElement>("button.compact-only"), ...toolbar.querySelectorAll<HTMLButtonElement>("button.compactable")].filter((b) => !b.hidden);
+  if (!items.length && !compactable().length) return;
   for (const b of items) b.hidden = true;
   // Trennstriche ohne sichtbare Knöpfe dazwischen ausblenden
   let prevSep: HTMLElement | null = null;
@@ -904,20 +910,35 @@ function overflowMenu(toolbar: HTMLElement, before: Element | null) {
   }
   if (prevSep && !seen) prevSep.hidden = true;
   const more = toolButton(ICON.more, "Weitere Aktionen", async () => {
-    const shown = items.filter((b) => !b.disabled && b.dataset.na !== "1");
+    const compact = document.body.classList.contains("compact") ? compactable() : [];
+    const shown = [...compact, ...items].filter((b) => !b.disabled && b.dataset.na !== "1");
     const v = await openMenu(
       more,
-      shown.map((b, i) => ({ value: String(i), label: b.getAttribute("aria-label") ?? "", icon: b.querySelector("svg")?.outerHTML, checked: b.classList.contains("on") })),
+      shown.map((b, i) => ({
+        value: String(i),
+        label: b.getAttribute("aria-label") ?? "",
+        icon: b.querySelector("svg")?.outerHTML,
+        checked: b.classList.contains("on"),
+        section: b.dataset.section,
+        // Trennlinie nach der Ansicht (compact-only) und vor dem Seltenen (secondary)
+        separator: i > 0 && (i === compact.length || (b.classList.contains("compactable") && shown[i - 1].classList.contains("compact-only"))),
+      })),
     );
-    if (v !== null) shown[Number(v)]?.click();
+    if (v === null) return;
+    setFallbackAnchor(more);
+    shown[Number(v)]?.click();
+    setFallbackAnchor(null);
   });
+  if (!items.length) more.classList.add("compact-more");
   before ? toolbar.insertBefore(more, before) : toolbar.append(more);
 }
 
-export function toolButton(icon: string, label: string, onClick: () => void, opts: { shortcut?: string; text?: boolean; danger?: boolean; secondary?: boolean } = {}) {
+/** `compact`: in der kompakten Leiste nur im Menü «…»; `compactOnly`: nur dort (z. B. Ersatz für eine Segmentauswahl). */
+export function toolButton(icon: string, label: string, onClick: () => void, opts: { shortcut?: string; text?: boolean; danger?: boolean; secondary?: boolean; compact?: boolean; compactOnly?: boolean; section?: string } = {}) {
   const b = document.createElement("button");
   b.type = "button";
-  b.className = `tool${opts.text ? " with-text" : ""}${opts.danger ? " danger" : ""}${opts.secondary ? " secondary" : ""}`;
+  b.className = `tool${opts.text ? " with-text" : ""}${opts.danger ? " danger" : ""}${opts.secondary ? " secondary" : ""}${opts.compact ? " compactable" : ""}${opts.compactOnly ? " compact-only" : ""}`;
+  if (opts.section) b.dataset.section = opts.section;
   b.innerHTML = icon;
   if (opts.text) b.append(Object.assign(document.createElement("span"), { textContent: label }));
   b.title = opts.shortcut ? `${label} (${keyLabel(opts.shortcut)})` : label;

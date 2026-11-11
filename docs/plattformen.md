@@ -44,6 +44,8 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Bildschirmtastatur mit Zusatzleiste | – (nicht nötig) | ✓ Touch-Geräte | ✓ Touch-Geräte | ✓ |
 | Touch im Remote-Bild (Touchpad/Direkt, Zoom) | – | ✓ Touch-Geräte | ✓ Touch-Geräte | ✓ |
 | Grössere Touch-Ziele | – | – | – | ✓ (44 pt) |
+| Vollbild | ✓ F11 | ✓ F11 | ✓ F11 | ✓ ohne Leisten, Statusleiste und Home-Leiste; Griff oben in der Mitte holt die Verbindungsleiste |
+| Seitenleiste und Details ein-/ausblenden | ✓ | ✓ | ✓ | ✓ Details als Blatt, Seitenleiste im Hochformat eingeklappt |
 | Eigene Fenster (Abkoppeln) | ✓ | ✓ | ✓ | ✗ eine App, ein Fenster; ↻ Tabs |
 | Einstellungen | ✓ eigenes Fenster (⌘,) | ✓ Dialog | ✓ Dialog | ✓ Blatt |
 | Menüleiste | ✓ native | ↻ Menü «☰» in der Titelleiste | ↻ Menü «☰» | ✗ gibt es nicht; ↻ Knöpfe und Kontextmenüs |

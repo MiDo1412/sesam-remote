@@ -284,13 +284,13 @@ export function desktopTouch(o: {
       modeBtn.title = `Touch-Bedienung: ${modeLabel[mode]}`;
       drawOverlay();
     }
-  });
+  }, { compact: true });
   modeBtn.title = `Touch-Bedienung: ${modeLabel[mode]}`;
   const lupeBtn = toolButton(ICON.magnify, "Zeiger-Lupe", () => {
     lupeOn = !lupeOn;
     lupeBtn.classList.toggle("on", lupeOn);
     lupeBtn.setAttribute("aria-pressed", String(lupeOn));
-  });
+  }, { compact: true });
   lupeBtn.setAttribute("aria-pressed", "false");
 
   return {

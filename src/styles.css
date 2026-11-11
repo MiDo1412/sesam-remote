@@ -865,3 +865,36 @@ body.mobile { -webkit-user-select: none; user-select: none; -webkit-touch-callou
 body.mobile :is(input, textarea, [contenteditable], .xterm, pre, code) { -webkit-user-select: text; user-select: text; }
 body.mobile img, body.mobile a { -webkit-user-drag: none; }
 body.mobile * { -webkit-tap-highlight-color: transparent; }
+
+/* Kompakte Sitzungsleiste (iPad, schmale Fenster): Seltenes im Menü «…», Tabs mit ganzem Namen. */
+.tab-tools .compact-only, .tab-tools .compact-more { display: none; }
+body.compact .tab-tools :is(.compactable, .compact-hide) { display: none; }
+body.compact .tab-tools .compact-more { display: inline-flex; }
+body.compact .tab-tools .with-text span { display: none; }
+body.compact .tab-tools .tool-sep { display: none; }
+body.compact.one-bar .tab { flex: 0 0 auto; min-width: 140px; max-width: 260px; }
+body.mobile.compact .tab-tools button.tool { height: 44px; min-width: 44px; }
+body.mobile .tab-tools .pulldown { min-height: 44px; }
+
+/* Vollbild auf dem iPad: Leisten weg, Griff oben in der Mitte holt die Verbindungsleiste. */
+.fs-handle { display: none; }
+body.mobile .fullscreen .fs-handle { display: block; position: absolute; top: 0; left: 50%; z-index: 19; width: 120px; height: 28px; transform: translateX(-50%); padding: 0; border: 0; background: transparent; }
+body.mobile .fullscreen .fs-handle::after { content: ""; position: absolute; left: 30px; right: 30px; top: 8px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.45); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); }
+body.mobile .fs-bar button { width: 44px; height: 44px; }
+body.mobile.immersive { padding-top: 0; }
+body.mobile.immersive .session { padding-bottom: 0; }
+
+/* Seitenleiste und Details ein-/ausblenden */
+.panel-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); flex-shrink: 0; }
+.panel-toggle:hover { background: var(--hover); color: var(--text); }
+.panel-toggle[aria-pressed="true"] { color: var(--accent); }
+body.no-sidebar .sidebar, body.no-details #details { display: none; }
+body.no-sidebar main { border-left: 0; border-top-left-radius: 0; }
+#details { position: relative; }
+.detail-close { display: none; }
+#details button { white-space: normal; line-height: 1.25; height: auto; min-height: 32px; padding-top: 6px; padding-bottom: 6px; }
+body.mobile .panel-toggle { width: 44px; height: 44px; }
+/* iPad: Details als Blatt über den Karten statt als Spalte */
+body.mobile main { position: relative; }
+body.mobile #details { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(340px, calc(100% - 24px)); box-sizing: border-box; z-index: 10; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18); padding-top: 56px; }
+body.mobile .detail-close { display: inline-flex; align-items: center; justify-content: center; position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 22px; background: transparent; color: var(--muted); }

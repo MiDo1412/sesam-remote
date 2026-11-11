@@ -26,12 +26,14 @@
         <main>
           <section aria-labelledby="title" class="list">
             <div class="list-head">
+              <button id="toggle-sidebar" type="button" class="panel-toggle" aria-label="Seitenleiste" title="Seitenleiste ein/aus"></button>
               <h1 id="title">Alle Verbindungen</h1>
               <div class="segmented view-switch" role="radiogroup" aria-label="Darstellung">
                 <label title="Kacheln"><input type="radio" name="libView" value="grid" aria-label="Kacheln" /><span class="seg-icon" data-icon="viewGrid"></span></label>
                 <label title="Liste"><input type="radio" name="libView" value="list" aria-label="Liste" /><span class="seg-icon" data-icon="viewList"></span></label>
               </div>
               <span class="split-btn lib-term"><button id="lib-term-new" type="button" title="Neues Terminal (Strg+T)">Terminal</button><button id="lib-term-pick" type="button" title="Terminal-Profil wählen" aria-label="Terminal-Profil wählen">▾</button></span>
+              <button id="toggle-details" type="button" class="panel-toggle" aria-label="Details" title="Details ein/aus"></button>
               <button id="quick" type="button" class="quick-btn" title="Schnelle Verbindung (Strg+K)"><span class="quick-icon"></span><span class="quick-text">Schnelle Verbindung</span></button>
               <button id="new" type="button" class="primary">＋ Neue Verbindung</button>
             </div>

@@ -16,6 +16,7 @@ import { openHelp } from "./help";
 import { listen } from "@tauri-apps/api/event";
 import { appSettings } from "./settings";
 import { openMenu } from "./menu";
+import { isMobile } from "./titlebar";
 
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
@@ -32,7 +33,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
 
   // Werkzeugleiste (pro Tab)
   ctx.toolbar.innerHTML = `
-    <div class="segmented dark" role="radiogroup" aria-label="Anzeige">
+    <div class="segmented dark compact-hide" role="radiogroup" aria-label="Anzeige">
       <label title="Entfernte Auflösung folgt der Fenstergrösse"><input type="radio" name="viewMode-${ctx.id}" value="fit" />Anpassen</label>
       <label title="Bild auf Fenstergrösse skalieren"><input type="radio" name="viewMode-${ctx.id}" value="scale" />Skalieren</label>
       <label title="Originalgrösse"><input type="radio" name="viewMode-${ctx.id}" value="native" />1:1</label>
@@ -97,15 +98,22 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   const ro = new ResizeObserver(() => (layout(), requestSize()));
   ro.observe(wrap);
 
-  for (const r of ctx.toolbar.querySelectorAll<HTMLInputElement>(`[name=viewMode-${ctx.id}]`)) {
-    r.checked = r.value === mode;
+  const radios = [...ctx.toolbar.querySelectorAll<HTMLInputElement>(`[name=viewMode-${ctx.id}]`)];
+  // Kompakte Leiste: dieselbe Auswahl im Menü «…» (Abschnitt «Ansicht»).
+  const modeBtns = radios.map((r, i) =>
+    toolButton(ICON.desktop, r.parentElement!.textContent!.trim(), () => ((r.checked = true), r.onchange?.(new Event("change"))), { compactOnly: true, section: i ? undefined : "Ansicht" }),
+  );
+  const markMode = () => radios.forEach((r, i) => ((r.checked = r.value === mode), modeBtns[i].classList.toggle("on", r.checked)));
+  for (const r of radios) {
     r.onchange = () => {
       mode = r.value as Mode;
+      markMode();
       layout();
       requestSize();
       canvas.focus();
     };
   }
+  markMode();
 
   // ---------- Maus ----------
   const toRemote = (e: MouseEvent) => {
@@ -340,8 +348,8 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     keysBtn,
     barBtn(ICON.typeClipboard, "Zwischenablage abtippen", () => void typeClipboard()),
     barName,
-    barBtn(ICON.minimize, "Minimieren", () => void win.minimize()),
-    barBtn(ICON.windowed, "Fenstermodus (F11)", () => void toggleFullscreen()),
+    ...(isMobile ? [] : [barBtn(ICON.minimize, "Minimieren", () => void win.minimize())]),
+    barBtn(ICON.windowed, isMobile ? "Vollbild beenden" : "Fenstermodus (F11)", () => void toggleFullscreen()),
     barBtn(ICON.disconnect, "Trennen", () => ctx.closeSelf()),
   );
   bar.onmouseleave = () => showBar(800);
@@ -349,8 +357,26 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   wrap.addEventListener("mousemove", (e) => {
     if (isFs && e.clientY < 6) showBar();
   });
+  // Touch: Griff oben in der Mitte antippen oder vom oberen Rand nach unten wischen.
+  const handle = Object.assign(document.createElement("button"), { type: "button", className: "fs-handle" });
+  handle.setAttribute("aria-label", "Verbindungsleiste zeigen");
+  handle.onclick = () => showBar(4000);
+  ctx.pane.append(handle);
+  let edgeY: number | null = null;
+  ctx.pane.addEventListener("pointerdown", (e) => (edgeY = isFs && e.pointerType === "touch" && e.clientY - ctx.pane.getBoundingClientRect().top < 28 ? e.clientY : null), true);
+  ctx.pane.addEventListener("pointermove", (e) => edgeY !== null && e.clientY - edgeY > 40 && ((edgeY = null), showBar(4000)), true);
 
   const toggleFullscreen = async () => {
+    if (isMobile) {
+      // iPad: kein Fenster-Vollbild; Leisten aus, Statusleiste und Home-Leiste über den View-Controller.
+      isFs = !isFs;
+      document.getElementById("session")!.classList.toggle("fullscreen", isFs);
+      document.body.classList.toggle("immersive", isFs);
+      invoke("immersive", { on: isFs }).catch(() => {});
+      bar.classList.remove("show");
+      if (isFs) showBar(3000), hint("Leiste: oben in der Mitte tippen oder vom oberen Rand nach unten wischen.", 5000);
+      return;
+    }
     const on = !(await win.isFullscreen());
     await win.setFullscreen(on);
     isFs = on;
@@ -455,7 +481,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   // Verbindungsqualität: Bildrate, Datenmenge (dekodiert) und Latenz (TCP-Verbindungsaufbau), alle 2 s.
   const stats = { frames: 0, bytes: 0, ms: null as number | null, tick: 0 };
   // Leise Signalbalken in der Leiste; Klick zeigt die Zahlen in einem Popover (bleibt offen und aktualisiert sich).
-  const quality = Object.assign(document.createElement("button"), { type: "button", className: "tool quality-btn" });
+  const quality = Object.assign(document.createElement("button"), { type: "button", className: "tool quality-btn compactable" });
   quality.setAttribute("aria-label", "Verbindungsqualität");
   quality.setAttribute("aria-expanded", "false");
   const bars = (n: number) =>
@@ -468,7 +494,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     pop.hidden = !pop.hidden;
     quality.setAttribute("aria-expanded", String(!pop.hidden));
     if (!pop.hidden) {
-      const r = quality.getBoundingClientRect();
+      const r = (quality.getClientRects().length ? quality : ctx.toolbar.querySelector<HTMLElement>("[aria-label='Weitere Aktionen']") ?? quality).getBoundingClientRect();
       Object.assign(pop.style, { top: `${r.bottom + 6}px`, left: `${Math.max(8, r.right - 220)}px` });
     }
   };
@@ -495,6 +521,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     ...touch.buttons,
     toolButton(ICON.typeClipboard, "Zwischenablage abtippen", typeClipboard, { secondary: true }),
     toolButton(ICON.screenshot, "Bildschirmfoto", screenshot, { secondary: true }),
+    ...modeBtns,
     toolSep(),
     spanBtn,
     toolButton(ICON.fullscreen, "Vollbild", toggleFullscreen, { shortcut: "F11" }),
@@ -542,7 +569,10 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     if (sid) (rdp ? api.rdpClose(sid) : api.vncClose(sid)).catch(() => {});
     sid = null;
     if (spanned) toggleSpan();
-    win.setFullscreen(false);
+    if (isMobile) {
+      if (isFs) invoke("immersive", { on: false }).catch(() => {});
+      document.body.classList.remove("immersive");
+    } else win.setFullscreen(false);
     document.getElementById("session")!.classList.remove("fullscreen");
   };
 

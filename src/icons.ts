@@ -46,6 +46,8 @@ import fSubtract from "@fluentui/svg-icons/icons/subtract_20_regular.svg?raw";
 import fTextBulletListLtr from "@fluentui/svg-icons/icons/text_bullet_list_ltr_20_regular.svg?raw";
 import fTextFont from "@fluentui/svg-icons/icons/text_font_20_regular.svg?raw";
 import fWindowConsole from "@fluentui/svg-icons/icons/window_console_20_regular.svg?raw";
+import fPanelLeft from "@fluentui/svg-icons/icons/panel_left_20_regular.svg?raw";
+import fInfo from "@fluentui/svg-icons/icons/info_20_regular.svg?raw";
 import fZoomIn from "@fluentui/svg-icons/icons/zoom_in_20_regular.svg?raw";
 // Betriebssystem-Logos einfarbig aus Simple Icons (CC0), gleiche 24-px-Box wie die Fluent-Symbole.
 import linuxLogo from "simple-icons/icons/linux.svg?raw";
@@ -104,6 +106,8 @@ export const ICON = {
   pin: fl(fPin),
   windowed: fl(fFullScreenMinimize),
   more: fl(fMoreHorizontal),
+  sidebar: fl(fPanelLeft, 18),
+  info: fl(fInfo, 18),
   permissions: fl(fShieldLock),
   eye: fl(fEye),
   key: fl(fKey),
@@ -125,7 +129,7 @@ export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
   font: "textformat", trash: "trash", upload: "arrow.up.circle", close: "xmark", minimize: "minus", splitRight: "rectangle.split.2x1",
   splitDown: "rectangle.split.1x2", screencast: "rectangle.on.rectangle", question: "questionmark.circle", viewGrid: "square.grid.2x2",
   viewList: "list.bullet", settings: "gearshape", pin: "pin", windowed: "arrow.down.right.and.arrow.up.left", more: "ellipsis",
-  permissions: "lock.shield", eye: "eye", key: "key",
+  permissions: "lock.shield", eye: "eye", key: "key", sidebar: "sidebar.left", info: "info.circle",
 };
 
 /** macOS: SF Symbols statt Fluent. Das System zeichnet sie (src-tauri/src/sfsymbol.rs); als leeres <svg> mit Maske,

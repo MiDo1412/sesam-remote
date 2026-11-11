@@ -54,6 +54,9 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Verbessert
 
+- **Vollbild auf dem iPad:** «Vollbild» blendet Leisten, Statusleiste und Home-Leiste aus; das Remote-Bild nimmt den ganzen Bildschirm. Die Verbindungsleiste kommt mit einem Tipp auf den Griff oben in der Mitte oder mit einem Wisch vom oberen Rand nach unten; dort beendet man das Vollbild auch wieder.
+- **Kompakte Sitzungsleiste:** Auf dem iPad und in schmalen Fenstern zeigt die Leiste nur noch Tasten, Bildschirmtastatur, Vollbild und Trennen; Ansicht (Anpassen, Skalieren, 1:1), Touch-Bedienung, Lupe und Seltenes liegen im Menü «…». Tabs zeigen den ganzen Namen.
+- **Seitenleiste und Details ein- und ausblenden:** Zwei Knöpfe in der Bibliothek blenden die Seitenleiste und die Details aus, Sesam merkt sich die Wahl. Auf dem iPad sind die Details anfangs aus und erscheinen als Blatt über den Karten; im Hochformat ist die Seitenleiste anfangs eingeklappt. Lange Knopftexte in den Details brechen sauber um.
 - **Lizenz:** Sesam steht jetzt unter der Mozilla Public License 2.0 (vorher GPL-3.0). Die Lizenztexte von Sesam, den Schriften und Symbolen liegen in der App.
 - **iPad bedienbar mit dem Finger:** Die Oberfläche ist auf dem iPad grösser (Text rund 17 pt, Knöpfe, Menüzeilen und Tabs mindestens 44 pt hoch, nach den Richtlinien von Apple), hoch und quer; Seitenleiste und Inhaltsfeld laufen bis an den unteren Rand.
 - **Versionsangabe:** Builds zwischen zwei Releases zeigen den Entwicklungsstand («26.11.1 Entwicklungsstand · Commit · Datum») statt einer nackten Nummer; ein Release zeigt nur die Nummer. «Über Sesam Remote» im Mac-Menü öffnet diese Angabe.
@@ -87,6 +90,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Behoben
 
+- **«Anpassen» bei Geräten mit festem Monitor:** Hat ein VNC-Server einen fest angeschlossenen Bildschirm (z. B. ein Raspberry Pi am HDMI-Monitor), vergrösserte «Anpassen» nur die Fläche und das Bild füllte bloss einen Teil davon. Sesam erkennt das jetzt, stellt die alte Grösse wieder her und skaliert das Bild auf die ganze Fläche.
 - **Ganzes Fenster:** Auf dem iPad keine weissen Balken mehr oben und unten; auf allen Systemen ist auch die Fläche hinter der App in der App-Farbe (hell und dunkel).
 - **Mac: Verbindungen ins eigene Netz:** «No route to host» zu Rechnern im lokalen Netz lag an der macOS-Freigabe «Lokales Netzwerk». Sesam Remote fragt jetzt mit eigenem Text danach, behält die Freigabe über Updates hinweg und erklärt bei einer Sperre, wo man sie einschaltet.
 - **Flüssiges Bild bei VNC und RDP:** Bildschirm-, Shell- und Dateidaten gingen wegen einer fehlenden Freigabe in der Sicherheitsrichtlinie über einen langsamen Ersatzweg, der jedes Byte als Text verpackte; dazu kam jedes geänderte Rechteck als eigene Nachricht. Jetzt geht alles binär, ein Bild pro Nachricht, und Sesam schickt erst weiter, wenn die Anzeige mitkommt: kein wachsender Rückstand mehr, die Anzeige zählt echte Bilder pro Sekunde.
