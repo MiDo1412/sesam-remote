@@ -59,8 +59,8 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Verschlüsselte Sicherung (Export/Import) | ✓ | ✓ | ✓ | ✓ (Datei über «Dateien») |
 | Gemeinsame Zwischenablage Text | ✓ | ✓ | ✓ | ✓ nur im Vordergrund; Einfügen mit Bestätigung von iOS |
 | Zwischenablage Dateien und Bilder | ✓ | ✓ | ✓ | … noch nicht |
-| Verknüpfung zu einer Verbindung | ✓ «Verknüpfung auf dem Schreibtisch» | ✓ «Verknüpfung auf dem Desktop» | ✓ | ↻ Kurzbefehle und Widget (in Arbeit, siehe unten) |
-| Zuletzt verwendete Verbindungen am App-Symbol | … Dock-Menü | … Sprungliste (Jump List) | – | ↻ Widget (in Arbeit) |
+| Verknüpfung zu einer Verbindung | ✓ «Verknüpfung auf dem Schreibtisch» | ✓ «Verknüpfung auf dem Desktop» | ✓ | ↻ Kurzbefehl «Verbindung öffnen» (App «Kurzbefehle», Spotlight, Siri, Home-Bildschirm) |
+| Zuletzt verwendete Verbindungen am App-Symbol | … Dock-Menü | … Sprungliste (Jump List) | – | … Widget (braucht bezahltes Team, siehe unten) |
 | `sesam://`-Links | ✓ | ✓ | ✓ | ✓ |
 | Freigabe «Lokales Netzwerk» | ✓ Systemeinstellungen | – (nicht nötig) | – | ✓ Abfrage beim ersten Verbinden |
 | Berechtigungen einrichten (Dialog) | ✓ | – (nicht nötig) | – | – (iPadOS fragt selbst) |
@@ -77,7 +77,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 - **Dateien:** nur über die App «Dateien» bzw. die Dateiauswahl; Heruntergeladenes liegt dort unter
   «Auf meinem iPad › Sesam Remote».
 - **Zwischenablage:** nur solange Sesam vorne ist; iOS kann beim Einfügen um Bestätigung bitten.
-- **Kein lokales Terminal, keine Verknüpfungen auf dem Schreibtisch**; ersetzt durch Kurzbefehle und Widget.
+- **Kein lokales Terminal, keine Verknüpfungen auf dem Schreibtisch**; ersetzt durch den Kurzbefehl «Verbindung öffnen».
 
 ## Nächste Schritte
 
