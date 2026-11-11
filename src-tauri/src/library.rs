@@ -396,10 +396,10 @@ mod tests {
     #[test]
     fn zusammenfuehren_uebernimmt_fehlende_dienste() {
         use super::{Connection, merge};
-        let mut shell = Connection { address: "Darts.local".into(), ssh_port: Some(22), vnc_port: None, user: "dart".into(), ..Default::default() };
-        let desk = Connection { address: "darts.local".into(), ssh_port: None, vnc_port: Some(5900), vnc_credential_id: Some("c1".into()), os: "raspberry".into(), ..Default::default() };
+        let mut shell = Connection { address: "Pi.local".into(), ssh_port: Some(22), vnc_port: None, user: "pi".into(), ..Default::default() };
+        let desk = Connection { address: "pi.local".into(), ssh_port: None, vnc_port: Some(5900), vnc_credential_id: Some("c1".into()), os: "raspberry".into(), ..Default::default() };
         assert_eq!(merge(&mut shell, &desk).unwrap(), vec!["VNC"]);
-        assert_eq!((shell.vnc_port, shell.vnc_credential_id.as_deref(), shell.os.as_str(), shell.user.as_str()), (Some(5900), Some("c1"), "raspberry", "dart"));
+        assert_eq!((shell.vnc_port, shell.vnc_credential_id.as_deref(), shell.os.as_str(), shell.user.as_str()), (Some(5900), Some("c1"), "raspberry", "pi"));
         // Zwei RDP-Einträge (z. B. Anmeldebildschirm und Sitzung) bleiben getrennt.
         let mut a = Connection { address: "pc".into(), rdp_port: Some(3389), vnc_port: None, ssh_port: None, ..Default::default() };
         let b = Connection { address: "pc".into(), rdp_port: Some(3390), vnc_port: None, ssh_port: None, ..Default::default() };

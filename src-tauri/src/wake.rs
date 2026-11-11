@@ -73,10 +73,10 @@ mod tests {
 
     #[test]
     fn mac_aus_arp_tabelle() {
-        let win = "\nSchnittstelle: 192.168.1.20 --- 0x7\n  Internetadresse       Physische Adresse     Typ\n  192.168.1.4           a4-bb-6d-01-02-03     dynamisch\n";
-        assert_eq!(parse_mac(win, "192.168.1.4").as_deref(), Some("A4:BB:6D:01:02:03"));
-        let linux = "? (192.168.1.4) at a4:bb:6d:01:02:03 [ether] on eth0";
-        assert_eq!(parse_mac(linux, "192.168.1.4").as_deref(), Some("A4:BB:6D:01:02:03"));
+        let win = "\nSchnittstelle: 192.168.1.20 --- 0x7\n  Internetadresse       Physische Adresse     Typ\n  192.168.1.40           a4-bb-6d-01-02-03     dynamisch\n";
+        assert_eq!(parse_mac(win, "192.168.1.40").as_deref(), Some("A4:BB:6D:01:02:03"));
+        let linux = "? (192.168.1.40) at a4:bb:6d:01:02:03 [ether] on eth0";
+        assert_eq!(parse_mac(linux, "192.168.1.40").as_deref(), Some("A4:BB:6D:01:02:03"));
         assert_eq!(parse_mac(win, "192.168.1.5"), None);
     }
 

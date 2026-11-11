@@ -1427,7 +1427,7 @@ mod tests {
 
     #[test]
     fn share_names_are_plain() {
-        assert_eq!(share_name(std::path::Path::new("C:/Users/mike/Austausch")), "Austausch");
+        assert_eq!(share_name(std::path::Path::new("C:/Users/benutzer/Austausch")), "Austausch");
         assert_eq!(share_name(std::path::Path::new("/tmp/a:b*c")), "abc");
         assert_eq!(share_name(std::path::Path::new("/")), "Sesam");
         let dir = std::env::temp_dir();
@@ -1488,7 +1488,7 @@ mod tests {
     #[test]
     fn redirect_updates_target() {
         let mut t = Target {
-            host: "doerig-02".into(),
+            host: "pc-buero".into(),
             port: 3389,
             user: "mike".into(),
             domain: None,
@@ -1546,7 +1546,7 @@ mod tests {
 }
 
 /// Probe gegen einen echten Server, ohne Zugangsdaten (falsches Passwort):
-/// `SESAM_RDP_PROBE=192.168.1.4:3389 cargo test --lib probe -- --ignored --nocapture`
+/// `SESAM_RDP_PROBE=192.168.1.20:3389 cargo test --lib probe -- --ignored --nocapture`
 #[cfg(test)]
 mod probe {
     use super::*;
@@ -1565,7 +1565,7 @@ mod probe {
     /// Anmeldung wie ein Mensch: am GNOME-Anmeldebildschirm Benutzer und Passwort tippen, Umleitung abwarten,
     /// Bildschirmfotos nach test-build/diag/. Zugangsdaten nur aus dem Tresor (Einstellungen › Zugangsdaten):
     /// «Sesam Test RDP» (RDP-Anmeldung) und, falls `SESAM_RDP_DESKTOP` nicht gesetzt, «Sesam Test» (Ubuntu-Konto).
-    /// `SESAM_RDP_LOGIN=192.168.1.4:3389 cargo test --lib probe_login -- --ignored --nocapture`
+    /// `SESAM_RDP_LOGIN=192.168.1.20:3389 cargo test --lib probe_login -- --ignored --nocapture`
     /// Mit `SESAM_RDP_DESKTOP=1` nur verbinden und Bilder speichern (direkte Freigabe, z. B. Port 3392, mit «Sesam Test»).
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
@@ -1719,7 +1719,7 @@ mod probe {
 
     /// «Zugangsdaten prüfen» gegen einen echten Server, mit «Sesam Test RDP» aus dem Tresor; mit
     /// `SESAM_RDP_WRONG=1` absichtlich falsches Passwort (erwartet: Anmeldung abgelehnt).
-    /// `SESAM_RDP_CHECK=192.168.1.4:3389 cargo test --lib probe_check -- --ignored --nocapture`
+    /// `SESAM_RDP_CHECK=192.168.1.20:3389 cargo test --lib probe_check -- --ignored --nocapture`
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn probe_check() {

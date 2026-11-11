@@ -1,4 +1,4 @@
-# Windows bauen (WS-MD01)
+# Windows bauen
 
 Das MSI und die portable Fassung entstehen nur unter Windows (WiX). Alles Nötige liegt im Repository; auf dem
 Windows-Rechner reicht holen und bauen.

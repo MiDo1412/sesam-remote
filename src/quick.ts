@@ -37,8 +37,8 @@ export function parseTarget(text: string): Partial<Recent> {
 
 // Selbstprüfung im Entwicklungsbuild
 if (import.meta.env.DEV) {
-  const a = parseTarget("ssh mike@192.168.1.4:2222");
-  console.assert(a.kind === "shell" && a.user === "mike" && a.address === "192.168.1.4" && a.port === 2222, "parseTarget ssh");
+  const a = parseTarget("ssh benutzer@192.168.1.20:2222");
+  console.assert(a.kind === "shell" && a.user === "benutzer" && a.address === "192.168.1.20" && a.port === 2222, "parseTarget ssh");
   const b = parseTarget("rdp://host.local:3390");
   console.assert(b.kind === "rdp" && b.address === "host.local" && b.port === 3390, "parseTarget rdp");
 }

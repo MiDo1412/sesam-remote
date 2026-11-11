@@ -105,10 +105,10 @@ export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "
 
 /** Selbstprüfung: lokales Netz erkennen und den macOS-Hinweis nur bei os error 65 zeigen. */
 if (import.meta.env.DEV) {
-  for (const h of ["172.16.1.31", "10.0.0.5", "192.168.1.153", "169.254.3.4", "nas", "doerig-02", "mac.local", "[fe80::1]", "fd00::2"]) console.assert(isLocalAddress(h), "lokal", h);
+  for (const h of ["172.16.0.10", "10.0.0.5", "192.168.0.10", "169.254.3.4", "nas", "pc-buero", "mac.local", "[fe80::1]", "fd00::2"]) console.assert(isLocalAddress(h), "lokal", h);
   for (const h of ["172.32.0.1", "8.8.8.8", "example.com", "2a02::1"]) console.assert(!isLocalAddress(h), "nicht lokal", h);
   const err = "No route to host (os error 65)";
-  console.assert(localNetworkHint(err, "172.16.1.31", true)?.steps[0].includes("Lokales Netzwerk"), "Hinweis");
+  console.assert(localNetworkHint(err, "172.16.0.10", true)?.steps[0].includes("Lokales Netzwerk"), "Hinweis");
   console.assert(localNetworkHint(err, "example.com", true) === null && localNetworkHint(err, "10.0.0.1", false) === null, "kein Hinweis");
   console.assert(localNetworkHint("Connection refused (os error 61)", "10.0.0.1", true) === null, "anderer Fehler");
 }

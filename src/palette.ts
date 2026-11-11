@@ -108,6 +108,6 @@ export function connectionCommands(c: Connection, open: (c: Connection, view: "d
 
 // Selbstprüfung im Entwicklungsbuild
 if (import.meta.env?.DEV) {
-  const c: Command = { label: "Darts: Desktop öffnen", hint: "192.168.1.4", run: () => {} };
-  console.assert(score(c, "") === 1 && score(c, "darts desk") > 0 && score(c, "windows") === 0 && score(c, "darts") > score(c, "desk"), "palette score");
+  const c: Command = { label: "Werkstatt: Desktop öffnen", hint: "192.168.1.20", run: () => {} };
+  console.assert(score(c, "") === 1 && score(c, "werkstatt desk") > 0 && score(c, "windows") === 0 && score(c, "werkstatt") > score(c, "desk"), "palette score");
 }

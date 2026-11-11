@@ -953,8 +953,8 @@ export const toolSep = () => Object.assign(document.createElement("span"), { cla
 /** Selbstprüfung: derselbe Rechner über die eigene Verbindung oder einen Bibliothekseintrag mit gleicher Adresse. */
 if (import.meta.env?.DEV) {
   const c = (id: string, address: string, p: Partial<Connection>) => ({ id, address, ...p }) as Connection;
-  const ssh = c("a", "Darts.local", { sshPort: 22 });
-  const rdp = c("b", "darts.local ", { rdpPort: 3389 });
+  const ssh = c("a", "Pi.local", { sshPort: 22 });
+  const rdp = c("b", "pi.local ", { rdpPort: 3389 });
   console.assert(sameHost(ssh, "shell", [rdp]) === ssh && sameHost(ssh, "desktop", [ssh, rdp]) === rdp, "sameHost");
   console.assert(sameHost(ssh, "desktop", [c("x", "anderer", { vncPort: 5900 })]) === null && sameHost(c("local:1", "", {}), "shell") === null, "sameHost leer");
 }

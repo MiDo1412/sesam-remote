@@ -719,14 +719,14 @@ Private-MAC: 4df1d2227cb63bbbaf0821816cb82afffc2c97163d22afb114f68621a55b07c7
 }
 
 /// Server-Journal lesen für die RDP-Fehlersuche: als Benutzer aus «Sesam Test» (Tresor) einen Befehl ausführen.
-/// `SESAM_SSH_JOURNAL=192.168.1.4 cargo test --lib probe_journal -- --ignored --nocapture`
+/// `SESAM_SSH_JOURNAL=192.168.1.20 cargo test --lib probe_journal -- --ignored --nocapture`
 /// Befehl über `SESAM_SSH_CMD` (Standard: GNOME-Remote-Desktop-Meldungen der letzten 10 Minuten).
 #[cfg(test)]
 mod ports_tests {
     #[test]
     fn parse_setup_ports() {
-        let p = super::parse_ports("darts 3390\nmike 3391\n\n# kommentar\nsesamtest 3392\nkaputt\nx y\n");
-        assert_eq!(p, vec![("darts".into(), 3390), ("mike".into(), 3391), ("sesamtest".into(), 3392)]);
+        let p = super::parse_ports("anna 3390\nbenutzer 3391\n\n# kommentar\nsesamtest 3392\nkaputt\nx y\n");
+        assert_eq!(p, vec![("anna".into(), 3390), ("benutzer".into(), 3391), ("sesamtest".into(), 3392)]);
     }
 }
 

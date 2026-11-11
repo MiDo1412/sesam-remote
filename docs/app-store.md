@@ -82,7 +82,7 @@ Blocker:
   Download von der Website, sonst warnt SmartScreen.
 - **Hilfsprozess für Tastenkürzel:** Sesam startet sich selbst mit `--kbhook-helper` für den
   Tastatur-Hook. Als MSI/EXE-Einreichung erlaubt; ein MSIX-Paket bräuchte `runFullTrust` und eine eigene
-  Prüfung. Nicht getestet: Der Windows-Rechner (WS-MD01) war von hier aus nicht erreichbar.
+  Prüfung. Nicht getestet: Ein Windows-Rechner war von hier aus nicht erreichbar.
 
 ## Linux
 
