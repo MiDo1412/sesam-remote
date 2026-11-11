@@ -334,7 +334,7 @@ pub async fn upload<R: Remote>(s: &Arc<Scp<R>>, local: &Path, remote_dir: &str, 
         }
     }
     let _ = st.shutdown().await;
-    (m.report)(Progress::Done { target: root.clone() });
+    (m.report)(Progress::Done { target: root.clone(), trashed: None });
     Ok(root)
 }
 
@@ -412,7 +412,7 @@ pub async fn download<R: Remote>(s: &Arc<Scp<R>>, remote: &str, local_dir: &Path
         st.write_all(&[0]).await.map_err(w)?;
     }
     let root = root.ok_or("SCP: nichts empfangen")?.to_string_lossy().into_owned();
-    (m.report)(Progress::Done { target: root.clone() });
+    (m.report)(Progress::Done { target: root.clone(), trashed: None });
     Ok(root)
 }
 

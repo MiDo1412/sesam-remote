@@ -1060,9 +1060,6 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         } catch (err) {
           status.textContent = `«${e.name}» nicht zusammengeführt: ${err}`;
         }
-      } else if (upload && ftp) {
-        // FTP kann nicht ersetzen: alte Datei löschen, dann hochladen (ohne Papierkorb).
-        api.sftpRemove(sid!, pjoin("/", destDir, e.name)).then(() => start(true, src, destDir, e.name)).catch((err) => (status.textContent = `«${e.name}» nicht ersetzt: ${err}`));
       } else start(upload, src, destDir, e.name, true);
     }
     return true;
@@ -1244,6 +1241,8 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         } else if (p.state === "done") {
           bar.value = 1;
           finish("Fertig", true);
+          // FTP: die alte Fassung hat der Server-Teil selbst in den Papierkorb gelegt.
+          if (p.trashed) undoRow(`↺ ${name} (ersetzt)`, p.trashed, p.target);
           if (then) return then();
           const to = upload ? panes.remote : panes.local;
           if (comparing) refreshCompareSoon();
@@ -1358,8 +1357,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
             st.textContent = `Hochgeladen um ${new Date().toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
             if (rp.listing?.path === remoteDir) load(rp, remoteDir);
           };
-          if (ftp) await api.sftpRemove(sid, remote).then(() => start(true, local, remoteDir, e.name, false, done));
-          else start(true, local, remoteDir, e.name, true, done);
+          start(true, local, remoteDir, e.name, true, done);
         } catch (err) {
           st.textContent = `Fehler: ${err}`;
         } finally {
@@ -1851,7 +1849,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         scp = true;
       }
       ctx.setState("connected");
-      if (!ftp && !opened.scp) void api.sftpTrashCleanup(opened.sid, trashDays()).catch(() => {}); // alte Einträge im Papierkorb
+      if (!opened.scp) void api.sftpTrashCleanup(opened.sid, trashDays()).catch(() => {}); // alte Einträge im Papierkorb
       await load(panes.remote, st?.remote ?? panes.remote.listing?.path ?? "");
     } catch (e) {
       const msg = String(e);

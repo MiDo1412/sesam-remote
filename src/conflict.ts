@@ -48,7 +48,7 @@ export function askConflict(src: Entry, dst: Entry, from: string, to: string, di
   dlg.querySelector("h2")!.textContent = folder ? `Ordner «${src.name}» gibt es schon` : `«${src.name}» gibt es schon`;
   dlg.querySelector(".conflict-text")!.textContent = folder
     ? `In ${dir || "/"} gibt es bereits einen Ordner mit diesem Namen. «Zusammenführen» kopiert den Inhalt hinein und fragt bei jeder vorhandenen Datei nach; «Beide behalten» legt den neuen Ordner mit Nummer daneben.`
-    : `In ${dir || "/"} liegt bereits eine Datei mit diesem Namen. «Ersetzen» überschreibt sie (auf dem Server per SFTP kommt die alte Fassung zuerst in den Papierkorb, mit «Rückgängig»); «Beide behalten» legt die neue mit Nummer daneben.`;
+    : `In ${dir || "/"} liegt bereits eine Datei mit diesem Namen. «Ersetzen» überschreibt sie erst, wenn die neue Fassung vollständig da ist; auf dem Server kommt die alte zuerst in den Papierkorb (mit «Rückgängig»), wo der Server das zulässt; «Beide behalten» legt die neue mit Nummer daneben.`;
   const wheres = dlg.querySelectorAll<HTMLElement>(".conflict-where");
   wheres[0].textContent = to;
   wheres[1].textContent = from;

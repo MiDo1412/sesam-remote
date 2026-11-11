@@ -119,7 +119,7 @@ export interface Listing {
 }
 export type Progress =
   | { state: "running"; done: number; total: number; file: string }
-  | { state: "done"; target: string }
+  | { state: "done"; target: string; trashed?: string }
   | { state: "failed"; error: string };
 
 /** Womit «Desktop» verbindet: RDP, wenn nur RDP an ist oder bei beiden RDP gewählt ist. */

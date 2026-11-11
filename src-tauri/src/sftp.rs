@@ -573,7 +573,12 @@ pub(crate) fn local_unique(dir: &Path, name: &str, is_dir: bool) -> PathBuf {
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum Progress {
     Running { done: u64, total: u64, file: String },
-    Done { target: String },
+    /// `trashed`: alte Fassung im Papierkorb (nur FTP-Ersetzen; SFTP sichert vorher selbst).
+    Done {
+        target: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        trashed: Option<String>,
+    },
     Failed { error: String },
 }
 
@@ -775,7 +780,7 @@ pub async fn upload(sftp: &Arc<Sftp>, local: &Path, remote_dir: &str, replace: b
             }
         }
     }
-    (m.report)(Progress::Done { target: root.clone() });
+    (m.report)(Progress::Done { target: root.clone(), trashed: None });
     Ok(root)
 }
 
@@ -847,7 +852,7 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
         }
     }
     let root = root.to_string_lossy().into_owned();
-    (m.report)(Progress::Done { target: root.clone() });
+    (m.report)(Progress::Done { target: root.clone(), trashed: None });
     Ok(root)
 }
 

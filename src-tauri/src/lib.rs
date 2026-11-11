@@ -1208,13 +1208,19 @@ async fn sftp_size(files: State<'_, Files>, sid: String, path: String) -> Result
 /// Rückgängig: aus dem Papierkorb an den alten Ort.
 #[tauri::command]
 async fn sftp_restore(files: State<'_, Files>, sid: String, trashed: String, original: String) -> Result<(), String> {
-    ssh_files(&files, &sid)?.restore(&trashed, &original).await
+    match files_get(&files, &sid)? {
+        FileSession::Ftp(f) => f.restore(&trashed, &original).await,
+        _ => ssh_files(&files, &sid)?.restore(&trashed, &original).await,
+    }
 }
 
 /// Papierkorb aufräumen (älter als `days` Tage).
 #[tauri::command]
 async fn sftp_trash_cleanup(files: State<'_, Files>, sid: String, days: u32) -> Result<usize, String> {
-    ssh_files(&files, &sid)?.trash_cleanup(days).await
+    match files_get(&files, &sid)? {
+        FileSession::Ftp(f) => f.trash_cleanup(days).await,
+        _ => ssh_files(&files, &sid)?.trash_cleanup(days).await,
+    }
 }
 
 /// Löschen, Umbenennen, Ordner/Datei anlegen oder zum Herunterladen kopieren, mit sudo (nur nach Bestätigung).
@@ -1783,9 +1789,9 @@ fn transfer_start(
             (FileSession::Scp(s), true) => scp::upload(s, local, remote, replace, report).await,
             (FileSession::Scp(s), false) => scp::download(s, remote, local, replace, report).await,
             // FTP: «Ersetzen» gibt es nicht, es bleibt bei «Name (2)».
-            (FileSession::Ftp(_), _) if replace => Err("Ersetzen ist bei FTP nicht möglich; die Datei wird als «Name (2)» abgelegt, wenn du ohne Ersetzen überträgst.".into()),
+            (FileSession::Ftp(s), true) if replace => ftp::upload_replace(s, local, remote, report).await,
             (FileSession::Ftp(s), true) => ftp::upload(s, local, remote, report).await,
-            (FileSession::Ftp(s), false) => ftp::download(s, remote, local, report).await,
+            (FileSession::Ftp(s), false) => ftp::download(s, remote, local, replace, report).await,
         };
         if let Err(error) = r {
             let _ = on_progress.send(sftp::Progress::Failed { error });
