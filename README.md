@@ -46,4 +46,4 @@ npm run build
 cd src-tauri && cargo test
 ```
 
-Aufbau und Modulplan: [docs/architektur.md](docs/architektur.md).
+Aufbau und Modulplan: [docs/architektur.md](docs/architektur.md). Welche Funktion auf welchem System: [docs/plattformen.md](docs/plattformen.md). Vertrieb und Stores: [docs/app-store.md](docs/app-store.md).
