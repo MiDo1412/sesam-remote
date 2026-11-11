@@ -1,47 +1,19 @@
-// Sesam Remote website: keyhole scene, door tabs, switches, counters.
+// Sesam Remote website: poster lift, door tabs, switches, counters.
 const root = document.body;
 root.classList.replace('no-js', 'js');
 const still = matchMedia('(prefers-reduced-motion: reduce)');
 
-// Keyhole scene: the hole in the seed grows until the library fills the screen.
-const opening = document.querySelector('.opening');
-const door = opening && opening.querySelector('.door');
-const hole = document.getElementById('kh');
-const heroText = opening && opening.querySelector('.hero-text');
-if (!door || still.matches) root.classList.add('no-scene');
-let ticking = false;
-function scene() {
-  ticking = false;
-  if (root.classList.contains('no-scene')) return;
-  const box = opening.getBoundingClientRect();
-  const run = box.height - innerHeight;
-  const p = Math.min(1, Math.max(0, -box.top / run));
-  const h = hole.getBoundingClientRect();
-  const t = Math.min(1, Math.max(0, (p - .04) / .78));
-  const e = t * t * (3 - 2 * t);
-  // scale that makes the keyhole's narrow foot wider than the screen diagonal
-  const max = 2.6 * Math.hypot(innerWidth, innerHeight) / h.width;
-  const s = Math.pow(max, e);
-  const w = h.width * s, hh = h.height * s;
-  // move the hole's circle centre from the seed to the middle of the screen
-  const cx = h.left + h.width / 2 + (innerWidth / 2 - h.left - h.width / 2) * e;
-  const cy = h.top + h.height * .27 + (innerHeight / 2 - h.top - h.height * .27) * e;
-  const st = door.style;
-  st.setProperty('--kw', w + 'px');
-  st.setProperty('--kh', hh + 'px');
-  st.setProperty('--kx', (cx - w / 2) + 'px');
-  st.setProperty('--ky', (cy - hh * .27) + 'px');
-  st.setProperty('--zoom', (1.08 - .08 * e).toFixed(3));
-  heroText.style.opacity = (1 - Math.min(1, t * 2.2)).toFixed(3);
-  opening.style.setProperty('--say', Math.min(1, Math.max(0, (p - .8) / .12)).toFixed(3));
-}
-function ask() { if (!ticking) { ticking = true; requestAnimationFrame(scene); } }
-if (door) {
-  addEventListener('scroll', ask, { passive: true });
-  addEventListener('resize', ask);
-  still.addEventListener('change', () => { root.classList.toggle('no-scene', still.matches); ask(); });
-  // the seed sways, so follow it while the scene is at rest
-  (function loop() { scene(); if (!root.classList.contains('no-scene')) requestAnimationFrame(loop); })();
+// Poster: the app window drifts up over the title while scrolling
+const win = document.querySelector('.hero .window');
+if (win) {
+  let ticking = false;
+  const lift = () => {
+    ticking = false;
+    if (still.matches) return;
+    const y = Math.min(scrollY, innerHeight);
+    win.style.setProperty('--lift', (-y * .18).toFixed(1) + 'px');
+  };
+  addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(lift); } }, { passive: true });
 }
 
 // Door tabs: Desktop, Shell, Dateien

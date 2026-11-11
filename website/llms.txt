@@ -1,6 +1,6 @@
 # Sesam Remote
 
-> Sesam Remote ist eine quelloffene Fernzugriffs-App (MPL-2.0) für macOS, Windows und iPadOS. Sie verbindet sich direkt, ohne Konto und ohne Cloud, per RDP, VNC, SSH, SFTP und FTP mit Windows-PCs, Macs, Linux-Servern, Ubuntu mit GNOME und Raspberry Pi. Desktop, Shell und Dateien eines Rechners stehen in einem Eintrag einer Bibliothek.
+> Sesam Remote ist eine Open-Source-Fernzugriffs-App (MPL-2.0) für macOS, Windows und iPadOS. Sie verbindet sich direkt, ohne Konto und ohne Cloud, per RDP, VNC, SSH, SFTP und FTP mit Windows-PCs, Macs, Linux-Servern, Ubuntu mit GNOME und Raspberry Pi. Desktop, Shell und Dateien eines Rechners stehen in einem Eintrag einer Bibliothek.
 
 Website: https://sesam-remote.app/ (Deutsch). App-Name im System: «Sesam Remote», kurz «Sesam». Kategorie: Dienstprogramme / Remote Desktop.
 

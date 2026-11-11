@@ -4,19 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sesam Remote – Fernzugriff auf Desktop, Shell und Dateien</title>
-<meta name="description" content="Sesam Remote verbindet Mac, Windows und iPad mit entfernten Rechnern: Desktop über RDP und VNC, Shell über SSH, Dateien über SFTP und FTP. Zugangsdaten im Schlüsselbund, kein Konto, keine Cloud. Quelloffen.">
+<meta name="description" content="Sesam Remote verbindet Mac, Windows und iPad mit entfernten Rechnern: Desktop über RDP und VNC, Shell über SSH, Dateien über SFTP und FTP. Zugangsdaten im Schlüsselbund, kein Konto, keine Cloud. Open Source.">
 <link rel="canonical" href="https://sesam-remote.app/">
 <link rel="alternate" hreflang="de" href="https://sesam-remote.app/">
 <meta name="robots" content="index, follow, max-image-preview:large">
-<meta name="theme-color" content="#0b4b39" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0f3a2c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f3f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#202020" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="img/sesam-icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 <link rel="alternate" type="text/markdown" title="Sesam Remote für KI-Assistenten" href="llms.txt">
-<link rel="preload" href="fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 
 <meta property="og:type" content="website">
@@ -77,7 +76,7 @@
       "@type": "FAQPage",
       "@id": "https://sesam-remote.app/#faq",
       "mainEntity": [
-        { "@type": "Question", "name": "Was ist Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Sesam Remote ist eine quelloffene Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen." } },
+        { "@type": "Question", "name": "Was ist Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Sesam Remote ist eine Open-Source-Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen." } },
         { "@type": "Question", "name": "Mit welchen Rechnern kann sich Sesam Remote verbinden?", "acceptedAnswer": { "@type": "Answer", "text": "Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP." } },
         { "@type": "Question", "name": "Brauche ich ein Konto oder einen Cloud-Dienst?", "acceptedAnswer": { "@type": "Answer", "text": "Nein. Sesam verbindet sich direkt mit deinen Rechnern. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie." } },
         { "@type": "Question", "name": "Wo speichert Sesam meine Passwörter?", "acceptedAnswer": { "@type": "Answer", "text": "Passwörter und SSH-Schlüssel liegen verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse." } },
@@ -94,7 +93,7 @@
 <script>document.body.classList.replace('no-js', 'js');</script>
 <a class="skip" href="#inhalt">Zum Inhalt</a>
 
-<header class="top">
+<header class="top solid">
   <div class="wrap">
     <a class="brand" href="./" aria-label="Sesam Remote, Startseite"><img src="img/sesam-icon.svg" alt="" width="34" height="34">Sesam</a>
     <nav aria-label="Hauptnavigation">
@@ -103,32 +102,24 @@
       <a href="#laden">Plattformen</a>
       <a href="support.html">Support</a>
     </nav>
-    <a class="btn small light" href="#laden">Laden</a>
+    <a class="btn small" href="#laden">Laden</a>
   </div>
 </header>
 
 <main id="inhalt">
   <section class="opening" aria-labelledby="titel">
-    <div class="stage">
-      <div class="wrap hero-text">
-        <h1 id="titel">Sesam, öffne&nbsp;dich.</h1>
+    <div class="wrap hero">
+      <h1 id="titel"><span class="l1">Sesam,</span> <span class="l2">öffne&nbsp;dich.</span></h1>
+      <p class="facts">RDP · VNC · SSH · SFTP<br>Mac · Windows · iPad<br>Open Source, MPL-2.0</p>
+      <div class="intro">
         <p class="lead">Bildschirm, Shell und Dateien deiner Macs, Windows-PCs, Linux-Server und Raspberry Pis. In einer App für Mac, Windows und iPad.</p>
         <div class="act">
-          <a class="btn light" href="#laden">Für Mac laden</a>
+          <a class="btn" href="#laden">Für Mac laden</a>
           <a class="link" href="#laden">Windows und iPad</a>
         </div>
       </div>
-      <svg class="seed" viewBox="290 160 444 704" aria-hidden="true">
-        <defs><mask id="hole" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="#fff"/><circle cx="512" cy="566" r="68" fill="#000"/><path d="M478 600h68l24 150H454z" fill="#000"/></mask></defs>
-        <path class="body" mask="url(#hole)" d="M512 168c86 104 210 250 210 432 0 146-94 256-210 256S302 746 302 600c0-182 124-328 210-432z"/>
-        <rect id="kh" x="444" y="498" width="136" height="252" fill="none"/>
-      </svg>
-      <div class="door" aria-hidden="true">
-        <div class="frame"><picture><source media="(prefers-color-scheme: dark)" srcset="img/lib-dark-1440.webp 1440w, img/lib-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/lib-light-1440.webp" srcset="img/lib-light-1440.webp 1440w, img/lib-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="eager" decoding="async" alt=""></picture></div>
-      </div>
-      <p class="opened" aria-hidden="true">Geöffnet: deine Bibliothek mit allen Rechnern.</p>
+      <div class="window"><picture><source media="(prefers-color-scheme: dark)" srcset="img/lib-dark-1440.webp 1440w, img/lib-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/lib-light-1440.webp" srcset="img/lib-light-1440.webp 1440w, img/lib-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="eager" decoding="async" alt="Die Bibliothek von Sesam Remote: Karten für Studio-Mac, Buchhaltung, Werkstatt-PC, Raspberry Pi Wetterstation, Webserver, NAS und Datenbank, nach Gruppen geordnet, mit Online-Status"></picture></div>
     </div>
-    <div class="static-shot"><picture><source media="(prefers-color-scheme: dark)" srcset="img/lib-dark-1440.webp 1440w, img/lib-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/lib-light-1440.webp" srcset="img/lib-light-1440.webp 1440w, img/lib-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="eager" decoding="async" alt="Die Bibliothek von Sesam Remote: Karten für Studio-Mac, Buchhaltung, Werkstatt-PC, Raspberry Pi Wetterstation, Webserver, NAS und Datenbank, nach Gruppen geordnet, mit Online-Status"></picture></div>
   </section>
 
   <section id="tueren" class="doors" data-door="desk" aria-labelledby="tueren-titel">
@@ -195,12 +186,12 @@
   <section class="targets" aria-labelledby="ziele-titel">
     <div class="wrap tiles">
       <div class="tile lead rise"><h2 id="ziele-titel">Öffnet, was du hast.</h2><p>Sesam klopft an den üblichen Ports an und weiss danach, welche Tür offen ist.</p></div>
-      <div class="tile rise" style="--i:1"><span class="port" data-n="3389">3389</span><div><b>Windows</b><br><span>Remotedesktop, RDP</span></div></div>
-      <div class="tile rise" style="--i:2"><span class="port" data-n="5900">5900</span><div><b>Mac</b><br><span>Bildschirmfreigabe, VNC</span></div></div>
-      <div class="tile rise" style="--i:3"><span class="port" data-n="3389">3389</span><div><b>Ubuntu</b><br><span>GNOME Remote Desktop, auch Wayland</span></div></div>
-      <div class="tile rise" style="--i:4"><span class="port" data-n="5900">5900</span><div><b>Raspberry Pi</b><br><span>wayvnc oder RealVNC</span></div></div>
-      <div class="tile rise" style="--i:5"><span class="port" data-n="22">22</span><div><b>Linux-Server</b><br><span>SSH und SFTP</span></div></div>
-      <div class="tile rise" style="--i:6"><span class="port" data-n="21">21</span><div><b>NAS und Webspace</b><br><span>FTPS oder FTP</span></div></div>
+      <div class="tile rise" style="--i:1"><div class="thumb"><span class="port" data-n="3389">3389</span><span class="badge">RDP</span></div><p class="name"><i style="--dot:#3e63dd"></i>Windows</p><p class="sub">Remotedesktop, RDP</p></div>
+      <div class="tile rise" style="--i:2"><div class="thumb"><span class="port" data-n="5900">5900</span><span class="badge">VNC</span></div><p class="name"><i style="--dot:#30a46c"></i>Mac</p><p class="sub">Bildschirmfreigabe, VNC</p></div>
+      <div class="tile rise" style="--i:3"><div class="thumb"><span class="port" data-n="3389">3389</span><span class="badge">RDP</span></div><p class="name"><i style="--dot:#f76b15"></i>Ubuntu</p><p class="sub">GNOME Remote Desktop, auch Wayland</p></div>
+      <div class="tile rise" style="--i:4"><div class="thumb"><span class="port" data-n="5900">5900</span><span class="badge">VNC</span></div><p class="name"><i style="--dot:#e5484d"></i>Raspberry Pi</p><p class="sub">wayvnc oder RealVNC</p></div>
+      <div class="tile rise" style="--i:5"><div class="thumb"><span class="port" data-n="22">22</span><span class="badge">SSH</span></div><p class="name"><i style="--dot:#8e4ec6"></i>Linux-Server</p><p class="sub">SSH und SFTP</p></div>
+      <div class="tile rise" style="--i:6"><div class="thumb"><span class="port" data-n="21">21</span><span class="badge">FTP</span></div><p class="name"><i style="--dot:#e2a336"></i>NAS und Webspace</p><p class="sub">FTPS oder FTP</p></div>
     </div>
   </section>
 
@@ -284,14 +275,14 @@
     <div class="wrap">
       <h2 id="fragen-titel" class="rise">Gut zu wissen.</h2>
       <div class="cards rise" style="--i:1">
-        <details name="faq" open data-tab="Was"><summary>Was ist Sesam Remote?</summary><p><span>Eine quelloffene Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen.</span></p></details>
-        <details name="faq" data-tab="Rechner"><summary>Mit welchen Rechnern kann sich Sesam verbinden?</summary><p><span>Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland und am Anmeldebildschirm), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP.</span></p></details>
-        <details name="faq" data-tab="Konto"><summary>Brauche ich ein Konto oder einen Cloud-Dienst?</summary><p><span>Nein. Sesam verbindet sich direkt mit deinen Rechnern, im lokalen Netz, über VPN, einen SSH-Sprungserver oder ein RD-Gateway. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie.</span></p></details>
-        <details name="faq" data-tab="Passwörter"><summary>Wo speichert Sesam meine Passwörter?</summary><p><span>Verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse. Für den Umzug schreibt Sesam eine mit deinem Passwort verschlüsselte Sicherung.</span></p></details>
-        <details name="faq" data-tab="Ubuntu"><summary>Funktioniert Sesam mit Ubuntu 26.04 und Wayland?</summary><p><span>Ja. Sesam verbindet sich über RDP mit GNOME Remote Desktop, auch mit dem Anmeldebildschirm, und folgt danach der Übergabe an die Sitzung. Ein Setup-Script richtet feste Ports pro Benutzer ein; Sesam startet es auf Wunsch selbst über SSH.</span></p></details>
-        <details name="faq" data-tab="App Store"><summary>Warum gibt es Sesam für den Mac nicht im Mac App Store?</summary><p><span>Die Sandbox des Mac App Store verbietet, was Sesam ausmacht: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als signierten und von Apple notarisierten Download von dieser Website.</span></p></details>
-        <details name="faq" data-tab="iPad"><summary>Was kann die iPad-Version nicht?</summary><p><span>iPadOS beendet Verbindungen kurz nachdem die App in den Hintergrund geht, behält Systemkürzel wie ⌘Tab für sich, gibt Dateien nur über die Dateien-App frei und erlaubt die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf dem iPad nicht.</span></p></details>
-        <details name="faq" data-tab="Lizenz"><summary>Unter welcher Lizenz steht Sesam?</summary><p><span>Unter der Mozilla Public License 2.0. Die Schriften dieser Website und der App stehen unter der SIL Open Font License, die Symbole unter Windows unter MIT.</span></p></details>
+        <details name="faq" open><summary>Was ist Sesam Remote?</summary><p><span>Eine Open-Source-Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen.</span></p></details>
+        <details name="faq"><summary>Mit welchen Rechnern kann sich Sesam verbinden?</summary><p><span>Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland und am Anmeldebildschirm), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP.</span></p></details>
+        <details name="faq"><summary>Brauche ich ein Konto oder einen Cloud-Dienst?</summary><p><span>Nein. Sesam verbindet sich direkt mit deinen Rechnern, im lokalen Netz, über VPN, einen SSH-Sprungserver oder ein RD-Gateway. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie.</span></p></details>
+        <details name="faq"><summary>Wo speichert Sesam meine Passwörter?</summary><p><span>Verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse. Für den Umzug schreibt Sesam eine mit deinem Passwort verschlüsselte Sicherung.</span></p></details>
+        <details name="faq"><summary>Funktioniert Sesam mit Ubuntu 26.04 und Wayland?</summary><p><span>Ja. Sesam verbindet sich über RDP mit GNOME Remote Desktop, auch mit dem Anmeldebildschirm, und folgt danach der Übergabe an die Sitzung. Ein Setup-Script richtet feste Ports pro Benutzer ein; Sesam startet es auf Wunsch selbst über SSH.</span></p></details>
+        <details name="faq"><summary>Warum gibt es Sesam für den Mac nicht im Mac App Store?</summary><p><span>Die Sandbox des Mac App Store verbietet, was Sesam ausmacht: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als signierten und von Apple notarisierten Download von dieser Website.</span></p></details>
+        <details name="faq"><summary>Was kann die iPad-Version nicht?</summary><p><span>iPadOS beendet Verbindungen kurz nachdem die App in den Hintergrund geht, behält Systemkürzel wie ⌘Tab für sich, gibt Dateien nur über die Dateien-App frei und erlaubt die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf dem iPad nicht.</span></p></details>
+        <details name="faq"><summary>Unter welcher Lizenz steht Sesam?</summary><p><span>Unter der Mozilla Public License 2.0. Die Schriften dieser Website und der App stehen unter der SIL Open Font License, die Symbole unter Windows unter MIT.</span></p></details>
       </div>
     </div>
   </section>
@@ -313,17 +304,14 @@
 
 <footer class="foot">
   <div class="wrap">
-    <div class="mark" aria-hidden="true">
-      <svg viewBox="290 160 444 704"><defs><mask id="hole2" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="#fff"/><circle cx="512" cy="566" r="68" fill="#000"/><path d="M478 600h68l24 150H454z" fill="#000"/></mask></defs><path class="body" mask="url(#hole2)" d="M512 168c86 104 210 250 210 432 0 146-94 256-210 256S302 746 302 600c0-182 124-328 210-432z"/></svg>
-      <b>Sesam</b>
-    </div>
+    <p class="mark" aria-hidden="true">Sesam</p>
     <div class="cols">
       <div><h3>App</h3><a href="#tueren">Funktionen</a><a href="#schluessel">Sicherheit</a><a href="#laden">Laden</a></div>
       <div><h3>Hilfe</h3><a href="support.html">Support</a><a href="#fragen">Fragen</a><a href="llms.txt">Für KI-Assistenten</a></div>
       <div><h3>Rechtliches</h3><a href="datenschutz.html">Datenschutz</a><a href="https://www.mozilla.org/MPL/2.0/" rel="noopener">Lizenz MPL-2.0</a></div>
       <div><h3>Kontakt</h3><a href="mailto:support@sesam-remote.app">support@sesam-remote.app</a><p>Gemacht in der Schweiz.</p></div>
     </div>
-    <div class="last"><span>© 2026 Sesam Remote</span><a class="btn small light" href="#titel">Nach oben</a></div>
+    <div class="last"><span>© 2026 Sesam Remote</span><a class="btn small quiet" href="#titel">Nach oben</a></div>
   </div>
 </footer>
 
