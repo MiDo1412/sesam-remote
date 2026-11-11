@@ -359,10 +359,15 @@ async fn agent_auth(h: &mut Handle<Client>, user: &str) -> bool {
 }
 
 async fn authenticate(h: &mut Handle<Client>, t: &Target) -> Result<(), String> {
-    if t.opts.agent && agent_auth(h, &t.user).await {
-        return Ok(());
+    let mut tried = Vec::new();
+    if t.opts.agent {
+        if agent_auth(h, &t.user).await {
+            return Ok(());
+        }
+        tried.push("SSH-Agent");
     }
     if let Some(pem) = &t.key {
+        tried.push("Schlüssel");
         let pk = keys::decode_secret_key(pem, None)
             .or_else(|_| keys::decode_secret_key(pem, t.password.as_deref()))
             .map_err(|e| format!("SSH-Schlüssel nicht lesbar: {e}"))?;
@@ -376,12 +381,18 @@ async fn authenticate(h: &mut Handle<Client>, t: &Target) -> Result<(), String> 
         }
     }
     if let Some(pw) = &t.password {
+        tried.push("Passwort");
         let r = h.authenticate_password(&t.user, pw).await.map_err(|e| e.to_string())?;
         if r.success() {
             return Ok(());
         }
     }
-    Err("Anmeldung abgelehnt".into())
+    tracing::info!(user = %t.user, tried = ?tried, "SSH-Anmeldung abgelehnt");
+    Err(if tried.is_empty() {
+        format!("Anmeldung abgelehnt: Für {} ist weder Passwort noch Schlüssel gespeichert.", t.user)
+    } else {
+        format!("Anmeldung als {} abgelehnt (versucht: {}).", t.user, tried.join(", "))
+    })
 }
 
 /// Verbinden (direkt oder über den Sprungserver), Host-Schlüssel prüfen, anmelden. Gemeinsam für Shell und Dateien.

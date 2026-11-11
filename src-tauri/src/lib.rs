@@ -818,12 +818,30 @@ fn ssh_target(c: &Connection, trust: Option<String>) -> Result<ssh::Target, Stri
 }
 
 fn ssh_target_direct(c: &Connection, trust: Option<String>) -> Result<ssh::Target, String> {
+    let (password, key) = (login_secret(c, Kind::Password)?, login_secret(c, Kind::SshKey)?);
+    // Laut Bibliothek gespeichert, im Schlüsselbund aber nicht (anderer Build, Gerät gewechselt, Sicherung ohne Geheimnisse):
+    // klar sagen statt nur «Anmeldung abgelehnt».
+    let missing = [(c.has_password && c.credential_id.is_none() && password.is_none(), "Passwort"), (c.has_key && c.credential_id.is_none() && key.is_none(), "SSH-Schlüssel")];
+    for (gone, what) in missing {
+        if gone {
+            tracing::warn!(conn = %c.id, "{what} laut Bibliothek gespeichert, im Schlüsselbund aber nicht gefunden");
+        }
+    }
+    if password.is_none() && key.is_none() && missing.iter().any(|(g, _)| *g) && !c.ssh_agent {
+        let what = match (missing[0].0, missing[1].0) {
+            (true, true) => "Passwort und der SSH-Schlüssel fehlen",
+            (true, false) => "Passwort fehlt",
+            _ => "SSH-Schlüssel fehlt",
+        };
+        let art = if missing[0].0 { "Das gespeicherte" } else { "Der gespeicherte" };
+        return Err(format!("{art} {what} im Schlüsselbund dieses Geräts (Verbindung «{}»). Bitte unter «Bearbeiten» neu eintragen.", c.name));
+    }
     Ok(ssh::Target {
         host: c.address.clone(),
         port: c.ssh_port.ok_or_else(|| format!("SSH ist für «{}» ausgeschaltet", c.name))?,
         user: c.user.clone(),
-        password: login_secret(c, Kind::Password)?,
-        key: login_secret(c, Kind::SshKey)?,
+        password,
+        key,
         trusted: trust,
         opts: ssh::Options {
             legacy: c.ssh_legacy,
@@ -1019,7 +1037,8 @@ enum FileSession {
 struct Files(Mutex<HashMap<String, FileSession>>);
 
 #[derive(Default)]
-struct Transfers(Arc<Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>>);
+/// Laufende Übertragungen: Aufgabe und Pause-Schalter.
+struct Transfers(Arc<Mutex<HashMap<String, (tauri::async_runtime::JoinHandle<()>, Arc<std::sync::atomic::AtomicBool>)>>>);
 
 fn files_get(files: &Files, sid: &str) -> Result<FileSession, String> {
     files.0.lock().unwrap().get(sid).cloned().ok_or_else(|| "Dateisitzung geschlossen".into())
@@ -1715,7 +1734,8 @@ fn transfer_start(
     let tid = new_sid("t");
     let (map, key) = (transfers.0.clone(), tid.clone());
     let mut running = transfers.0.lock().unwrap();
-    let task = tauri::async_runtime::spawn(async move {
+    let pause = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let task = tauri::async_runtime::spawn(sftp::PAUSE.scope(pause.clone(), async move {
         let ch = on_progress.clone();
         let report = move |p| {
             let _ = ch.send(p);
@@ -1737,16 +1757,25 @@ fn transfer_start(
             let _ = on_progress.send(sftp::Progress::Failed { error });
         }
         map.lock().unwrap().remove(&key);
-    });
-    running.insert(tid.clone(), task);
+    }));
+    running.insert(tid.clone(), (task, pause));
     Ok(tid)
 }
 
 #[tauri::command]
 fn transfer_cancel(transfers: State<Transfers>, tid: String) {
-    if let Some(t) = transfers.0.lock().unwrap().remove(&tid) {
+    if let Some((t, _)) = transfers.0.lock().unwrap().remove(&tid) {
         t.abort();
     }
+}
+
+/// Anhalten bzw. weiterlaufen lassen; die Übertragung setzt an derselben Stelle fort (Verbindung bleibt offen).
+#[tauri::command]
+fn transfer_pause(transfers: State<Transfers>, tid: String, paused: bool) -> Result<(), String> {
+    let map = transfers.0.lock().unwrap();
+    let (_, p) = map.get(&tid).ok_or("Übertragung läuft nicht mehr")?;
+    p.store(paused, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
 }
 
 // ---------- VNC ----------
@@ -2419,6 +2448,7 @@ pub fn run() {
             clip_read,
             clip_write,
             stage_file,
+            transfer_pause,
             local_read,
             local_temp,
             local_open,

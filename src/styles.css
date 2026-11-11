@@ -947,3 +947,5 @@ dialog.preview[open] { display: flex; flex-direction: column; }
 .pane-tools label { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
 .pane-filter { min-width: 80px; }
 body.mobile .pane-tools { gap: 10px; flex-wrap: nowrap; overflow: hidden; }
+.transfer-btns { display: inline-flex; gap: 4px; }
+.transfer.paused progress { opacity: 0.5; }

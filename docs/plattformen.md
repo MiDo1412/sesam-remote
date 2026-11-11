@@ -110,5 +110,5 @@ Mit dem bezahlten Team:
   plus den Schritt `appintentsmetadataprocessor` im Build. Bis dahin: Kurzbefehl mit «URL öffnen».
 - Windows: Sprungliste auf einem echten Windows-Rechner prüfen, Windows Hello vor dem Anzeigen von Passwörtern.
 - Linux: Tastenkürzel an den Remotecomputer.
-- Dateifenster: Übertragungen pausieren (heute: Abbrechen und Wiederholen), zuletzt besuchte Ordner je
+- Dateifenster: nach einem Verbindungsabbruch an der alten Stelle fortsetzen (SFTP-Offset, FTP REST), zuletzt besuchte Ordner je
   Verbindung, Bearbeiten auf dem iPad (dort gibt es kein Standardprogramm; denkbar über «Teilen»).

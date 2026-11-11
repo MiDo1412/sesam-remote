@@ -317,6 +317,7 @@ pub async fn upload<R: Remote>(s: &Arc<Scp<R>>, local: &Path, remote_dir: &str, 
                 let label = src.to_string_lossy();
                 let mut left = size;
                 while left > 0 {
+                    crate::sftp::wait_if_paused().await;
                     let k = f.read(&mut buf[..left.min(BUF as u64) as usize]).await.map_err(|e| format!("{label}: {e}"))?;
                     if k == 0 {
                         return Err(format!("{label}: Datei wurde während der Übertragung kürzer"));
@@ -388,6 +389,7 @@ pub async fn download<R: Remote>(s: &Arc<Scp<R>>, remote: &str, local_dir: &Path
                 let label = rjoin(remote, &n);
                 let mut left = size;
                 while left > 0 {
+                    crate::sftp::wait_if_paused().await;
                     let k = st.read(&mut buf[..left.min(BUF as u64) as usize]).await.map_err(w)?;
                     if k == 0 {
                         return Err("SCP: Verbindung unerwartet beendet".into());

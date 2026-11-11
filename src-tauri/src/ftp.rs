@@ -335,6 +335,7 @@ where
 {
     let mut buf = vec![0u8; 256 * 1024];
     loop {
+        crate::sftp::wait_if_paused().await;
         let n = r.read(&mut buf).await.map_err(|e| e.to_string())?;
         if n == 0 {
             return w.flush().await.map_err(|e| e.to_string());

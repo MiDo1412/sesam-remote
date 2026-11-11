@@ -647,6 +647,18 @@ impl<F: Fn(Progress)> Meter<F> {
     }
 }
 
+tokio::task_local! {
+    /// Pause einer Übertragung (transfer_pause): gesetzt, liest die Schleife nicht weiter; Dateien und Stelle bleiben offen.
+    pub static PAUSE: std::sync::Arc<std::sync::atomic::AtomicBool>;
+}
+
+/// Wartet, solange die laufende Übertragung pausiert ist (ausserhalb einer Übertragung sofort zurück).
+pub async fn wait_if_paused() {
+    while PAUSE.try_with(|p| p.load(std::sync::atomic::Ordering::Relaxed)).unwrap_or(false) {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+}
+
 async fn pump<R, W, F>(mut r: R, mut w: W, m: &mut Meter<F>, file: &str) -> Result<(), String>
 where
     R: AsyncRead + Unpin,
@@ -655,6 +667,7 @@ where
 {
     let mut buf = vec![0u8; 256 * 1024];
     loop {
+        wait_if_paused().await;
         let n = r.read(&mut buf).await.map_err(err)?;
         if n == 0 {
             break;
@@ -949,6 +962,37 @@ mod tests {
         let _ = sftp.to_trash("/home/a.txt").await.unwrap();
         assert_eq!(sftp.trash_cleanup(7).await.unwrap(), 1);
         assert_eq!(sftp.trash_cleanup(0).await.unwrap(), 1, "Zeitstempel dieser Sekunde zählt noch nicht als alt");
+    }
+
+    /// Pause hält die Übertragung an derselben Stelle an, Fortsetzen macht sie fertig (Inhalt vollständig).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn pause_und_fortsetzen() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let fs = Arc::new(Mutex::new(MemFs::default()));
+        fs.lock().unwrap().nodes.insert("/home".into(), None);
+        let (client, server) = tokio::io::duplex(1 << 20);
+        russh_sftp::server::run(server, Server { fs: fs.clone(), listed: HashSet::new() }).await;
+        let sftp = Arc::new(Sftp { s: SftpSession::new(client).await.unwrap(), ssh: None });
+        let file = std::env::temp_dir().join(format!("sesam-pause-{}.bin", std::process::id()));
+        let big: Vec<u8> = (0..900_000u32).map(|i| (i * 13 % 251) as u8).collect();
+        std::fs::write(&file, &big).unwrap();
+        let pause = Arc::new(AtomicBool::new(true));
+        let done = Arc::new(Mutex::new(0u64));
+        let d2 = done.clone();
+        let task = tokio::spawn(PAUSE.scope(pause.clone(), {
+            let sftp = sftp.clone();
+            let file = file.clone();
+            async move { upload(&sftp, &file, "/home", false, move |p| if let Progress::Running { done, .. } = p { *d2.lock().unwrap() = done }).await }
+        }));
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        assert_eq!(*done.lock().unwrap(), 0, "pausiert: nichts übertragen");
+        assert!(!task.is_finished());
+        pause.store(false, Ordering::Relaxed);
+        let target = task.await.unwrap().unwrap();
+        let name = file.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(target, format!("/home/{name}"));
+        assert_eq!(fs.lock().unwrap().nodes[&target].as_deref(), Some(big.as_slice()));
+        let _ = std::fs::remove_file(&file);
     }
 
     #[tokio::test]

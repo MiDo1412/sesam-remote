@@ -1088,13 +1088,28 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const state = el("span", "transfer-state", "Startet …");
     const cancel = el("button", "plain", "Abbrechen");
     cancel.type = "button";
-    row.append(label, bar, state, cancel);
+    // Pause: die Übertragung bleibt an ihrer Stelle stehen und läuft mit «Weiter» dort fort.
+    const pause = el("button", "plain", "Pause") as HTMLButtonElement;
+    pause.type = "button";
+    let paused = false;
+    pause.onclick = () => {
+      if (!tid) return;
+      paused = !paused;
+      api.transferPause(tid, paused).catch(() => {});
+      pause.textContent = paused ? "Weiter" : "Pause";
+      if (paused) state.textContent = "Pausiert";
+      row.classList.toggle("paused", paused);
+    };
+    const btns = el("span", "transfer-btns");
+    btns.append(pause, cancel);
+    row.append(label, bar, state, btns);
     transferList.prepend(row);
     let tid: string | null = null;
     let [lastAt, lastDone, speed] = [0, 0, 0];
     const finish = (text: string, ok = false) => {
       state.textContent = text;
       cancel.hidden = true;
+      pause.hidden = true;
       if (tid) running.delete(tid);
       if (settledOnce) return;
       settledOnce = true;
@@ -1116,6 +1131,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     api
       .transferStart(sid!, upload, src, destDir, (p: Progress) => {
         if (p.state === "running") {
+          if (paused) return;
           bar.value = p.total ? p.done / p.total : 0;
           // Geschwindigkeit gleitend, Restzeit daraus
           const now = performance.now();

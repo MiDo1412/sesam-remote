@@ -289,4 +289,5 @@ export const api = {
     return invoke<string>("transfer_start", { sid, upload, src, destDir, replace, onProgress: ch });
   },
   transferCancel: (tid: string) => invoke<void>("transfer_cancel", { tid }),
+  transferPause: (tid: string, paused: boolean) => invoke<void>("transfer_pause", { tid, paused }),
 };
