@@ -1,6 +1,7 @@
 import { api } from "./api";
 import { marked } from "marked";
 import { downloadScript } from "./setup";
+import { isMobile } from "./titlebar";
 import vnc from "../docs/hilfe/vnc.md?raw";
 import wayvnc from "../docs/hilfe/wayvnc.md?raw";
 import macos from "../docs/hilfe/macos.md?raw";
@@ -71,7 +72,7 @@ export function openHelp(id: string) {
       b.className = "nav-item";
       b.dataset.id = t.id;
       b.textContent = t.title;
-      b.onclick = () => show(t.id);
+      b.onclick = () => (show(t.id), b.focus({ preventScroll: true }));
       return b;
     }),
   );
@@ -90,5 +91,9 @@ export function openHelp(id: string) {
   };
   nav.prepend(search);
   show(id);
-  if (!dlg.open) dlg.showModal();
+  if (!dlg.open) {
+    dlg.showModal();
+    // Touch: nicht gleich die Bildschirmtastatur für das Suchfeld zeigen, Fokus auf die gewählte Anleitung.
+    if (isMobile) nav.querySelector<HTMLElement>("[aria-current=true]")?.focus({ preventScroll: true });
+  }
 }

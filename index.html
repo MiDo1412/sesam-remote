@@ -51,6 +51,7 @@
               </thead>
               <tbody id="conn-rows"></tbody>
             </table>
+            <p id="no-match" class="empty no-match" hidden>Keine Verbindungen gefunden.</p>
             <div id="empty" class="empty" hidden>
               <img class="empty-logo" src="/sesam-icon.svg" alt="" width="64" height="64" />
               <p>Noch keine Verbindungen.</p>
@@ -101,7 +102,7 @@
           </select>
         </label>
         <label data-tip="Standard: das letzte Bild des Desktops, gespeichert beim Trennen. Optional ein eigenes Bild.">Vorschaubild
-          <span class="pick"><span id="thumb-preview" class="thumb-mini" aria-hidden="true"></span><span id="thumb-name" class="pick-name"></span><button type="button" id="thumb-menu" class="menu-button">Ändern</button></span>
+          <span class="pick"><span id="thumb-preview" class="thumb-mini" aria-hidden="true"></span><span id="thumb-name" class="pick-name"></span><button type="button" id="thumb-menu">Ändern</button></span>
         </label>
 
         <div class="row span"><span>Bei Doppelklick öffnen</span>
@@ -201,7 +202,7 @@
             <label data-tip="Standard 22.">Port<input name="sshPort" type="number" min="1" max="65535" class="mono" /></label>
           </div>
         </fieldset>
-        <label class="option"><span><b>Shell auf dem Server halten (tmux)</b><small>Die Shell läuft in einer tmux-Sitzung weiter, wenn die Verbindung abbricht (Ruhezustand, Netzwechsel); beim Neuverbinden hängt Sesam sie wieder an, laufende Befehle laufen weiter. Braucht tmux auf dem Server, Sesam installiert nichts.</small></span><input type="checkbox" name="persistShell" /></label>
+        <label class="option span"><span><b>Shell auf dem Server halten (tmux)</b><small>Die Shell läuft in einer tmux-Sitzung weiter, wenn die Verbindung abbricht (Ruhezustand, Netzwechsel); beim Neuverbinden hängt Sesam sie wieder an, laufende Befehle laufen weiter. Braucht tmux auf dem Server, Sesam installiert nichts.</small></span><input type="checkbox" name="persistShell" /></label>
         <fieldset class="span svc">
           <legend>Dateien über FTP <small>FTPS, FTP</small> <button type="button" class="help-btn" data-help="ftp" aria-label="Hilfe zu FTP">?</button></legend>
           <label class="switch"><input type="checkbox" name="ftpOn" /> Ein</label>
@@ -434,7 +435,7 @@
       <div class="help">
         <nav id="help-nav" aria-label="Anleitungen"></nav>
         <article id="help-body"></article>
-        <form method="dialog" class="help-close"><button class="plain" aria-label="Hilfe schliessen">Schliessen</button></form>
+        <form method="dialog" class="help-close"><button aria-label="Hilfe schliessen">Schliessen</button></form>
       </div>
     </dialog>
 

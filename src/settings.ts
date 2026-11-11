@@ -75,7 +75,8 @@ export async function openSettings(tab = "general") {
     if (t === "terminal") void renderProfiles();
     if (t === "groups") renderGroupSettings();
   };
-  for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.onclick = () => show(b.dataset.pane!);
+  // Fokus wandert mit der Auswahl (WebKit fokussiert Knöpfe beim Klick nicht), sonst stehen Ring und Auswahl auf zwei Zeilen.
+  for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.onclick = () => (show(b.dataset.pane!), b.focus({ preventScroll: true }));
 
   // Allgemein
   const trash = $<HTMLSelectElement>("settings-trash-days");

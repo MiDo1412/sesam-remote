@@ -18,15 +18,14 @@ export function showPreview(name: string, data: ArrayBuffer, total: number, trun
   const dlg = document.createElement("dialog");
   dlg.className = "preview";
   dlg.setAttribute("aria-label", `Vorschau ${name}`);
-  const head = document.createElement("div");
-  head.className = "preview-head";
-  const title = document.createElement("strong");
+  // Einheitliches Blatt: Titel im Blatt, Inhalt, Fussleiste mit Hinweis links und Knopf rechts.
+  const title = document.createElement("h2");
   title.textContent = name;
   const close = document.createElement("button");
   close.type = "button";
+  close.className = "primary";
   close.textContent = "Schliessen";
   close.onclick = () => dlg.close();
-  head.append(title, close);
   const body = document.createElement("div");
   body.className = "preview-body";
   let url = "";
@@ -46,9 +45,12 @@ export function showPreview(name: string, data: ArrayBuffer, total: number, trun
     body.append(pre);
   }
   const foot = document.createElement("div");
-  foot.className = "preview-foot";
-  foot.textContent = truncated ? `Gezeigt werden die ersten ${Math.round(data.byteLength / 1024)} KB von ${Math.round(total / 1024)} KB.` : "";
-  dlg.append(head, body, foot);
+  foot.className = "actions preview-foot";
+  const note = document.createElement("span");
+  note.className = "note";
+  note.textContent = truncated ? `Gezeigt werden die ersten ${Math.round(data.byteLength / 1024)} KB von ${Math.round(total / 1024)} KB.` : "";
+  foot.append(note, close);
+  dlg.append(title, body, foot);
   dlg.addEventListener("keydown", (e) => e.key === " " && (e.preventDefault(), dlg.close()));
   dlg.onclose = () => (url && URL.revokeObjectURL(url), dlg.remove());
   document.body.append(dlg);

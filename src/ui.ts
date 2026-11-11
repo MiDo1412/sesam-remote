@@ -36,6 +36,8 @@ export function ask(title: string, text: string, ok = "OK", cancel: string | nul
   byId("ask-title").textContent = title;
   byId("ask-text").textContent = text;
   byId("ask-ok").textContent = ok;
+  // Zerstörende Aktion rot (HIG), sonst Hauptaktion grün.
+  byId("ask-ok").classList.toggle("danger", /löschen|entfernen|ersetzen/i.test(ok));
   const c = byId("ask-cancel");
   c.hidden = cancel === null;
   c.textContent = cancel ?? "";

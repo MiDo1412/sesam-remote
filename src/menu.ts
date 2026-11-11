@@ -31,6 +31,10 @@ let current: { close: (value: string | null) => void } | null = null;
 export let fallbackAnchor: HTMLElement | null = null;
 export const setFallbackAnchor = (el: HTMLElement | null) => (fallbackAnchor = el);
 
+// Kontextmenü (Rechtsklick) öffnet am Mauszeiger wie im System, nicht unter dem ganzen Element.
+let ctxPoint: { x: number; y: number; t: number } | null = null;
+addEventListener("contextmenu", (e) => (ctxPoint = e.clientX || e.clientY ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null), true);
+
 export function openMenu(anchor: HTMLElement, items: MenuItem[], opts: { checked?: string; listbox?: boolean } = {}): Promise<string | null> {
   current?.close(null);
   if (!anchor.getClientRects().length && fallbackAnchor?.getClientRects().length) anchor = fallbackAnchor;
@@ -63,7 +67,9 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], opts: { checked
     (anchor.closest("dialog[open]") ?? document.body).append(menu);
 
     // Platzierung: unter dem Knopf, sonst darüber; nach links, wenn rechts kein Platz.
-    const a = anchor.getBoundingClientRect();
+    const pt = ctxPoint && performance.now() - ctxPoint.t < 800 ? ctxPoint : null;
+    ctxPoint = null;
+    const a = pt ? new DOMRect(pt.x, pt.y, 0, 0) : anchor.getBoundingClientRect();
     const m = menu.getBoundingClientRect();
     const below = innerHeight - a.bottom - 8 >= m.height || a.top < m.height + 8;
     const top = below ? a.bottom + 4 : a.top - m.height - 4;
@@ -73,7 +79,7 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], opts: { checked
     // In einem Dialog mit transform (iPad-Blatt) bezieht sich «fixed» auf den Dialog: Versatz herausrechnen.
     const r = menu.getBoundingClientRect();
     if (r.left !== left || r.top !== top) Object.assign(menu.style, { left: `${2 * left - r.left}px`, top: `${2 * top - r.top}px` });
-    menu.style.minWidth = `${a.width}px`;
+    if (!pt) menu.style.minWidth = `${a.width}px`;
     menu.style.transformOrigin = below ? "top" : "bottom";
     if (!below) menu.style.maxHeight = `${a.top - 12}px`;
 

@@ -17,6 +17,9 @@ const glyph = (svg: string) => fl(svg, 14);
  *  Programme, keine Desktop-Verknüpfungen; die Oberfläche blendet diese Funktionen aus (Klasse «mobile»). */
 export const isMobile = /iPad|iPhone|Android/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1);
 export const isMac = navigator.userAgent.includes("Mac") && !isMobile;
+// Fokusring nur nach Tastaturbedienung (styles.css: body.kbd); Klick oder Tippen blendet ihn wieder aus.
+addEventListener("keydown", (e) => (e.key === "Tab" || e.key.startsWith("Arrow")) && document.body.classList.add("kbd"), true);
+addEventListener("pointerdown", () => document.body.classList.remove("kbd"), true);
 /** Apple-Tastatur (Mac oder iPad mit Tastatur): Kürzel mit ⌘ anzeigen. */
 const appleKeys = navigator.userAgent.includes("Mac") || /iPad|iPhone/.test(navigator.userAgent);
 

@@ -595,7 +595,8 @@ function activate(tab: Tab) {
   $("session-sub").textContent = tab.sub;
   $("library").hidden = true;
   $("session").hidden = false;
-  tab.tabEl.scrollIntoView({ block: "nearest", inline: "nearest" }); // bei vielen Tabs den aktiven sichtbar halten
+  // Bei vielen Tabs den aktiven sichtbar halten, auch wenn die Werkzeugleiste danach breiter wird.
+  requestAnimationFrame(() => tab.tabEl.scrollIntoView({ block: "nearest", inline: "nearest" }));
   tab.handle.onShow?.();
 }
 

@@ -345,6 +345,7 @@ function render() {
   const list = prefs.view === "list";
   for (const r of document.querySelectorAll<HTMLInputElement>("[name=libView]")) r.checked = r.value === prefs.view;
   $("grid").hidden = list;
+  $("no-match").hidden = list || !items.length || visible.length > 0;
   $("conn-table").hidden = !list || !items.length;
   if (list) renderTable(visible);
   else $("conn-rows").replaceChildren();
