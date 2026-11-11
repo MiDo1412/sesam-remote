@@ -1,0 +1,1 @@
+export default async (p) => { await p.locator('.card', { hasText: 'Wetterstation' }).click(); await p.waitForTimeout(300); await p.locator('#details').getByRole('button', { name: /^Dateien/ }).first().click(); await p.waitForTimeout(2000); };

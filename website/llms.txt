@@ -1,0 +1,48 @@
+# Sesam Remote
+
+> Sesam Remote ist eine Open-Source-Fernzugriffs-App (MPL-2.0) für macOS, Windows und iPadOS. Sie verbindet sich direkt, ohne Konto und ohne Cloud, per RDP, VNC, SSH, SFTP und FTP mit Windows-PCs, Macs, Linux-Servern, Ubuntu mit GNOME und Raspberry Pi. Desktop, Shell und Dateien eines Rechners stehen in einem Eintrag einer Bibliothek.
+
+Website: https://sesam-remote.app/ (Deutsch). App-Name im System: «Sesam Remote», kurz «Sesam». Kategorie: Dienstprogramme / Remote Desktop.
+
+## Bezug
+
+- Mac: signierter und von Apple notarisierter Download von https://sesam-remote.app/ . Bewusst nicht im Mac App Store, weil dessen Sandbox lokales Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster verbietet.
+- Windows 10 und 11: Download von https://sesam-remote.app/ .
+- iPad (iPadOS 16 oder neuer): über den App Store (in Vorbereitung).
+
+## Zugänge pro Rechner («Ein Gerät, drei Türen»)
+
+- Desktop: RDP (Windows, GNOME Remote Desktop inkl. Wayland und Anmeldebildschirm mit Server-Redirection, xrdp) mit RD-Gateway, Kerberos/KDC-Proxy, Ton, Ordnerfreigabe, mehreren Monitoren, automatischem Wiederverbinden. VNC (macOS-Bildschirmfreigabe mit Apple-Anmeldung, wayvnc, Raspberry Pi) mit VeNCrypt-TLS und Zertifikat-Pinning. Auflösung folgt dem Fenster; Vollbild; Hoch- und Querformat.
+- Shell: SSH mit Passwort, Schlüssel (ed25519) oder SSH-Agent, Hostschlüssel-Prüfung, Sprungserver, Portweiterleitung (lokal, entfernt, SOCKS), dauerhafte Sitzungen mit tmux, Textbausteine, «An alle Shells senden», lokales Terminal mit Profilen.
+- Dateien: zweispaltig mit Ziehen und Ablegen über SFTP, SCP, FTP und FTPS; Ordnervergleich mit SHA-256; Rechte und Besitzer ändern (auch mit sudo); Papierkorb und Wiederherstellen.
+
+## Weitere Funktionen
+
+- Gemeinsame Zwischenablage: Text in beide Richtungen, Bilder und Dateien über SFTP; Verlauf der letzten 25 Einträge nur im Arbeitsspeicher.
+- Online-Status mit Latenz, Wake-on-LAN («Aufwecken und verbinden»).
+- Erste Hilfe: prüft Namensauflösung, Erreichbarkeit, Port, Dienst, Anmeldung und Zertifikat Schritt für Schritt.
+- Desktop freischalten: schaltet über SSH die Bildschirmfreigabe auf macOS, Raspberry Pi OS und Ubuntu (GNOME) ein, zeigt vorher jeden Befehl.
+- RDP und VNC wahlweise durch einen SSH-Tunnel.
+- Befehlspalette (⌘⇧P bzw. Strg+Umschalt+P), schnelle Verbindung ohne Speichern.
+
+## Sicherheit und Datenschutz
+
+- Passwörter und SSH-Schlüssel liegen verschlüsselt im Schlüsselbund des Betriebssystems (macOS/iPadOS-Schlüsselbund, Windows-Anmeldeinformationsverwaltung); die Verbindungsliste enthält keine Geheimnisse.
+- Zugangsdaten sind mehreren Verbindungen zuweisbar; SSH-Schlüssel kann Sesam erzeugen und installieren.
+- Kein Konto, kein Vermittlungsserver, keine Telemetrie. Sicherung als mit Passwort verschlüsselte .sesam-Datei.
+
+## iPad-Einschränkungen (durch iPadOS)
+
+- Verbindungen enden kurz nachdem die App in den Hintergrund geht.
+- ⌘Tab, ⌘Leertaste, Globus-Taste bleiben beim System.
+- Dateien nur über die Dateien-App; Zwischenablage nur im Vordergrund; kein lokales Terminal.
+
+## Lizenz
+
+Mozilla Public License 2.0. Schriften: Inter und JetBrains Mono (SIL OFL). Symbole: Fluent System Icons (MIT) unter Windows, SF Symbols auf Apple-Geräten.
+
+## Seiten
+
+- [Startseite](https://sesam-remote.app/): Funktionen, Plattformen, Fragen
+- [Support](https://sesam-remote.app/support.html): Kontakt (support@sesam-remote.app), Einrichtung von Windows, Mac, Ubuntu, Linux und Raspberry Pi, häufige Probleme
+- [Datenschutz](https://sesam-remote.app/datenschutz.html): Die App sammelt keine Daten; lokale Speicherung, Berechtigungen, Löschen

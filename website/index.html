@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sesam Remote – Fernzugriff auf Desktop, Shell und Dateien</title>
+<meta name="description" content="Sesam Remote verbindet Mac, Windows und iPad mit entfernten Rechnern: Desktop über RDP und VNC, Shell über SSH, Dateien über SFTP und FTP. Zugangsdaten im Schlüsselbund, kein Konto, keine Cloud. Open Source.">
+<link rel="canonical" href="https://sesam-remote.app/">
+<link rel="alternate" hreflang="de" href="https://sesam-remote.app/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#f3f3f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#202020" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="img/sesam-icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<link rel="alternate" type="text/markdown" title="Sesam Remote für KI-Assistenten" href="llms.txt">
+<link rel="preload" href="fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+
+<meta property="og:type" content="website">
+<meta property="og:locale" content="de_CH">
+<meta property="og:site_name" content="Sesam Remote">
+<meta property="og:title" content="Sesam Remote – Sesam, öffne dich.">
+<meta property="og:description" content="Desktop, Shell und Dateien entfernter Rechner in einer App. Für Mac, Windows und iPad.">
+<meta property="og:url" content="https://sesam-remote.app/">
+<meta property="og:image" content="https://sesam-remote.app/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Sesam Remote: Bibliothek mit Verbindungen zu Mac, Windows, Ubuntu und Raspberry Pi">
+<meta name="twitter:card" content="summary_large_image">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://sesam-remote.app/#app",
+      "name": "Sesam Remote",
+      "alternateName": "Sesam",
+      "url": "https://sesam-remote.app/",
+      "image": "https://sesam-remote.app/img/icon-512.png",
+      "screenshot": "https://sesam-remote.app/img/lib-light-1440.webp",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "Remote Desktop",
+      "operatingSystem": "macOS, Windows 10, Windows 11, iPadOS 16 oder neuer",
+      "inLanguage": "de",
+      "license": "https://www.mozilla.org/MPL/2.0/",
+      "isAccessibleForFree": true,
+      "description": "Fernzugriffs-App für Mac, Windows und iPad. Verbindet sich per RDP, VNC, SSH, SFTP und FTP mit Windows-PCs, Macs, Linux-Servern, Ubuntu mit GNOME und Raspberry Pi. Desktop, Shell und Dateien eines Rechners in einer Bibliothek; Passwörter und Schlüssel im Schlüsselbund des Betriebssystems; kein Konto, keine Cloud.",
+      "featureList": [
+        "Remotedesktop über RDP (Windows, GNOME Remote Desktop, xrdp) mit RD-Gateway, Kerberos und automatischem Wiederverbinden",
+        "Bildschirmfreigabe über VNC (macOS, wayvnc unter Wayland, Raspberry Pi) mit VeNCrypt-TLS und Zertifikat-Pinning",
+        "SSH-Shell mit Schlüsseln, SSH-Agent, Sprungserver, Portweiterleitung und dauerhaften Sitzungen (tmux)",
+        "Zweispaltiger Dateitransfer über SFTP, SCP, FTP und FTPS mit Ziehen und Ablegen",
+        "Gemeinsame Zwischenablage für Text, Bilder und Dateien",
+        "Zugangsdaten verschlüsselt im Schlüsselbund des Systems, mehreren Verbindungen zuweisbar",
+        "Wake-on-LAN, Online-Status und Erste-Hilfe-Prüfung",
+        "Desktop freischalten auf macOS, Raspberry Pi OS und Ubuntu per SSH",
+        "Befehlspalette und schnelle Verbindung"
+      ],
+      "softwareHelp": { "@type": "WebPage", "url": "https://sesam-remote.app/support.html" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CHF" }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://sesam-remote.app/#web",
+      "url": "https://sesam-remote.app/",
+      "name": "Sesam Remote",
+      "inLanguage": "de-CH",
+      "about": { "@id": "https://sesam-remote.app/#app" },
+      "publisher": { "@type": "Organization", "name": "Sesam Remote", "email": "support@sesam-remote.app" }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://sesam-remote.app/#faq",
+      "mainEntity": [
+        { "@type": "Question", "name": "Was ist Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Sesam Remote ist eine Open-Source-Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen." } },
+        { "@type": "Question", "name": "Mit welchen Rechnern kann sich Sesam Remote verbinden?", "acceptedAnswer": { "@type": "Answer", "text": "Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP." } },
+        { "@type": "Question", "name": "Brauche ich ein Konto oder einen Cloud-Dienst?", "acceptedAnswer": { "@type": "Answer", "text": "Nein. Sesam verbindet sich direkt mit deinen Rechnern. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie." } },
+        { "@type": "Question", "name": "Wo speichert Sesam meine Passwörter?", "acceptedAnswer": { "@type": "Answer", "text": "Passwörter und SSH-Schlüssel liegen verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse." } },
+        { "@type": "Question", "name": "Warum gibt es Sesam für den Mac nicht im Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "Die Sandbox des Mac App Store verbietet Funktionen, die Sesam ausmachen: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als signierten und von Apple notarisierten Download von dieser Website." } },
+        { "@type": "Question", "name": "Was kann die iPad-Version nicht?", "acceptedAnswer": { "@type": "Answer", "text": "iPadOS beendet Verbindungen kurz nachdem die App in den Hintergrund geht, behält Systemkürzel wie Befehl-Tab für sich, gibt Dateien nur über die Dateien-App frei und erlaubt die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf dem iPad nicht." } },
+        { "@type": "Question", "name": "Unter welcher Lizenz steht Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Unter der Mozilla Public License 2.0 (MPL-2.0)." } }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body class="no-js">
+<script>document.body.classList.replace('no-js', 'js');</script>
+<a class="skip" href="#inhalt">Zum Inhalt</a>
+
+<header class="top solid">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="Sesam Remote, Startseite"><img src="img/sesam-icon.svg" alt="" width="34" height="34">Sesam</a>
+    <nav aria-label="Hauptnavigation">
+      <a href="#tueren">Funktionen</a>
+      <a href="#schluessel">Sicherheit</a>
+      <a href="#laden">Plattformen</a>
+      <a href="support.html">Support</a>
+    </nav>
+    <a class="btn small" href="#laden">Laden</a>
+  </div>
+</header>
+
+<main id="inhalt">
+  <section class="opening" aria-labelledby="titel">
+    <div class="wrap hero">
+      <h1 id="titel"><span class="l1">Sesam,</span> <span class="l2">öffne&nbsp;dich.</span></h1>
+      <p class="facts">RDP · VNC · SSH · SFTP<br>Mac · Windows · iPad<br>Open Source, MPL-2.0</p>
+      <div class="intro">
+        <p class="lead">Bildschirm, Shell und Dateien deiner Macs, Windows-PCs, Linux-Server und Raspberry Pis. In einer App für Mac, Windows und iPad.</p>
+        <div class="act">
+          <a class="btn" href="#laden">Für Mac laden</a>
+          <a class="link" href="#laden">Windows und iPad</a>
+        </div>
+      </div>
+      <div class="window"><picture><source media="(prefers-color-scheme: dark)" srcset="img/lib-dark-1440.webp 1440w, img/lib-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/lib-light-1440.webp" srcset="img/lib-light-1440.webp 1440w, img/lib-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="eager" decoding="async" alt="Die Bibliothek von Sesam Remote: Karten für Studio-Mac, Buchhaltung, Werkstatt-PC, Raspberry Pi Wetterstation, Webserver, NAS und Datenbank, nach Gruppen geordnet, mit Online-Status"></picture></div>
+    </div>
+  </section>
+
+  <section id="tueren" class="doors" data-door="desk" aria-labelledby="tueren-titel">
+    <div class="wrap">
+      <div class="head">
+        <h2 id="tueren-titel" class="rise">Öffne <span class="word" id="door-word">den Desktop.</span></h2>
+        <p class="rise" style="--i:1">Ein Eintrag ist ein Gerät mit drei Türen. Sesam fragt beim Anlegen die Ports ab und schaltet ein, was antwortet.</p>
+      </div>
+      <div class="seg rise" style="--i:2" role="tablist" aria-label="Tür wählen">
+        <button role="tab" id="t-desk" aria-controls="p-desk" aria-selected="true" data-door="desk" data-word="den Desktop.">Desktop</button>
+        <button role="tab" id="t-shell" aria-controls="p-shell" aria-selected="false" tabindex="-1" data-door="shell" data-word="die Shell.">Shell</button>
+        <button role="tab" id="t-files" aria-controls="p-files" aria-selected="false" tabindex="-1" data-door="files" data-word="die Dateien.">Dateien</button>
+      </div>
+      <div class="body">
+        <div>
+          <div class="panel" role="tabpanel" id="p-desk" aria-labelledby="t-desk">
+            <h3>RDP und VNC</h3>
+            <ul>
+              <li>Windows, GNOME unter Wayland samt Anmeldebildschirm, xrdp</li>
+              <li>Mac-Bildschirmfreigabe und Raspberry Pi über VNC mit TLS</li>
+              <li>Auflösung folgt dem Fenster, auch im Hochformat</li>
+              <li>RD-Gateway, Kerberos, Ton, Ordnerfreigabe, mehrere Monitore</li>
+            </ul>
+          </div>
+          <div class="panel" role="tabpanel" id="p-shell" aria-labelledby="t-shell" hidden>
+            <h3>SSH</h3>
+            <ul>
+              <li>Passwort, Schlüssel oder SSH-Agent</li>
+              <li>Sprungserver und Portweiterleitung</li>
+              <li>Sitzungen, die mit tmux weiterlaufen</li>
+              <li>Textbausteine und «An alle Shells senden»</li>
+            </ul>
+          </div>
+          <div class="panel" role="tabpanel" id="p-files" aria-labelledby="t-files" hidden>
+            <h3>SFTP und FTP</h3>
+            <ul>
+              <li>Zwei Spalten, Ziehen und Ablegen</li>
+              <li>Ordner vergleichen, mit Prüfsumme</li>
+              <li>Rechte ändern, auf Wunsch mit sudo</li>
+              <li>Papierkorb auf dem Server, Löschen rückgängig</li>
+            </ul>
+          </div>
+        </div>
+        <div class="shots rise" style="--i:3">
+          <picture class="on"><source media="(prefers-color-scheme: dark)" srcset="img/desk-dark-1440.webp 1440w, img/desk-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/desk-light-1440.webp" srcset="img/desk-light-1440.webp 1440w, img/desk-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="lazy" decoding="async" alt="Remotedesktop zu einem Ubuntu-PC über RDP mit der Sitzungsleiste von Sesam"></picture>
+          <picture><source media="(prefers-color-scheme: dark)" srcset="img/shell-dark-1440.webp 1440w, img/shell-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/shell-light-1440.webp" srcset="img/shell-light-1440.webp 1440w, img/shell-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="lazy" decoding="async" alt="SSH-Shell zu einem Webserver: Status von nginx und Inhalt des Webordners"></picture>
+          <picture><source media="(prefers-color-scheme: dark)" srcset="img/files-dark-1440.webp 1440w, img/files-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/files-light-1440.webp" srcset="img/files-light-1440.webp 1440w, img/files-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="lazy" decoding="async" alt="Dateitransfer in zwei Spalten: eigener Ordner links, Raspberry Pi rechts"></picture>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="switches" aria-labelledby="schalter-titel">
+    <div class="wrap"><h2 id="schalter-titel" class="rise">Ein Schalter, eine Sorge weniger.</h2></div>
+    <div class="list">
+      <div class="band rise on"><div><p class="say" id="b1">Teile die Zwischenablage mit dem Rechner.</p><p class="then"><span>Text in beide Richtungen, Bilder und Dateien über SFTP. Die letzten 25 Einträge bleiben im Verlauf.</span></p></div><button class="toggle" role="switch" aria-checked="true" aria-labelledby="b1"></button></div>
+      <div class="band rise"><div><p class="say" id="b2">Schick den Desktop durch einen SSH-Tunnel.</p><p class="then"><span>RDP und VNC müssen nicht offen im Netz stehen, und klassisches VNC ist so verschlüsselt.</span></p></div><button class="toggle" role="switch" aria-checked="false" aria-labelledby="b2"></button></div>
+      <div class="band rise on"><div><p class="say" id="b3">Lass die Shell auf dem Server weiterlaufen.</p><p class="then"><span>Mit tmux übersteht die Sitzung Netzwechsel und zugeklappte Deckel. Du machst dort weiter, wo du warst.</span></p></div><button class="toggle" role="switch" aria-checked="true" aria-labelledby="b3"></button></div>
+      <div class="band rise"><div><p class="say" id="b4">Weck den Rechner, bevor du verbindest.</p><p class="then"><span>Wake-on-LAN, sobald Sesam ihn einmal im Netz gesehen hat. Verbunden wird, sobald er antwortet.</span></p></div><button class="toggle" role="switch" aria-checked="false" aria-labelledby="b4"></button></div>
+      <div class="band rise"><div><p class="say" id="b5">Verbinde nach einem Abbruch selbst neu.</p><p class="then"><span>Fünf Versuche nach 2, 4, 8, 16 und 30 Sekunden. Windows setzt die laufende Sitzung fort.</span></p></div><button class="toggle" role="switch" aria-checked="false" aria-labelledby="b5"></button></div>
+    </div>
+  </section>
+
+  <section class="targets" aria-labelledby="ziele-titel">
+    <div class="wrap tiles">
+      <div class="tile lead rise"><h2 id="ziele-titel">Öffnet, was du hast.</h2><p>Sesam klopft an den üblichen Ports an und weiss danach, welche Tür offen ist.</p></div>
+      <div class="tile rise" style="--i:1"><div class="thumb"><span class="port" data-n="3389">3389</span><span class="badge">RDP</span></div><p class="name"><i style="--dot:#3e63dd"></i>Windows</p><p class="sub">Remotedesktop, RDP</p></div>
+      <div class="tile rise" style="--i:2"><div class="thumb"><span class="port" data-n="5900">5900</span><span class="badge">VNC</span></div><p class="name"><i style="--dot:#30a46c"></i>Mac</p><p class="sub">Bildschirmfreigabe, VNC</p></div>
+      <div class="tile rise" style="--i:3"><div class="thumb"><span class="port" data-n="3389">3389</span><span class="badge">RDP</span></div><p class="name"><i style="--dot:#f76b15"></i>Ubuntu</p><p class="sub">GNOME Remote Desktop, auch Wayland</p></div>
+      <div class="tile rise" style="--i:4"><div class="thumb"><span class="port" data-n="5900">5900</span><span class="badge">VNC</span></div><p class="name"><i style="--dot:#e5484d"></i>Raspberry Pi</p><p class="sub">wayvnc oder RealVNC</p></div>
+      <div class="tile rise" style="--i:5"><div class="thumb"><span class="port" data-n="22">22</span><span class="badge">SSH</span></div><p class="name"><i style="--dot:#8e4ec6"></i>Linux-Server</p><p class="sub">SSH und SFTP</p></div>
+      <div class="tile rise" style="--i:6"><div class="thumb"><span class="port" data-n="21">21</span><span class="badge">FTP</span></div><p class="name"><i style="--dot:#e2a336"></i>NAS und Webspace</p><p class="sub">FTPS oder FTP</p></div>
+    </div>
+  </section>
+
+  <section class="flow" aria-labelledby="ablauf-titel">
+    <div class="wrap">
+      <h2 id="ablauf-titel" class="rise">Von der Adresse zum Desktop.</h2>
+      <div class="bar rise" role="list">
+        <div role="listitem" style="--j:0">Sekunden<small>Zuerst tippst du Name oder IP-Adresse.</small></div>
+        <div role="listitem" style="--j:1">Zwei Sekunden<small>Dann klopft Sesam an 22, 3389, 5900 und 21.</small></div>
+        <div role="listitem" style="--j:2">Einmal<small>Danach bestätigst du den Fingerabdruck des Servers.</small></div>
+        <div role="listitem" style="--j:3">So lange du willst<small>Ab jetzt öffnet ein Doppelklick die Tür.</small></div>
+      </div>
+      <div class="under" aria-hidden="true">
+        <p>Zuerst tippst du Name oder IP-Adresse.</p>
+        <p>Dann klopft Sesam an 22, 3389, 5900 und 21.</p>
+        <p>Danach bestätigst du den Fingerabdruck des Servers.</p>
+        <p>Ab jetzt öffnet ein Doppelklick die Tür, im Fenster, als Tab oder im Vollbild.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="schluessel" class="vault" aria-labelledby="schluessel-titel">
+    <div class="wrap">
+      <h2 id="schluessel-titel" class="rise">Die Schlüssel bleiben bei dir.</h2>
+      <div>
+        <p class="lead rise" style="--i:1">Sesam spricht direkt mit deinen Rechnern. Dazwischen steht kein Dienst, und ein Konto brauchst du nicht.</p>
+        <ul class="keys rise" style="--i:2">
+          <li>Passwörter und Schlüssel liegen verschlüsselt im Schlüsselbund von macOS und iPadOS bzw. in der Windows-Anmeldeinformationsverwaltung.</li>
+          <li>Zugangsdaten einmal anlegen und mehreren Verbindungen zuweisen; SSH-Schlüssel erzeugt und installiert Sesam selbst.</li>
+          <li>Ändert sich ein Hostschlüssel oder Zertifikat, warnt Sesam, statt still weiterzumachen.</li>
+          <li>Keine Cloud, keine Telemetrie. Die Sicherung ist eine mit deinem Passwort verschlüsselte Datei.</li>
+        </ul>
+      </div>
+      <div class="rise" style="--i:3"><picture><source media="(prefers-color-scheme: dark)" srcset="img/cred-dark-1440.webp 1440w, img/cred-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/cred-light-1440.webp" srcset="img/cred-light-1440.webp 1440w, img/cred-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="lazy" decoding="async" alt="Einstellungen von Sesam, Bereich Zugangsdaten: vier gespeicherte Zugangsdaten mit Benutzer, Art und den Verbindungen, die sie nutzen"></picture></div>
+    </div>
+  </section>
+
+  <section id="laden" class="platforms" aria-labelledby="plattformen-titel">
+    <div class="wrap">
+      <h2 id="plattformen-titel" class="rise">Mac, Windows, iPad. Dieselbe App.</h2>
+      <div class="grid">
+        <div class="ipad rise" style="--i:1"><picture><img src="img/ipad-desk-1180.webp" srcset="img/ipad-desk-1180.webp 1180w, img/ipad-desk-2360.webp 2360w" sizes="(min-width: 900px) 60vw, 100vw" width="1180" height="820" loading="lazy" decoding="async" alt="Sesam Remote auf dem iPad: Remotedesktop zu einem Ubuntu-PC mit Sitzungsleiste"></picture></div>
+        <div class="get">
+          <article class="rise" style="--i:2">
+            <h3>Mac</h3>
+            <p>Signiert und von Apple notarisiert, als Download von hier. Nicht im Mac App Store, weil dessen Sandbox das lokale Terminal und Tastenkürzel an den entfernten Rechner verbietet.</p>
+            <a class="btn" href="download/Sesam-Remote.dmg">Für Mac laden</a>
+          </article>
+          <article class="rise" style="--i:3">
+            <h3>Windows</h3>
+            <p>Für Windows 10 und 11. Tastenkürzel gehen an den entfernten Rechner, wie bei der Remotedesktopverbindung.</p>
+            <a class="btn" href="download/Sesam-Remote-Setup.exe">Für Windows laden</a>
+          </article>
+          <article class="rise" style="--i:4">
+            <h3>iPad</h3>
+            <p>Ab iPadOS 16, für Finger, Trackpad und Tastatur, mit eigener Leiste für Strg, Alt, Esc und F1 bis F12. Bald im App Store.</p>
+          </article>
+        </div>
+      </div>
+      <div class="matrix">
+        <h3 class="rise">Was wo geht</h3>
+        <div class="table-wrap rise" style="--i:1">
+          <table>
+            <thead><tr><th scope="col">Funktion</th><th scope="col">Mac</th><th scope="col">Windows</th><th scope="col">iPad</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Desktop über RDP und VNC</th><td class="yes">Ja</td><td class="yes">Ja</td><td class="yes">Ja</td></tr>
+              <tr><th scope="row">SSH-Shell und Dateien</th><td class="yes">Ja</td><td class="yes">Ja</td><td class="yes">Ja</td></tr>
+              <tr><th scope="row">Zugangsdaten im Schlüsselbund</th><td class="yes">Ja</td><td class="yes">Ja</td><td class="yes">Ja</td></tr>
+              <tr><th scope="row">Gemeinsame Zwischenablage</th><td class="yes">Ja</td><td class="yes">Ja</td><td>Im Vordergrund</td></tr>
+              <tr><th scope="row">Systemkürzel an den entfernten Rechner</th><td class="yes">Ja</td><td class="yes">Ja</td><td>Ohne ⌘Tab, ⌘Leertaste</td></tr>
+              <tr><th scope="row">Lokales Terminal</th><td class="yes">Ja</td><td class="yes">Ja</td><td>Nein</td></tr>
+              <tr><th scope="row">Verbindung im Hintergrund</th><td class="yes">Ja</td><td class="yes">Ja</td><td>Endet nach kurzer Zeit</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="fragen" class="faq" aria-labelledby="fragen-titel">
+    <div class="wrap">
+      <h2 id="fragen-titel" class="rise">Gut zu wissen.</h2>
+      <div class="cards rise" style="--i:1">
+        <details name="faq" open><summary>Was ist Sesam Remote?</summary><p><span>Eine Open-Source-Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen.</span></p></details>
+        <details name="faq"><summary>Mit welchen Rechnern kann sich Sesam verbinden?</summary><p><span>Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland und am Anmeldebildschirm), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP.</span></p></details>
+        <details name="faq"><summary>Brauche ich ein Konto oder einen Cloud-Dienst?</summary><p><span>Nein. Sesam verbindet sich direkt mit deinen Rechnern, im lokalen Netz, über VPN, einen SSH-Sprungserver oder ein RD-Gateway. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie.</span></p></details>
+        <details name="faq"><summary>Wo speichert Sesam meine Passwörter?</summary><p><span>Verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse. Für den Umzug schreibt Sesam eine mit deinem Passwort verschlüsselte Sicherung.</span></p></details>
+        <details name="faq"><summary>Funktioniert Sesam mit Ubuntu 26.04 und Wayland?</summary><p><span>Ja. Sesam verbindet sich über RDP mit GNOME Remote Desktop, auch mit dem Anmeldebildschirm, und folgt danach der Übergabe an die Sitzung. Ein Setup-Script richtet feste Ports pro Benutzer ein; Sesam startet es auf Wunsch selbst über SSH.</span></p></details>
+        <details name="faq"><summary>Warum gibt es Sesam für den Mac nicht im Mac App Store?</summary><p><span>Die Sandbox des Mac App Store verbietet, was Sesam ausmacht: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als signierten und von Apple notarisierten Download von dieser Website.</span></p></details>
+        <details name="faq"><summary>Was kann die iPad-Version nicht?</summary><p><span>iPadOS beendet Verbindungen kurz nachdem die App in den Hintergrund geht, behält Systemkürzel wie ⌘Tab für sich, gibt Dateien nur über die Dateien-App frei und erlaubt die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf dem iPad nicht.</span></p></details>
+        <details name="faq"><summary>Unter welcher Lizenz steht Sesam?</summary><p><span>Unter der Mozilla Public License 2.0. Die Schriften dieser Website und der App stehen unter der SIL Open Font License, die Symbole unter Windows unter MIT.</span></p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="close" aria-labelledby="schluss-titel">
+    <div class="wrap">
+      <h2 id="schluss-titel" class="sr">Sesam laden</h2>
+      <form class="blank rise" action="download/Sesam-Remote.dmg" method="get" id="get">
+        Öffne Sesam auf <label class="sr" for="os">Plattform</label><select id="os" aria-label="Plattform">
+          <option value="download/Sesam-Remote.dmg">dem Mac</option>
+          <option value="download/Sesam-Remote-Setup.exe">Windows</option>
+          <option value="#fragen">dem iPad</option>
+        </select> <button type="submit">jetzt.</button>
+      </form>
+      <p class="note rise" style="--i:1">Mac: signiert und notarisiert. Windows: 10 und 11. iPad: bald im App Store.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p class="mark" aria-hidden="true">Sesam</p>
+    <div class="cols">
+      <div><h3>App</h3><a href="#tueren">Funktionen</a><a href="#schluessel">Sicherheit</a><a href="#laden">Laden</a></div>
+      <div><h3>Hilfe</h3><a href="support.html">Support</a><a href="#fragen">Fragen</a><a href="llms.txt">Für KI-Assistenten</a></div>
+      <div><h3>Rechtliches</h3><a href="datenschutz.html">Datenschutz</a><a href="https://www.mozilla.org/MPL/2.0/" rel="noopener">Lizenz MPL-2.0</a></div>
+      <div><h3>Kontakt</h3><a href="mailto:support@sesam-remote.app">support@sesam-remote.app</a><p>Gemacht in der Schweiz.</p></div>
+    </div>
+    <div class="last"><span>© 2026 Sesam Remote</span><a class="btn small quiet" href="#titel">Nach oben</a></div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

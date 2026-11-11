@@ -1,0 +1,30 @@
+# Apache: richtige Typen, Komprimierung und Zwischenspeicher.
+AddType image/webp .webp
+AddType image/svg+xml .svg
+AddType font/woff2 .woff2
+AddType application/manifest+json .webmanifest
+AddType text/markdown;charset=utf-8 .md
+AddType text/plain;charset=utf-8 .txt
+AddDefaultCharset utf-8
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain text/markdown application/javascript image/svg+xml application/xml application/manifest+json
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/html "access plus 1 hour"
+  ExpiresByType text/css "access plus 1 week"
+  ExpiresByType image/webp "access plus 1 month"
+  ExpiresByType image/png "access plus 1 month"
+  ExpiresByType image/svg+xml "access plus 1 month"
+  ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+</IfModule>
+
+ErrorDocument 404 /404.html
