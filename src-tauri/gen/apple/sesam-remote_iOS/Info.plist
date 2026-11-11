@@ -23,7 +23,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Sesam verbindet sich mit Rechnern in deinem Netzwerk (Desktop, Shell und Dateien).</string>
+	<string>Sesam verbindet sich mit Rechnern in deinem Netzwerk (SSH, RDP, VNC und Dateien).</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
