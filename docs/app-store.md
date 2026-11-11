@@ -1,22 +1,27 @@
-# App Stores: was bereit ist, was die Einreichung blockiert
+# Vertrieb: was bereit ist, was noch blockiert
+
+Entscheid (11.11.2026): **Mac** nur als Download von der Website (signiert und notarisiert), **iPad** über den
+App Store, **Windows** über den Microsoft Store und/oder die Website, **Linux** vorerst nur als Download.
 
 Stand 11.11.2026. Nichts davon ist eingereicht, hochgeladen oder bestellt. Was ein Konto, Geld oder eine
 Entscheidung von Mike braucht, ist als **Blocker** markiert.
 
-## Gemeinsam für alle Stores
+## Gemeinsam
 
 - **Version:** eine Quelle, `VERSION`. `node scripts/release.mjs` setzt sie in `package.json`,
   `src-tauri/tauri.conf.json`, `Cargo.toml` und `Cargo.lock`; die Tauri-CLI übernimmt sie beim Bauen in
   `CFBundleShortVersionString` und `CFBundleVersion` (macOS, iPadOS). «Über Sesam» liest sie zur Laufzeit.
-  Heute überall `0.1.0` (noch kein Release); das nächste hiesse `26.11.1`. Die Nummern `JJ.M.N` steigen
+  Heute `0.1.0` (noch kein Release); Builds dazwischen zeigen «26.11.1 Entwicklungsstand · Commit · Datum»
+  (`vite.config.ts`). Die Nummern `JJ.M.N` steigen
   immer, taugen also auch als Build-Nummer für App Store Connect und Partner Center.
 - **Kategorie und Texte:** `bundle.category = Utility` (Mac: «Dienstprogramme»), Kurz- und Langbeschreibung
-  in `tauri.conf.json`. Store-Texte, Screenshots, Datenschutz-URL und Support-URL fehlen noch.
+  in `tauri.conf.json`. Store-Texte, Screenshots, Datenschutz-URL und Support-URL fehlen noch (iPad, Windows).
 - **Symbole:** alle Grössen in `src-tauri/icons` (macOS `.icns`, Windows `.ico` und Store-Logos, iOS-Satz,
   im Xcode-Projekt eingetragen).
-- **Lizenz (Blocker, Entscheidung):** Sesam steht unter GPL-3.0. Die GPL verträgt sich nach verbreiteter
-  Auffassung nicht mit den Nutzungsbedingungen des Apple App Store (zusätzliche Einschränkungen für Nutzer);
-  beim Microsoft Store ist es unkritischer. Lösbar, weil
+- **Lizenz (Blocker nur für den iPad App Store, Entscheidung):** Sesam steht unter GPL-3.0. Die GPL verträgt
+  sich nach verbreiteter Auffassung nicht mit den Nutzungsbedingungen des Apple App Store (zusätzliche
+  Einschränkungen für Nutzer). Für den Mac-Download, die Website und den Microsoft Store ist das kein Thema.
+  Für das iPad lösbar, weil
   - alle 187 Commits von Mike stammen (alleiniger Urheber, keine fremden Beiträge), er also selbst zusätzlich
     unter anderer Lizenz veröffentlichen kann (Doppellizenz oder Ausnahme für App-Store-Vertrieb), und
   - keine Abhängigkeit unter GPL steht: 760 Rust-Crates und alle npm-Pakete sind MIT/Apache/BSD/ISC,
@@ -30,36 +35,33 @@ Entscheidung von Mike braucht, ist als **Blocker** markiert.
   jährliche Selbstauskunft (US BIS) nötig ist, entscheidet Mike bzw. die Beratung. Darum ist der Schlüssel
   noch **nicht** gesetzt; App Store Connect fragt beim Hochladen danach.
 
-## Mac App Store
+## Mac: Download von der Website
 
 Bereit:
-- Bundle-ID `ch.sesam.remote`, Kategorie, Symbole, Datenschutz-Manifest
-  (`src-tauri/store/PrivacyInfo.xcprivacy`: keine Verfolgung, keine gesammelten Daten, Gründe für
-  Dateizeitstempel und Systemuhr).
-- Eigene Sandbox-Variante als Overlay: `src-tauri/tauri.mas.conf.json` mit
-  `src-tauri/store/mas.entitlements` (Netz als Client und Server für Tunnel, vom Nutzer gewählte Dateien,
-  Downloads). Gebaut und geprüft: Manifest und Kategorie landen im Paket.
+- Release-Build als `.app` (`npx tauri build --bundles app`), Bundle-ID `ch.sesam.remote`, Kategorie, Symbole,
+  Info.plist mit Text für «Lokales Netzwerk». Heute nur ad-hoc signiert: Gatekeeper warnt beim ersten Öffnen.
+- Kein Sandbox-Zwang: lokales Terminal, Tastenkürzel an den Remotecomputer (Bedienungshilfen),
+  Verknüpfungen und RDP-Ordnerfreigabe bleiben möglich.
 
-Blocker:
-- **Apple Developer Program (bezahlt, 99 USD/Jahr).** Das heutige kostenlose «Personal Team» kann weder
-  signieren mit «Apple Distribution» noch einreichen.
-- **Sandbox-Konflikte**, die eine MAS-Variante mit weniger Funktionen nötig machen:
-  - lokales Terminal (startet Shells und Programme; in der Sandbox nicht erlaubt),
-  - Tastenkürzel an den Remotecomputer (CGEventTap braucht Bedienungshilfen, in der Sandbox verboten),
-  - «Mit Administratorrechten» betrifft nur entfernte Rechner (sudo per SSH) und bleibt möglich,
-  - Dateifenster ausserhalb von Downloads und gewählten Ordnern (lokale Seite müsste auf
-    Ordnerauswahl mit Security-Scoped Bookmarks umgestellt werden),
-  - Verknüpfungen auf dem Schreibtisch und Ordnerfreigabe für RDP (Schreiben ausserhalb des Containers),
-  - `sesam://`-Links gehen, Hilfsprozess für Tasten nicht.
-- **Empfehlung:** zwei Fassungen. Voller Funktionsumfang als notarisierter Direkt-Download (braucht
-  ebenfalls das bezahlte Programm, «Developer ID»), dazu eine MAS-Fassung ohne lokales Terminal und
-  Tastenkürzel. Die MAS-Fassung braucht im Code noch Schalter, die diese Teile ausblenden (ähnlich wie
-  heute für das iPad, `isMobile` bzw. `cfg(desktop)`).
+Was es für einen Download ohne Warnung braucht:
+- **Apple Developer Program (bezahlt, 99 USD/Jahr).** Das heutige kostenlose «Personal Team» kann kein
+  «Developer ID Application»-Zertifikat ausstellen.
+- **Zertifikat «Developer ID Application»** (in Xcode › Settings › Apple Accounts › Manage Certificates
+  oder auf developer.apple.com) im Schlüsselbund; in `tauri.conf.json` `bundle.macOS.signingIdentity` darauf
+  setzen bzw. beim Bauen `APPLE_SIGNING_IDENTITY`.
+- **Notarisierung:** Tauri reicht beim Bauen selbst ein, wenn `APPLE_API_KEY`, `APPLE_API_ISSUER` und
+  `APPLE_API_KEY_PATH` (App-Store-Connect-API-Schlüssel) oder `APPLE_ID`, `APPLE_PASSWORD`
+  (app-spezifisches Passwort) und `APPLE_TEAM_ID` gesetzt sind. Nie ins Repository.
+- **Hardened Runtime** (setzt Tauri beim Signieren) und für die Verteilung ein `.dmg`
+  (`--bundles dmg`) statt der nackten `.app`.
+- **Website:** Download-Seite, Prüfsumme, Hinweis auf die Freigaben (Lokales Netzwerk, Bedienungshilfen).
 
 ## iPad (App Store)
 
 Bereit:
-- Xcode-Projekt `src-tauri/gen/apple` (nur iPad, ab iPadOS 16), Bundle-ID, Symbole, Datenschutz-Manifest,
+- Xcode-Projekt `src-tauri/gen/apple` (nur iPad, ab iPadOS 16), Bundle-ID, Symbole, Datenschutz-Manifest
+  (`sesam-remote_iOS/PrivacyInfo.xcprivacy`: keine Verfolgung, keine gesammelten Daten, Gründe für
+  Dateizeitstempel und Systemuhr),
   Text für «Lokales Netzwerk», Dateifreigabe («Auf meinem iPad › Sesam Remote»). Auf dem echten iPad
   (iPadOS 27.2.1) installiert und gestartet.
 
@@ -74,15 +76,16 @@ Blocker:
 - **Exportkontrolle und Lizenz:** siehe oben.
 - Ungeprüft auf dem Gerät: RDP, Dateiauswahl beim Hochladen.
 
-## Microsoft Store
+## Windows: Microsoft Store und/oder Website
 
 Bereit:
 - Windows-Installer (MSI/NSIS) aus dem Tauri-Bundler, Store-Logos (`Square*Logo.png`, `StoreLogo.png`).
   Der Microsoft Store nimmt heute auch MSI/EXE-Apps an (Win32-Einreichung); ein MSIX ist dafür nicht nötig.
 
 Blocker:
-- **Partner-Center-Konto** (Entwicklerkonto; Kosten je nach Kontotyp, vor dem Anlegen prüfen) und eine **Code-Signatur** für den Installer
-  (Zertifikat oder Azure Trusted Signing).
+- **Partner-Center-Konto** für den Store (Kosten je nach Kontotyp, vor dem Anlegen prüfen).
+- **Code-Signatur** für den Installer (Zertifikat oder Azure Trusted Signing), für den Store und für den
+  Download von der Website, sonst warnt SmartScreen.
 - **Hilfsprozess für Tastenkürzel:** Sesam startet sich selbst mit `--kbhook-helper` für den
   Tastatur-Hook. Als MSI/EXE-Einreichung erlaubt; ein MSIX-Paket bräuchte `runFullTrust` und eine eigene
   Prüfung. Nicht getestet: Der Windows-Rechner (WS-MD01) war von hier aus nicht erreichbar.
