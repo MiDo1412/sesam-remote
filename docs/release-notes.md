@@ -10,7 +10,6 @@ So ist ein Eintrag gebaut (`docs/versionierung.md`):
 - `## <Version> — <Datum>`, darunter **ein Satz**, was die Version bringt.
 - Dann die Gruppen `### Neu`, `### Verbessert`, `### Behoben`, `### Entfernt` und `### Betrieb`,
   nur die, die es braucht. Je Zeile `- **Worum es geht:** ein, zwei einfache Sätze.`
-- **Ganzes Fenster:** Auf dem iPad keine weissen Balken mehr oben und unten; auf allen Systemen ist auch die Fläche hinter der App in der App-Farbe (hell und dunkel).
 - `### Betrieb` nennt die Handgriffe für den Betreiber.
 
 Jede Änderung schreibt ihre Zeilen unter «In Arbeit». `node scripts/release.mjs` macht daraus den
@@ -83,6 +82,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Behoben
 
+- **Ganzes Fenster:** Auf dem iPad keine weissen Balken mehr oben und unten; auf allen Systemen ist auch die Fläche hinter der App in der App-Farbe (hell und dunkel).
 - **Mac: Verbindungen ins eigene Netz:** «No route to host» zu Rechnern im lokalen Netz lag an der macOS-Freigabe «Lokales Netzwerk». Sesam Remote fragt jetzt mit eigenem Text danach, behält die Freigabe über Updates hinweg und erklärt bei einer Sperre, wo man sie einschaltet.
 - **Flüssiges Bild bei VNC und RDP:** Bildschirm-, Shell- und Dateidaten gingen wegen einer fehlenden Freigabe in der Sicherheitsrichtlinie über einen langsamen Ersatzweg, der jedes Byte als Text verpackte; dazu kam jedes geänderte Rechteck als eigene Nachricht. Jetzt geht alles binär, ein Bild pro Nachricht, und Sesam schickt erst weiter, wenn die Anzeige mitkommt: kein wachsender Rückstand mehr, die Anzeige zählt echte Bilder pro Sekunde.
 - **Auflösung bei VNC:** Lehnt der Server eine andere Grösse ab, sagt Sesam das einmal und skaliert, statt bei jeder Fenstergrösse «unbekannter Fehler» zu melden; «weitergeleitet» gilt nicht mehr als Fehler.
