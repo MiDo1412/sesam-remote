@@ -83,6 +83,8 @@ argon2 = { version = "0.6", default-features = false, features = ["alloc"] }
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 arboard = "3"
 portable-pty = "0.9"
+# Automatische Updates (src/update.rs): offizielles Tauri-Plugin, Signatur ed25519 (minisign) Pflicht
+tauri-plugin-updater = "2"
 
 # iPadOS: Schlüsselbund über den «protected»-Speicher (keyring 4 kennt iOS nur so, src/vault.rs); beide schon im Baum.
 [target.'cfg(target_os = "ios")'.dependencies]

@@ -60,6 +60,7 @@ Release (Nummer JJ.M.N, Abschnitt «In Arbeit» der Release-Notes): [docs/versio
 | [docs/release-notes.md](docs/release-notes.md) | Änderungen je Version |
 | [docs/versionierung.md](docs/versionierung.md) | Versionsnummern und Release |
 | [docs/app-store.md](docs/app-store.md) | Stores und Signieren |
+| [docs/release.md](docs/release.md) | Bauen, signieren, automatische Updates |
 | [docs/intune.md](docs/intune.md) | Windows: MSI über Intune verteilen |
 | [docs/portabel.md](docs/portabel.md) | Portable Fassungen |
 | [docs/security-review-2026-11-11.md](docs/security-review-2026-11-11.md) | Sicherheitsprüfung |

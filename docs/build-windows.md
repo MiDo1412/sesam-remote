@@ -10,6 +10,17 @@ Windows-Rechner reicht holen und bauen.
 - WiX lädt der Tauri-Bundler beim ersten MSI-Build selbst herunter (WiX 3, in den Tauri-Cache).
 - Pro Klon: `git config core.hooksPath .githooks`
 
+## Nach dem Umschreiben der Historie (11.11.2026)
+
+Die Historie von `main` und `website` wurde einmal umgeschrieben (nur Autor-Adressen). Ein Klon von vorher muss
+einmal neu aufsetzen (lokale Änderungen vorher sichern):
+
+```powershell
+git fetch origin
+git checkout main
+git reset --hard origin/main
+```
+
 ## Bauen
 
 ```powershell

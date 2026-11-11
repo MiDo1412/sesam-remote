@@ -120,6 +120,23 @@ macOS-Builds sind nur ad hoc signiert und nicht notarisiert, Windows-Installer u
 Updater, also keinen angreifbaren Update-Kanal. Zu jedem Release gehört `SHA256SUMS.txt`. **Nächster Schritt:**
 Developer ID mit Notarisierung, Authenticode für Windows.
 
+## Nachtrag: automatische Updates (neu, vor dem Release geprüft)
+
+Eingebaut nach der Prüfung (`src-tauri/src/update.rs`, offizielles `tauri-plugin-updater`). Geprüft:
+
+- **Echtheit:** Jedes Update ist mit ed25519 signiert; die App enthält nur den öffentlichen Schlüssel.
+  `requireSignedVersion` bindet die Version an die Signatur. Eine manipulierte `latest.json` kann also kein
+  älteres, echtes Paket als neueres ausgeben. Nur neuere Versionen. Getestet: falsche Version abgelehnt, ältere
+  nicht installiert.
+- **Transport:** nur HTTPS (`dangerousInsecureTransportProtocol` nur in einer Test-Konfiguration).
+- **Angriffsfläche Webview:** Die Webview hat keine Rechte für das Updater-Plugin, nur eigene Befehle (Stand,
+  Schalter, Suchen, Installieren). Einen Ort, eine URL oder einen Schlüssel kann sie nicht vorgeben.
+- **Windows:** Die Richtlinie liest `reg.exe` mit vollem Pfad (sonst hätte ein `reg.exe` neben einer portablen App
+  Vorrang). MSI-Installationen installieren nie still mit Administratorrechten.
+- **Rest:** Wer den privaten Schlüssel hat, kann Updates ausliefern. Er liegt deshalb ausserhalb des Repositorys,
+  mit Passwort, und braucht eine Sicherung (`docs/release.md`). `latest.json` selbst ist nicht signiert; mehr als
+  ausbleibende Updates erreicht ein Angreifer damit nicht.
+
 ## Weitere Beobachtungen
 
 - **iPad und Stammzertifikate:** `rustls-native-certs` liest auf iOS nur OpenSSL-Pfade und findet dort

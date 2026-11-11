@@ -63,6 +63,12 @@
         "upgradeCode": "26F306D2-BA30-5F9C-B735-610DBA9E864E",
         "language": [
           "de-DE"
+        ],
+        "fragmentPaths": [
+          "wix/autoupdate.wxs"
+        ],
+        "componentRefs": [
+          "AutoUpdatePolicy"
         ]
       }
     }
@@ -82,6 +88,17 @@
           "appLink": false
         }
       ]
+    },
+    "updater": {
+      "pubkey": "ÖFFENTLICHER-SCHLÜSSEL-FEHLT: scripts/updater-key.sh ausführen",
+      "endpoints": [
+        "https://sesam-remote.app/updates/latest.json",
+        "https://github.com/MiDo1412/sesam-remote/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true,
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

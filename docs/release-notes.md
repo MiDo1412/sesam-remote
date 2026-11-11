@@ -18,6 +18,15 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Neu
+
+- **Automatische Updates:** Sesam sucht im Hintergrund nach neuen Versionen, lädt sie still herunter, prüft die Signatur und installiert beim Beenden; der nächste Start ist neu. Unter Einstellungen › Über Sesam stehen der Stand, «Automatisch aktualisieren» (an) und «Jetzt suchen». Windows mit MSI im Programme-Ordner: nur Hinweis mit «Jetzt installieren»; Firmen schalten es mit `AUTOUPDATE=0` bzw. einer Richtlinie aus (`docs/intune.md`). Portable Fassungen aktualisieren sich an Ort und Stelle. Auf dem iPad aktualisiert der App Store.
+
+### Betrieb
+
+- **Neue Git-Historie:** `main` und `website` wurden einmal umgeschrieben (nur Autor-Adressen, Inhalte gleich). Bestehende Klone einmal mit `git fetch origin && git reset --hard origin/main` neu aufsetzen (`docs/build-windows.md`).
+- **Update-Schlüssel:** Einmal `scripts/updater-key.sh` ausführen und den Schlüssel sichern; Bauen, Signieren und Hochladen der Updates nach `https://sesam-remote.app/updates/` stehen in `docs/release.md`.
+
 ## 26.11.1 — 2026-11-11
 
 Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App.

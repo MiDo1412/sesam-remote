@@ -125,6 +125,7 @@ export async function openSettings(tab = "general") {
 
   // Über
   $("settings-version").textContent = __VERSION_LABEL__ || (await getVersion().catch(() => ""));
+  void renderUpdate();
   show(tab);
   if (!dlg.open) dlg.showModal();
   // Fokus auf den gewählten Bereich (nicht immer «Allgemein»), damit Tastatur und Anzeige übereinstimmen.
@@ -156,4 +157,52 @@ async function renderCerts() {
       return row;
     }),
   );
+}
+
+// ---------- Automatische Updates (src-tauri/src/update.rs) ----------
+interface UpdateStatus {
+  current: string;
+  auto: boolean;
+  locked: boolean;
+  checking: boolean;
+  ready: string | null;
+  install: "onQuit" | "manual" | "never" | null;
+  error: string | null;
+}
+
+function updateLine(s: UpdateStatus): string {
+  if (s.checking) return "Suche nach Updates …";
+  if (s.ready) return s.install === "manual" ? `Update ${s.ready} ist verfügbar.` : `Update ${s.ready} wird beim nächsten Start installiert.`;
+  if (s.error) return `Update-Prüfung nicht möglich: ${s.error}`;
+  if (!s.auto) return s.locked ? "Updates verteilt die IT (Richtlinie dieses Computers)." : "Automatisch aktualisieren ist aus.";
+  return `Sesam ist aktuell (${s.current}).`;
+}
+
+async function renderUpdate(s?: UpdateStatus) {
+  const box = $("update-box");
+  try {
+    s ??= await invoke<UpdateStatus>("update_status");
+  } catch {
+    return;
+  }
+  if (s.install === "never") return void (box.hidden = true);
+  box.hidden = false;
+  $("update-line").textContent = updateLine(s);
+  const auto = $<HTMLInputElement>("update-auto");
+  auto.checked = s.auto;
+  auto.disabled = s.locked;
+  auto.onchange = async () => {
+    await invoke("update_set_auto", { auto: auto.checked }).catch(() => {});
+    void renderUpdate();
+  };
+  const check = $<HTMLButtonElement>("update-check");
+  check.disabled = s.checking || (s.locked && !s.auto);
+  check.onclick = async () => {
+    $("update-line").textContent = "Suche nach Updates …";
+    check.disabled = true;
+    void renderUpdate(await invoke<UpdateStatus>("update_check").catch((e) => ({ ...s!, checking: false, error: String(e) })));
+  };
+  const install = $<HTMLButtonElement>("update-install");
+  install.hidden = !(s.ready && s.install === "manual");
+  install.onclick = () => void invoke("update_install").catch((e) => ($("update-line").textContent = `Installation nicht möglich: ${e}`));
 }

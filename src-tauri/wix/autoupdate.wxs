@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- msiexec /i Sesam-Remote.msi AUTOUPDATE=0 /qn: schaltet automatische Updates für diesen Computer aus
+     (Richtlinie HKLM\Software\Policies\Sesam Remote\AutoUpdate = 0, src-tauri/src/update.rs), damit Intune die
+     Versionen verteilt. Ohne die Eigenschaft wird nichts geschrieben. Entfernen der App entfernt den Wert. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <Property Id="AUTOUPDATE" Secure="yes" />
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="AutoUpdatePolicy" Guid="7C1E4A2B-5D93-4F0E-9B6A-3E8F2D1C4A57" Win64="yes">
+        <Condition><![CDATA[AUTOUPDATE = "0"]]></Condition>
+        <RegistryValue Root="HKLM" Key="Software\Policies\Sesam Remote" Name="AutoUpdate" Type="integer" Value="0" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

@@ -714,6 +714,8 @@ dialog.preview h2 { margin: 0; text-align: center; overflow: hidden; text-overfl
 .settings-pane h2 { font-size: 15px; margin: var(--s-2) 0 var(--s-1); }
 .settings-pane h3 { font-size: 13px; margin: var(--s-2) 0 0; }
 .settings-pane.about { align-items: center; justify-content: center; text-align: center; }
+.update-box { display: grid; justify-items: center; gap: var(--s-2); margin-top: var(--s-3); }
+.update-box .row { display: flex; gap: var(--s-2); }
 .list-head .plain { font-size: 13px; }
 /* Gruppierte Liste wie .first-aid-steps: eine Fläche, Zeilen mit Trennlinie. */
 .certs { display: flex; flex-direction: column; border-radius: var(--r-card); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }

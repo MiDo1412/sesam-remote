@@ -37,6 +37,20 @@ oder mit dem MSI selbst:
 msiexec /x "Sesam Remote_26.11.1_x64_de-DE.msi" /qn /norestart
 ```
 
+## Automatische Updates
+
+Sesam aktualisiert sich selbst (`docs/release.md`). Bei einer MSI-Installation im Programme-Ordner braucht das
+Administratorrechte; ohne Richtlinie zeigt Sesam dann nur «Update … ist verfügbar» und installiert erst nach
+Klick auf «Jetzt installieren». Soll Intune die Versionen bestimmen, automatische Updates ausschalten:
+
+```bat
+msiexec /i "Sesam Remote_26.11.1_x64_de-DE.msi" AUTOUPDATE=0 /qn /norestart
+```
+
+Das schreibt `HKLM\Software\Policies\Sesam Remote` › `AutoUpdate` (REG_DWORD) = `0`; Sesam zeigt dann
+«Updates verteilt die IT» und der Schalter ist gesperrt. Alternativ denselben Wert per Intune-Konfiguration
+(OMA-URI/Registry) setzen. `1` erzwingt Updates, ohne Wert entscheidet der Benutzer.
+
 ## In Intune
 
 **Variante A – Branchen-App (LOB, MSI):** MSI hochladen; Intune liest Produktcode und Version selbst und
@@ -45,7 +59,7 @@ installiert im Gerätekontext mit `/qn`. Einfach, aber jede Version ist eine neu
 **Variante B – Win32-App (.intunewin, empfohlen):**
 
 - Paket mit dem *Microsoft Win32 Content Prep Tool* aus dem Ordner mit dem MSI erstellen.
-- Installationsbefehl: `msiexec /i "Sesam Remote_26.11.1_x64_de-DE.msi" /qn /norestart`
+- Installationsbefehl: `msiexec /i "Sesam Remote_26.11.1_x64_de-DE.msi" AUTOUPDATE=0 /qn /norestart`
 - Deinstallationsbefehl: `msiexec /x {PRODUCT-CODE} /qn /norestart`
 - Installationsverhalten: **System**; Neustart: **Keine bestimmte Aktion**.
 - Erkennungsregel (eine davon):

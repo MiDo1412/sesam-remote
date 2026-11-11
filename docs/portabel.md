@@ -25,6 +25,8 @@ Wer Bibliothek und Zugangsdaten auf einen anderen Rechner bringen will, nimmt Ei
 
 ## Hinweise
 
+- Updates: Portable Fassungen aktualisieren sich still an Ort und Stelle (beim Beenden), wenn der Ordner
+  beschreibbar ist (`docs/release.md`).
 - macOS: Die App ist nicht notarisiert; beim ersten Start Rechtsklick › Öffnen. Von einem schreibgeschützten
   Ort (z. B. direkt aus dem DMG) läuft sie, kann dort aber keinen Ordner `Sesam-Daten` anlegen.
 - Windows: WebView2 muss vorhanden sein (Windows 10/11 haben sie).

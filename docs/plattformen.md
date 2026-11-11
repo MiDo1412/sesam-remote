@@ -5,7 +5,7 @@ Plattform nennt. Wo etwas nicht geht, steht hier der Grund und der Ersatz. Neue 
 ein.
 
 Legende: **✓** vorhanden · **↻** ersetzt durch … · **✗** nicht möglich, weil … · **…** noch nicht gebaut.
-Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüft (WS-MD01 nicht erreichbar).
+Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüft (kein Windows-Rechner erreichbar).
 
 ## Vertrieb
 
@@ -13,6 +13,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 |---|---|---|---|---|
 | Wege | Download von der Website, signiert (Developer ID) und notarisiert; **kein** Mac App Store (Entscheid 11.11.2026) | Website und/oder Microsoft Store | Download (Pakete des Tauri-Bundlers: `.deb`, `.rpm`, AppImage) | App Store |
 | Details | `docs/app-store.md` | `docs/app-store.md` | – | `docs/app-store.md` |
+| Automatische Updates | ✓ still, beim Beenden | ✓ portabel still; MSI: Hinweis bzw. per Intune-Richtlinie aus | ✓ AppImage still; .deb über die Paketverwaltung | ↻ App Store |
 
 ## Verbinden
 

@@ -425,6 +425,11 @@
           <img src="/sesam-icon.svg" alt="" width="72" height="72" />
           <h2>Sesam Remote</h2>
           <p>Version <span id="settings-version"></span></p>
+          <div class="update-box" id="update-box" hidden>
+            <p class="note" id="update-line" aria-live="polite"></p>
+            <label class="check"><input type="checkbox" id="update-auto" /> <span>Automatisch aktualisieren</span></label>
+            <div class="row"><button type="button" id="update-check">Jetzt suchen</button><button type="button" id="update-install" class="primary" hidden>Jetzt installieren</button></div>
+          </div>
           <p class="note">Fernzugriff über RDP, VNC, SSH und SFTP.<br />Quelloffen unter der Mozilla Public License 2.0.</p>
         </section>
         <form method="dialog" class="settings-close"><button class="primary">Fertig</button></form>

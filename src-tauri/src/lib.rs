@@ -16,6 +16,8 @@ mod ftp;
 mod library;
 mod perms;
 mod portable;
+#[cfg(desktop)]
+mod update;
 mod localterm;
 mod profiles;
 mod rdp;
@@ -1826,6 +1828,55 @@ fn local_temp(app: AppHandle, sub: String) -> Result<String, String> {
     Ok(d.to_string_lossy().into_owned())
 }
 
+// ---------- Automatische Updates (src/update.rs; iPad: App Store) ----------
+
+#[tauri::command]
+fn update_status(app: AppHandle) -> serde_json::Value {
+    #[cfg(desktop)]
+    return serde_json::to_value(update::status(&app)).unwrap_or_default();
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        serde_json::json!({ "current": app.package_info().version.to_string(), "install": "never" })
+    }
+}
+
+#[tauri::command]
+fn update_set_auto(auto: bool) -> Result<(), String> {
+    #[cfg(desktop)]
+    return update::set_auto(auto);
+    #[cfg(mobile)]
+    {
+        let _ = auto;
+        Err("Auf dem iPad aktualisiert der App Store".into())
+    }
+}
+
+#[tauri::command]
+async fn update_check(app: AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(desktop)]
+    {
+        update::check(&app, true).await?;
+        Ok(serde_json::to_value(update::status(&app)).unwrap_or_default())
+    }
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        Err("Auf dem iPad aktualisiert der App Store".into())
+    }
+}
+
+#[tauri::command]
+async fn update_install(app: AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    return update::install_now(&app).await;
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        Err("Auf dem iPad aktualisiert der App Store".into())
+    }
+}
+
 /// Endungen, deren Standardaktion auf diesem System etwas ausführt statt es zu öffnen.
 #[cfg(windows)]
 const RUNS_ON_OPEN: &[&str] = &[
@@ -2438,6 +2489,9 @@ pub fn run() {
         }
         .unwrap()
     });
+    // Automatische Updates (src/update.rs), nur Desktop; iPad: App Store.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     // Zweiter Start (z. B. Klick auf eine Verknüpfung): Link an die laufende App, Fenster nach vorne. Nur Desktop.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -2594,6 +2648,12 @@ pub fn run() {
             app.manage(Files::default());
             app.manage(RdpSessions::default());
             app.manage(Transfers::default());
+            #[cfg(desktop)]
+            {
+                update::cleanup();
+                app.manage(update::State::default());
+                update::start(app.handle().clone());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -2716,11 +2776,20 @@ pub fn run() {
             rdp_release_all,
             rdp_set_monitors,
             rdp_set_size,
-            rdp_close
+            rdp_close,
+            update_status,
+            update_set_auto,
+            update_check,
+            update_install
         ])
         .build(tauri::generate_context!())
         .expect("Sesam Remote konnte nicht starten")
         .run(|_app, _e| {
+            // Beim Beenden ein bereits geprüftes Update still installieren (src/update.rs).
+            #[cfg(desktop)]
+            if let tauri::RunEvent::Exit = _e {
+                update::install_on_quit(_app);
+            }
             // macOS: Klick aufs Dock-Symbol bei ausgeblendetem Hauptfenster (rotes Schliessen) holt es zurück.
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = _e
