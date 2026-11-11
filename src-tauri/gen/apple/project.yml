@@ -71,6 +71,8 @@ targets:
     settings:
       base:
         ENABLE_BITCODE: false
+        # Kurzbefehle (SesamIntents.swift)
+        SWIFT_VERSION: "5.0"
         # Nur iPad (2); die Oberfläche ist für grosse Bildschirme gebaut.
         TARGETED_DEVICE_FAMILY: "2"
         ARCHS: [arm64]

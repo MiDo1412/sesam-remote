@@ -58,7 +58,15 @@
         "schemes": [
           "sesam"
         ]
-      }
+      },
+      "mobile": [
+        {
+          "scheme": [
+            "sesam"
+          ],
+          "appLink": false
+        }
+      ]
     }
   }
 }

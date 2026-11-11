@@ -17,6 +17,7 @@
 		6D22CA668379D4243560935A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CD9E36E40FF1AFA297988B62 /* PrivacyInfo.xcprivacy */; };
 		94182D2963A59A3D7C1A5B20 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 494687E65C654551DE3B5F8F /* Metal.framework */; };
 		96922098E5B0827EFEF0B46D /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 987DB060EE590983AABCAC90 /* QuartzCore.framework */; };
+		B4F4CA08727D9C0E2C1B3B25 /* SesamIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ACA68A4752B6FA8C9487F30 /* SesamIntents.swift */; };
 		D5D879945CFE81BB3FC70B3A /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 79D34973B69DCB07BC79BD64 /* WebKit.framework */; };
 		D7A5DA37C64A93C77070E0C7 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = C9E0DB5E081A02190C94E7F7 /* main.mm */; };
 		E437EC5F4A542C905E9FAFE0 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 49F9EB0CC6A8110EEA83DE51 /* LaunchScreen.storyboard */; };
@@ -47,6 +48,7 @@
 		6ACCB8093A9B5554BC063C6B /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		6B8EE98A6CA7A62CE00F7A88 /* rdstls.rs */ = {isa = PBXFileReference; path = rdstls.rs; sourceTree = "<group>"; };
 		79D34973B69DCB07BC79BD64 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		7ACA68A4752B6FA8C9487F30 /* SesamIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SesamIntents.swift; sourceTree = "<group>"; };
 		7F7DB67F15351A76A6807910 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		827AD226C0BB39B44D60FF6B /* relay.rs */ = {isa = PBXFileReference; path = relay.rs; sourceTree = "<group>"; };
 		906D39718DC77639F06A86D9 /* wake.rs */ = {isa = PBXFileReference; path = wake.rs; sourceTree = "<group>"; };
@@ -156,6 +158,7 @@
 			isa = PBXGroup;
 			children = (
 				C9E0DB5E081A02190C94E7F7 /* main.mm */,
+				7ACA68A4752B6FA8C9487F30 /* SesamIntents.swift */,
 				37E08E982CE62DF2936FAC34 /* bindings */,
 			);
 			path = "sesam-remote";
@@ -227,18 +230,18 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		"TEMP_2CEB5EF3-332E-4CAE-8FDA-F890F59A06ED" /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = arm64;
-			sourceTree = "<group>";
-		};
-		"TEMP_CDE1E443-33A6-4DB3-957F-E08604FE562F" /* x86_64 */ = {
+		"TEMP_49D1BB9C-5526-460A-8851-49AD780072B6" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = x86_64;
+			sourceTree = "<group>";
+		};
+		"TEMP_849F76D9-AD53-499C-8715-0ED751ADF60B" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -337,6 +340,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4F4CA08727D9C0E2C1B3B25 /* SesamIntents.swift in Sources */,
 				D7A5DA37C64A93C77070E0C7 /* main.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -489,6 +493,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ch.sesam.remote;
 				PRODUCT_NAME = "Sesam Remote";
 				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 2;
 				VALID_ARCHS = arm64;
 			};
@@ -520,6 +525,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ch.sesam.remote;
 				PRODUCT_NAME = "Sesam Remote";
 				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 2;
 				VALID_ARCHS = arm64;
 			};
