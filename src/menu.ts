@@ -66,8 +66,13 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], opts: { checked
     const a = anchor.getBoundingClientRect();
     const m = menu.getBoundingClientRect();
     const below = innerHeight - a.bottom - 8 >= m.height || a.top < m.height + 8;
-    menu.style.top = `${below ? a.bottom + 4 : a.top - m.height - 4}px`;
-    menu.style.left = `${Math.max(8, Math.min(a.left, innerWidth - m.width - 8))}px`;
+    const top = below ? a.bottom + 4 : a.top - m.height - 4;
+    const left = Math.max(8, Math.min(a.left, innerWidth - m.width - 8));
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    // In einem Dialog mit transform (iPad-Blatt) bezieht sich «fixed» auf den Dialog: Versatz herausrechnen.
+    const r = menu.getBoundingClientRect();
+    if (r.left !== left || r.top !== top) Object.assign(menu.style, { left: `${2 * left - r.left}px`, top: `${2 * top - r.top}px` });
     menu.style.minWidth = `${a.width}px`;
     menu.style.transformOrigin = below ? "top" : "bottom";
     if (!below) menu.style.maxHeight = `${a.top - 12}px`;

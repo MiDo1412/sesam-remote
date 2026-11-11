@@ -1,6 +1,6 @@
 //! H.264 für EGFX (AVC420/AVC444) über den Decoder des Betriebssystems, ohne eigene Codec-Bibliothek
 //! (Lizenz- und Patentfragen in docs/architektur.md). Windows: Media Foundation (Microsoft H.264 Video Decoder MFT),
-//! macOS: VideoToolbox. Ohne Decoder (Linux) kündigt EGFX kein AVC an und der Server nimmt andere Codecs.
+//! macOS und iPadOS: VideoToolbox. Ohne Decoder (Linux) kündigt EGFX kein AVC an und der Server nimmt andere Codecs.
 
 use ironrdp_egfx::decode::{DecodedFrame, DecoderError, DecoderResult, H264Decoder, Yuv420Frame};
 
@@ -8,9 +8,9 @@ use ironrdp_egfx::decode::{DecodedFrame, DecoderError, DecoderResult, H264Decode
 pub fn decoder() -> Option<Box<dyn H264Decoder>> {
     #[cfg(windows)]
     return Some(Box::new(mf::MfDecoder::default()));
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     return Some(Box::new(vt::VtDecoder::default()));
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(not(any(windows, target_os = "macos", target_os = "ios")))]
     None
 }
 
@@ -226,7 +226,7 @@ mod mf {
 }
 
 /// NAL-Einheiten eines Annex-B-Stroms (ohne Startcodes).
-#[cfg(any(test, target_os = "macos"))]
+#[cfg(any(test, target_os = "macos", target_os = "ios"))]
 pub fn nal_units(data: &[u8]) -> Vec<&[u8]> {
     let mut starts = Vec::new();
     let mut i = 0;
@@ -252,8 +252,8 @@ pub fn nal_units(data: &[u8]) -> Vec<&[u8]> {
         .collect()
 }
 
-/// macOS: VideoToolbox über die C-Schnittstelle (CoreMedia/CoreVideo), ohne zusätzliche Pakete.
-#[cfg(target_os = "macos")]
+/// macOS und iPadOS: VideoToolbox über die C-Schnittstelle (CoreMedia/CoreVideo), ohne zusätzliche Pakete.
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod vt {
     use super::*;
     use std::ffi::c_void;

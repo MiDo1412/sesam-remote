@@ -90,6 +90,8 @@ apple-native-keyring-store = { version = "1", features = ["protected"] }
 # Zwischenablage über UIPasteboard (src/clipshare.rs); beide bringt Tauri auf iOS schon mit
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
+# Face ID/Touch ID vor dem Anzeigen gespeicherter Passwörter (src/auth.rs), schon im Baum
+block2 = "0.6"
 
 # Windows-Zwischenablage für RDP (Text, Bilder, Dateien)
 [target.'cfg(windows)'.dependencies]
@@ -101,7 +103,7 @@ windows = { version = "0.62", features = ["Win32_Media_MediaFoundation", "Win32_
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSFontDescriptor", "NSWorkspace", "objc2-core-foundation"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSDictionary", "NSData"] }
-# Touch ID bzw. Mac-Passwort vor dem Anzeigen gespeicherter Passwörter (src/sfsymbol.rs authenticate)
+# Touch ID bzw. Mac-Passwort vor dem Anzeigen gespeicherter Passwörter (src/auth.rs)
 objc2 = "0.6"
 block2 = "0.6"
 # Tastatur-Tap für ⌘Tab & Co. am Remotecomputer (src/kbhook.rs)

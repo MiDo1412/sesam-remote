@@ -1,3 +1,4 @@
+import { dropFiles } from "./dropfiles";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
 import { ask, askHostKey, askPassword, askText, choose, tell } from "./ui";
@@ -1261,6 +1262,10 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     target.addEventListener("pointerup", up);
   }
 
+  // iPad: aus «Dateien» auf die Server-Seite ziehen
+  dropFiles(panes.remote.root, () => ctx.isActive() && !!sid && !!panes.remote.listing, (paths) => {
+    for (const path of paths) start(true, path, panes.remote.listing!.path, path.split(/[\\/]/).pop() ?? path);
+  });
   // Dateien aus Explorer/Finder auf die Server-Seite ziehen (nur im sichtbaren Tab).
   const unlistenDrop = getCurrentWebview().onDragDropEvent((ev) => {
     if (!ctx.isActive()) return;

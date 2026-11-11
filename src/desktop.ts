@@ -17,6 +17,7 @@ import { listen } from "@tauri-apps/api/event";
 import { appSettings } from "./settings";
 import { openMenu } from "./menu";
 import { isMobile } from "./titlebar";
+import { dropFiles } from "./dropfiles";
 
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
@@ -533,17 +534,21 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   window.addEventListener("focus", syncClipboard);
   canvas.addEventListener("focus", syncClipboard);
 
-  // Dateien aus Explorer/Finder auf den Desktop ziehen = hochladen.
+  // Dateien aus Explorer/Finder (iPad: aus «Dateien») auf den Desktop ziehen = hochladen.
+  const dropPaths = (paths: string[]) => {
+    status.textContent = "Übertrage …";
+    // Ohne SSH bei dieser Verbindung: dasselbe Gerät über einen Eintrag mit SSH (Ein Gerät, drei Türen).
+    invoke<string>("drop_files", { id: c.sshPort ? c.id : (sameHost(c, "shell")?.id ?? c.id), files: paths })
+      .then((m) => (status.textContent = m))
+      .catch((e) => (status.textContent = String(e)));
+  };
+  dropFiles(wrap, () => ctx.isActive() && !!sid, dropPaths);
   const unlistenDrop = getCurrentWebview().onDragDropEvent((ev) => {
     if (!ctx.isActive() || !sid) return;
     wrap.classList.toggle("drop", ev.payload.type === "over");
     if (ev.payload.type === "drop") {
       wrap.classList.remove("drop");
-      status.textContent = "Übertrage …";
-      // Ohne SSH bei dieser Verbindung: dasselbe Gerät über einen Eintrag mit SSH (Ein Gerät, drei Türen).
-      invoke<string>("drop_files", { id: c.sshPort ? c.id : (sameHost(c, "shell")?.id ?? c.id), files: ev.payload.paths })
-        .then((m) => (status.textContent = m))
-        .catch((e) => (status.textContent = String(e)));
+      dropPaths(ev.payload.paths);
     }
     if (ev.payload.type === "leave") wrap.classList.remove("drop");
   });

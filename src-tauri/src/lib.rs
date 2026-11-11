@@ -1,3 +1,5 @@
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod auth;
 mod backup;
 mod clipshare;
 mod creds;
@@ -636,17 +638,17 @@ async fn cred_install_key(path: State<'_, LibraryPath>, id: String, connection: 
     }
 }
 
-/// Gespeichertes Passwort anzeigen bzw. kopieren: nur nach Touch ID bzw. Mac-Passwort.
+/// Gespeichertes Passwort anzeigen bzw. kopieren: nur nach Touch ID/Face ID bzw. Passwort des Geräts.
 #[tauri::command]
 async fn cred_reveal(path: State<'_, LibraryPath>, id: String) -> Result<String, String> {
     let cred = creds::load(&creds_path(&path))?.into_iter().find(|x| x.id == id).ok_or("Zugangsdaten nicht gefunden")?;
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         let reason = format!("das Passwort von «{}» anzeigen", cred.name);
-        tauri::async_runtime::spawn_blocking(move || sfsymbol::authenticate(&reason)).await.map_err(|e| e.to_string())??;
+        tauri::async_runtime::spawn_blocking(move || auth::authenticate(&reason)).await.map_err(|e| e.to_string())??;
     }
     // shortcut: unter Windows noch ohne Windows Hello, darum dort gesperrt; mit Hello (UserConsentVerifier) freigeben.
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     {
         let _ = &cred;
         return Err("Anzeigen ist auf diesem System noch nicht möglich".into());
@@ -1621,6 +1623,41 @@ fn local_home(app: AppHandle) -> Result<String, String> {
     app.path().home_dir().map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
 }
 
+/// iPad: Datei aus der App «Dateien» auf eine Sitzung gezogen. Die Webansicht liefert nur den Inhalt, also hier
+/// in einen eigenen Ordner im Cache legen (Kopf `x-name`, Rumpf roh) und den Pfad zurückgeben; danach läuft es wie
+/// beim Ziehen auf dem Desktop. Der Ordner wird bei jedem Start geleert.
+#[tauri::command]
+fn stage_file(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else { return Err("Keine Datei".into()) };
+    let raw = request.headers().get("x-name").and_then(|v| v.to_str().ok()).unwrap_or("Datei");
+    let name = percent_decode(raw);
+    let name = std::path::Path::new(&name).file_name().and_then(|n| n.to_str()).filter(|n| !n.is_empty() && *n != "." && *n != "..").ok_or("Ungültiger Dateiname")?.to_string();
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("Ablage").join(new_sid("d"));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let file = dir.join(name);
+    std::fs::write(&file, data).map_err(|e| e.to_string())?;
+    Ok(file.to_string_lossy().into_owned())
+}
+
+/// %XX in einem Kopfwert (Dateinamen mit Umlauten gehen kodiert über die Kopfzeile).
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let Some(v) = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// Startet eine Übertragung im Hintergrund; Fortschritt über `on_progress`. Gibt die Übertragungs-ID zurück.
 #[tauri::command]
 fn transfer_start(
@@ -2279,6 +2316,9 @@ pub fn run() {
             diag::init(&dir);
             kbhook::init(app.handle().clone());
             let _ = LIBRARY_FILE.set(dir.join("library.json"));
+            if let Ok(c) = app.path().app_cache_dir() {
+                let _ = std::fs::remove_dir_all(c.join("Ablage"));
+            }
             #[cfg(target_os = "macos")]
             jumps::dock::install(app.handle().clone());
             jumps::changed(&dir.join("library.json"));
@@ -2337,6 +2377,7 @@ pub fn run() {
             app_exit,
             clip_read,
             clip_write,
+            stage_file,
             immersive,
             kbhook_set,
             kbhook_selftest,
@@ -2418,6 +2459,14 @@ pub fn run() {
 
 #[cfg(test)]
 mod setup_script_tests {
+    #[test]
+    fn prozent_dekodieren() {
+        assert_eq!(super::percent_decode("B%C3%BCro%20Plan.pdf"), "Büro Plan.pdf");
+        assert_eq!(super::percent_decode("a%2"), "a%2");
+        assert_eq!(super::percent_decode("100%"), "100%");
+        assert_eq!(super::percent_decode("%zz"), "%zz");
+    }
+
     /// Das Setup-Script wird unverändert ausgeliefert (LF, ohne BOM); die Summe muss zur freigegebenen Fassung passen.
     #[test]
     fn setup_script_is_the_released_version() {

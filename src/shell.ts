@@ -1,3 +1,4 @@
+import { dropFiles } from "./dropfiles";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
@@ -115,23 +116,29 @@ export function shellTab(ctx: TabCtx): TabHandle {
   });
   const unlistenDrop = getCurrentWebview().onDragDropEvent(async (ev) => {
     if (ev.payload.type !== "drop" || !ctx.isActive() || !sid) return;
+    await dropPaths(ev.payload.paths);
+  });
+  // iPad: aus «Dateien» auf die Shell ziehen
+  dropFiles(ctx.pane, () => ctx.isActive() && !!sid && !local, (paths) => dropPaths(paths));
+  async function dropPaths(paths: string[]) {
+    if (!sid) return;
     if (local) {
-      send(ev.payload.paths.map(quote).join(" "));
+      send(paths.map(quote).join(" "));
       return term.focus();
     }
     const s = sid;
     const dir = cwd || (await askText("Wohin hochladen?", `Den aktuellen Ordner der Shell kennt Sesam nicht (die Shell meldet ihn nicht). Ordner auf ${c.name}; leer = Home.`, "Hochladen", ""));
     if (dir === null) return;
-    status.textContent = `Lade ${ev.payload.paths.length} Element(e) hoch …`;
+    status.textContent = `Lade ${paths.length} Element(e) hoch …`;
     try {
-      const done = await api.shellUpload(s, ev.payload.paths, dir);
+      const done = await api.shellUpload(s, paths, dir);
       status.textContent = `Hochgeladen nach ${dir || "Home"}`;
       send(done.map(quote).join(" "));
     } catch (e) {
       status.textContent = `Nicht hochgeladen: ${e}`;
     }
     term.focus();
-  });
+  }
 
   // ---------- Türöffner: lokale Dienste des Servers über SSH im Browser ----------
   const hint = navigator.userAgent.includes("Mac") ? "⌘-Klick" : "Strg+Klick";

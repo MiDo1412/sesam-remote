@@ -54,6 +54,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Verbessert
 
+- **iPad wie am Mac:** Gespeicherte Passwörter zeigt Sesam auf dem iPad jetzt nach Face ID, Touch ID oder dem Gerätecode. Dateien lassen sich aus der App «Dateien» (Split View oder Slide Over) auf ein Remote-Bild, eine Shell oder die Server-Seite im Dateifenster ziehen und werden hochgeladen. RDP nutzt auch auf dem iPad H.264 über den Decoder des Systems.
 - **Zuletzt verwendet am App-Symbol:** Rechtsklick aufs Sesam-Symbol im Dock (Mac) bzw. in der Taskleiste (Windows) zeigt die zuletzt verbundenen Verbindungen sowie «Neue Verbindung …» und «Schnelle Verbindung …». Ein Klick öffnet sie direkt.
 - **Vollbild auf dem iPad:** «Vollbild» blendet Leisten, Statusleiste und Home-Leiste aus; das Remote-Bild nimmt den ganzen Bildschirm. Die Verbindungsleiste kommt mit einem Tipp auf den Griff oben in der Mitte oder mit einem Wisch vom oberen Rand nach unten; dort beendet man das Vollbild auch wieder.
 - **Kompakte Sitzungsleiste:** Auf dem iPad und in schmalen Fenstern zeigt die Leiste nur noch Tasten, Bildschirmtastatur, Vollbild und Trennen; Ansicht (Anpassen, Skalieren, 1:1), Touch-Bedienung, Lupe und Seltenes liegen im Menü «…». Tabs zeigen den ganzen Namen.

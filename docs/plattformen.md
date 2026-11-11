@@ -32,7 +32,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Desktop freischalten | ✓ | ✓ | ✓ | ✓ |
 | Türöffner (lokale Dienste über SSH) | ✓ | ✓ | ✓ | ✓ |
 | Gehaltene Shell (tmux, «Nahtlos») | ✓ | ✓ | ✓ | ✓ wichtig, weil iPadOS Verbindungen im Hintergrund trennt |
-| Durchreiche (Dateien auf Shell/Remote-Bild ziehen) | ✓ | ✓ | ✓ | … Ziehen aus «Dateien» in Split View noch nicht angebunden |
+| Durchreiche (Dateien auf Shell/Remote-Bild ziehen) | ✓ | ✓ | ✓ | ✓ aus «Dateien» (Split View, Slide Over) ziehen; nur Dateien, keine Ordner |
 | Papierkorb auf dem Server, Rückgängig | ✓ ⌘Z | ✓ Strg+Z | ✓ Strg+Z | ✓ (⌘Z mit Tastatur) |
 | Mit Administratorrechten (sudo auf dem Server) | ✓ | ✓ | ✓ | ✓ |
 
@@ -57,7 +57,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Funktion | macOS | Windows | Linux | iPad |
 |---|---|---|---|---|
 | Zugangsdaten | ✓ Schlüsselbund | ✓ Anmeldeinformationsverwaltung | ✓ Secret Service | ✓ Schlüsselbund |
-| Passwort anzeigen mit Bestätigung | ✓ Touch ID / Mac-Passwort | … Windows Hello noch nicht | … | … Face ID/Touch ID noch nicht angebunden |
+| Passwort anzeigen mit Bestätigung | ✓ Touch ID / Mac-Passwort | … Windows Hello noch nicht | … | ✓ Face ID / Touch ID / Gerätecode |
 | Verschlüsselte Sicherung (Export/Import) | ✓ | ✓ | ✓ | ✓ (Datei über «Dateien») |
 | Gemeinsame Zwischenablage Text | ✓ | ✓ | ✓ | ✓ nur im Vordergrund; Einfügen mit Bestätigung von iOS |
 | Zwischenablage Dateien und Bilder | ✓ | ✓ | ✓ | … noch nicht |
@@ -67,7 +67,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | `sesam://`-Links | ✓ | ✓ | ✓ | ✓ |
 | Freigabe «Lokales Netzwerk» | ✓ Systemeinstellungen | – (nicht nötig) | – | ✓ Abfrage beim ersten Verbinden |
 | Berechtigungen einrichten (Dialog) | ✓ | – (nicht nötig) | – | – (iPadOS fragt selbst) |
-| H.264 im Remote-Bild | ✓ VideoToolbox | ✓ Media Foundation | … | … VideoToolbox gibt es, noch nicht freigeschaltet |
+| H.264 im Remote-Bild | ✓ VideoToolbox | ✓ Media Foundation | … | ✓ VideoToolbox (wie am Mac; mit echtem RDP-Server auf dem iPad noch ungeprüft) |
 | RDP-Ordnerfreigabe | ✓ | ✓ | ✓ | ✗ kein freier Dateizugriff |
 | RDP-Ton | ✓ | ✓ | ✓ | ✓ |
 

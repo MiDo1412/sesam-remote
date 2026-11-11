@@ -59,6 +59,7 @@ targets:
         # Ordner «Documents» der App in der Dateien-App zeigen (Downloads, Dateien zum Hochladen)
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        NSFaceIDUsageDescription: Sesam zeigt gespeicherte Passwörter erst nach deiner Bestätigung.
         NSLocalNetworkUsageDescription: Sesam verbindet sich mit Rechnern in deinem Netzwerk (SSH, RDP, VNC und Dateien).
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
