@@ -80,7 +80,7 @@
         { "@type": "Question", "name": "Mit welchen Rechnern kann sich Sesam Remote verbinden?", "acceptedAnswer": { "@type": "Answer", "text": "Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP." } },
         { "@type": "Question", "name": "Brauche ich ein Konto oder einen Cloud-Dienst?", "acceptedAnswer": { "@type": "Answer", "text": "Nein. Sesam verbindet sich direkt mit deinen Rechnern. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie." } },
         { "@type": "Question", "name": "Wo speichert Sesam meine Passwörter?", "acceptedAnswer": { "@type": "Answer", "text": "Passwörter und SSH-Schlüssel liegen verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse." } },
-        { "@type": "Question", "name": "Warum gibt es Sesam für den Mac nicht im Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "Die Sandbox des Mac App Store verbietet Funktionen, die Sesam ausmachen: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als signierten und von Apple notarisierten Download von dieser Website." } },
+        { "@type": "Question", "name": "Warum gibt es Sesam für den Mac nicht im Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "Die Sandbox des Mac App Store verbietet Funktionen, die Sesam ausmachen: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als Download von dieser Website (die Notarisierung durch Apple folgt)." } },
         { "@type": "Question", "name": "Was kann die iPad-Version nicht?", "acceptedAnswer": { "@type": "Answer", "text": "iPadOS beendet Verbindungen kurz nachdem die App in den Hintergrund geht, behält Systemkürzel wie Befehl-Tab für sich, gibt Dateien nur über die Dateien-App frei und erlaubt die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf dem iPad nicht." } },
         { "@type": "Question", "name": "Unter welcher Lizenz steht Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Unter der Mozilla Public License 2.0 (MPL-2.0)." } }
       ]
@@ -237,13 +237,14 @@
         <div class="get">
           <article class="rise" style="--i:2">
             <h3>Mac</h3>
-            <p>Signiert und von Apple notarisiert, als Download von hier. Nicht im Mac App Store, weil dessen Sandbox das lokale Terminal und Tastenkürzel an den entfernten Rechner verbietet.</p>
-            <a class="btn" href="download/Sesam-Remote.dmg">Für Mac laden</a>
+            <p>Für Macs mit Apple-Chip, als Download von hier; aktualisiert sich selbst. Noch nicht von Apple notarisiert: beim ersten Start Rechtsklick › Öffnen. Nicht im Mac App Store, weil dessen Sandbox das lokale Terminal und Tastenkürzel an den entfernten Rechner verbietet.</p>
+            <a class="btn" href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS.dmg" download>Für Mac laden</a>
+            <p class="alt"><a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS_portabel.zip" download>Portable Fassung (ZIP)</a></p>
           </article>
           <article class="rise" style="--i:3">
             <h3>Windows</h3>
             <p>Für Windows 10 und 11. Tastenkürzel gehen an den entfernten Rechner, wie bei der Remotedesktopverbindung.</p>
-            <a class="btn" href="download/Sesam-Remote-Setup.exe">Für Windows laden</a>
+            <span class="btn" aria-disabled="true" style="opacity:.55;pointer-events:none">Folgt in Kürze</span>
           </article>
           <article class="rise" style="--i:4">
             <h3>iPad</h3>
@@ -280,7 +281,7 @@
         <details name="faq"><summary>Brauche ich ein Konto oder einen Cloud-Dienst?</summary><p><span>Nein. Sesam verbindet sich direkt mit deinen Rechnern, im lokalen Netz, über VPN, einen SSH-Sprungserver oder ein RD-Gateway. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie.</span></p></details>
         <details name="faq"><summary>Wo speichert Sesam meine Passwörter?</summary><p><span>Verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse. Für den Umzug schreibt Sesam eine mit deinem Passwort verschlüsselte Sicherung.</span></p></details>
         <details name="faq"><summary>Funktioniert Sesam mit Ubuntu 26.04 und Wayland?</summary><p><span>Ja. Sesam verbindet sich über RDP mit GNOME Remote Desktop, auch mit dem Anmeldebildschirm, und folgt danach der Übergabe an die Sitzung. Ein Setup-Script richtet feste Ports pro Benutzer ein; Sesam startet es auf Wunsch selbst über SSH.</span></p></details>
-        <details name="faq"><summary>Warum gibt es Sesam für den Mac nicht im Mac App Store?</summary><p><span>Die Sandbox des Mac App Store verbietet, was Sesam ausmacht: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als signierten und von Apple notarisierten Download von dieser Website.</span></p></details>
+        <details name="faq"><summary>Warum gibt es Sesam für den Mac nicht im Mac App Store?</summary><p><span>Die Sandbox des Mac App Store verbietet, was Sesam ausmacht: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als Download von dieser Website (die Notarisierung durch Apple folgt).</span></p></details>
         <details name="faq"><summary>Was kann die iPad-Version nicht?</summary><p><span>iPadOS beendet Verbindungen kurz nachdem die App in den Hintergrund geht, behält Systemkürzel wie ⌘Tab für sich, gibt Dateien nur über die Dateien-App frei und erlaubt die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf dem iPad nicht.</span></p></details>
         <details name="faq"><summary>Unter welcher Lizenz steht Sesam?</summary><p><span>Unter der Mozilla Public License 2.0. Die Schriften dieser Website und der App stehen unter der SIL Open Font License, die Symbole unter Windows unter MIT.</span></p></details>
       </div>
@@ -290,14 +291,14 @@
   <section class="close" aria-labelledby="schluss-titel">
     <div class="wrap">
       <h2 id="schluss-titel" class="sr">Sesam laden</h2>
-      <form class="blank rise" action="download/Sesam-Remote.dmg" method="get" id="get">
+      <form class="blank rise" action="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS.dmg" method="get" id="get">
         Öffne Sesam auf <label class="sr" for="os">Plattform</label><select id="os" aria-label="Plattform">
-          <option value="download/Sesam-Remote.dmg">dem Mac</option>
-          <option value="download/Sesam-Remote-Setup.exe">Windows</option>
+          <option value="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS.dmg">dem Mac</option>
+          <option value="#laden" disabled>Windows (folgt)</option>
           <option value="#fragen">dem iPad</option>
         </select> <button type="submit">jetzt.</button>
       </form>
-      <p class="note rise" style="--i:1">Mac: signiert und notarisiert. Windows: 10 und 11. iPad: bald im App Store.</p>
+      <p class="note rise" style="--i:1">Mac: Apple-Chip, noch nicht notarisiert (Rechtsklick › Öffnen). Windows: folgt. iPad: bald im App Store.</p>
     </div>
   </section>
 </main>

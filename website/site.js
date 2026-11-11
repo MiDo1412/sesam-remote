@@ -74,6 +74,13 @@ document.querySelectorAll('.rise').forEach(el => seen.observe(el));
 
 // "Öffne Sesam auf … jetzt."
 const form = document.getElementById('get');
+// Passendes System vorwählen (das iPad meldet sich wie ein Mac, hat aber Touch).
+if (form) {
+  const ua = navigator.userAgent, touch = navigator.maxTouchPoints > 1;
+  const want = /Windows/.test(ua) ? 'Windows' : /iPad|iPhone/.test(ua) || (/Macintosh/.test(ua) && touch) ? 'iPad' : /Macintosh/.test(ua) ? 'Mac' : null;
+  const opt = want && [...form.querySelectorAll('option')].find(o => o.textContent.includes(want) && !o.disabled);
+  if (opt) opt.selected = true;
+}
 if (form) form.addEventListener('submit', ev => {
   ev.preventDefault();
   location.href = form.querySelector('select').value;

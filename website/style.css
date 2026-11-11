@@ -271,3 +271,6 @@ code { font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 
   .window { translate: none !important; }
 }
 .contact code { background: #3a3a3d; color: inherit; }
+
+/* Zweitlink unter einem Download-Knopf (portable Fassung) */
+.get .alt { margin: .6rem 0 0; font-size: .9em; }

@@ -16,6 +16,7 @@ import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, rmS
 import { createHash } from "node:crypto";
 import { join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+import { githubNames } from "./release-files.mjs";
 
 const root = join(fileURLToPath(import.meta.url), "..", "..");
 const version = (await import("node:fs")).readFileSync(join(root, "VERSION"), "utf8").trim();
@@ -81,6 +82,16 @@ if (process.platform === "darwin") {
 }
 rmSync(stage, { recursive: true, force: true });
 
+// Für das GitHub-Release: Namen ohne Leerzeichen, dazu eine Kopie ohne Version, damit die Website stabil auf
+// «releases/latest/download/<Name>» verlinken kann.
+const gh = join(out, "github");
+mkdirSync(gh, { recursive: true });
+for (const f of done) {
+  const [clean, alias] = githubNames(basename(f), version);
+  copyFileSync(f, join(gh, clean));
+  if (alias) copyFileSync(f, join(gh, alias));
+}
+
 // Prüfsummen: eine Zeile je Datei, im Format von «shasum -a 256» / «sha256sum».
 const sha = (f) => new Promise((ok) => {
   const h = createHash("sha256");
@@ -91,4 +102,10 @@ const old = existsSync(sumsFile) ? (await import("node:fs")).readFileSync(sumsFi
 const lines = new Map(old.map((l) => [l.slice(66), l]));
 for (const f of done) lines.set(basename(f), `${await sha(f)}  ${basename(f)}`);
 writeFileSync(sumsFile, [...lines.values()].sort((a, b) => a.slice(66).localeCompare(b.slice(66))).join("\n") + "\n");
-console.log([...done.map((f) => `fertig: ${f}`), `Prüfsummen: ${sumsFile}`].join("\n"));
+// Dieselben Prüfsummen unter den GitHub-Namen (ergänzt, was andere Systeme schon beigetragen haben).
+const ghSums = join(gh, "SHA256SUMS.txt");
+const ghOld = existsSync(ghSums) ? (await import("node:fs")).readFileSync(ghSums, "utf8").split("\n").filter(Boolean) : [];
+const ghLines = new Map(ghOld.map((l) => [l.slice(66), l]));
+for (const f of done) for (const n of githubNames(basename(f), version).filter(Boolean)) ghLines.set(n, `${await sha(f)}  ${n}`);
+writeFileSync(ghSums, [...ghLines.values()].sort((a, b) => a.slice(66).localeCompare(b.slice(66))).join("\n") + "\n");
+console.log([...done.map((f) => `fertig: ${f}`), `Prüfsummen: ${sumsFile}`, `GitHub-Dateien: ${gh}`].join("\n"));

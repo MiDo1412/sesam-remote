@@ -44,11 +44,16 @@ node scripts/updates.mjs windows-x86_64-portable sesam-remote.exe
 
 Linux entsprechend mit dem AppImage (`linux-x86_64`).
 
-## Hochladen
+## Veröffentlichen
 
-`test-build/release/<Version>/updates/` auf die Website nach `https://sesam-remote.app/updates/` kopieren:
-`latest.json` und den Ordner `<Version>/` mit den Dateien und `.sig`. Erst die Dateien, zuletzt
-`latest.json` (sonst zeigt sie kurz auf Fehlendes). Nur über HTTPS.
+`node scripts/release.mjs publish` hängt alles aus `test-build/release/<Version>/github/` ans GitHub-Release:
+Installer mit Version im Namen und mit festem Namen (`Sesam-Remote_macOS.dmg`, `Sesam-Remote_Windows.msi`,
+`…_portabel.zip`), `latest.json`, Update-Dateien samt `.sig`, `SHA256SUMS.txt`. Die App holt Updates zuerst
+von `https://github.com/MiDo1412/sesam-remote/releases/latest/download/latest.json`; die Website verlinkt die
+festen Namen unter `releases/latest/download/…` und lädt so immer direkt die neueste Datei.
+
+Freiwillig (Rückfall, falls GitHub einmal wegfällt): `test-build/release/<Version>/updates/` nach
+`https://sesam-remote.app/updates/` kopieren, zuletzt `latest.json`.
 
 ## Wie die App aktualisiert
 

@@ -24,3 +24,13 @@ test("latest.json zusammenführen", () => {
   const c = merge(b, "26.11.3", "M", { "darwin-aarch64": { signature: "t", url: "x" } }, now);
   assert.deepEqual(Object.keys(c.platforms), ["darwin-aarch64"], "neue Version beginnt leer");
 });
+
+import { githubNames, githubUrl } from "./release-files.mjs";
+
+test("Namen fürs GitHub-Release: mit Version und fest", () => {
+  assert.deepEqual(githubNames("Sesam Remote_26.11.2_aarch64.dmg", "26.11.2"), ["Sesam-Remote_26.11.2_macOS_aarch64.dmg", "Sesam-Remote_macOS.dmg"]);
+  assert.deepEqual(githubNames("Sesam Remote_26.11.2_x64_de-DE.msi", "26.11.2"), ["Sesam-Remote_26.11.2_Windows_x64.msi", "Sesam-Remote_Windows.msi"]);
+  assert.deepEqual(githubNames("Sesam-Remote_26.11.2_Windows_x64_portabel.zip", "26.11.2"), ["Sesam-Remote_26.11.2_Windows_x64_portabel.zip", "Sesam-Remote_Windows_x64_portabel.zip"]);
+  assert.deepEqual(githubNames("Sesam Remote.app.tar.gz", "26.11.2"), ["Sesam-Remote.app.tar.gz", null]);
+  assert.equal(githubUrl("26.11.2", "Sesam-Remote.app.tar.gz"), "https://github.com/MiDo1412/sesam-remote/releases/download/v26.11.2/Sesam-Remote.app.tar.gz");
+});

@@ -150,7 +150,10 @@ function main() {
     } catch {
       there = false;
     }
-    const assets = installers(root, current);
+    // Alles aus test-build/release/<Version>/github (scripts/portable.mjs, scripts/updates.mjs): Installer mit und
+    // ohne Version im Namen, portable Fassungen, latest.json und Update-Dateien samt .sig, SHA256SUMS.txt.
+    const prepared = at("test-build", "release", current, "github");
+    const assets = existsSync(prepared) ? readdirSync(prepared).filter((f) => !f.startsWith(".") && f !== "release-text.md").map((f) => join(prepared, f)) : installers(root, current);
     if (!assets.length) console.warn(`Kein Installer für ${current} gefunden (zuerst «npx tauri build»); das Release bekommt nur den Text.`);
     if (there) {
       // the entry is the source: a reworded line reaches the release that is already there

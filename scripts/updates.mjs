@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Stellt die Update-Dateien einer Version für die Website zusammen (docs/release.md):
- * test-build/release/<VERSION>/updates/latest.json und <VERSION>/<Dateien samt .sig>, bereit zum Hochladen nach
- * https://sesam-remote.app/updates/. Nimmt, was auf diesem System signiert gebaut wurde, und ergänzt eine schon
- * vorhandene latest.json (Windows und Linux kommen von anderen Rechnern dazu).
+ * Stellt die Update-Dateien einer Version zusammen (docs/release.md):
+ * - test-build/release/<VERSION>/github/: latest.json mit Adressen der GitHub-Release-Dateien und die Dateien samt
+ *   .sig; «node scripts/release.mjs publish» hängt alles ans Release (erste Quelle der App).
+ * - test-build/release/<VERSION>/updates/: dasselbe für https://sesam-remote.app/updates/ (Rückfall, freiwillig).
+ * Nimmt, was auf diesem System signiert gebaut wurde, und ergänzt eine schon vorhandene latest.json (Windows und
+ * Linux kommen von anderen Rechnern dazu).
  *
  *   node scripts/updates.mjs                     Artefakte aus src-tauri/target/release/bundle übernehmen
  *   node scripts/updates.mjs <plattform> <datei> eine einzelne signierte Datei (mit <datei>.sig daneben),
@@ -15,6 +17,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { githubUrl } from "./release-files.mjs";
 
 export const BASE = "https://sesam-remote.app/updates";
 const root = join(fileURLToPath(import.meta.url), "..", "..");
@@ -69,9 +72,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     copyFileSync(`${file}.sig`, join(files, `${name}.sig`));
     entries[platform] = { signature: readFileSync(`${file}.sig`, "utf8").trim(), url: `${BASE}/${version}/${encodeURIComponent(name)}` };
   }
-  const latest = join(out, "latest.json");
-  const old = existsSync(latest) ? JSON.parse(readFileSync(latest, "utf8")) : null;
   const notes = notesFor(readFileSync(join(root, "docs", "release-notes.md"), "utf8"), version);
-  writeFileSync(latest, JSON.stringify(merge(old, version, notes, entries), null, 2) + "\n");
-  console.log(`latest.json: ${latest}\n${Object.keys(entries).map((p) => `  ${p}`).join("\n")}`);
+  const write = (dir, list) => {
+    const latest = join(dir, "latest.json");
+    const old = existsSync(latest) ? JSON.parse(readFileSync(latest, "utf8")) : null;
+    writeFileSync(latest, JSON.stringify(merge(old, version, notes, list), null, 2) + "\n");
+    return latest;
+  };
+  // GitHub: dieselben Dateien als Anhang des Releases, Adressen direkt auf die Datei.
+  const gh = join(root, "test-build", "release", version, "github");
+  mkdirSync(gh, { recursive: true });
+  const ghEntries = {};
+  for (const [platform, e] of Object.entries(entries)) {
+    const name = decodeURIComponent(e.url.split("/").pop());
+    copyFileSync(join(files, name), join(gh, name));
+    copyFileSync(join(files, `${name}.sig`), join(gh, `${name}.sig`));
+    ghEntries[platform] = { ...e, url: githubUrl(version, name) };
+  }
+  console.log(`latest.json: ${write(gh, ghEntries)} (GitHub)\nlatest.json: ${write(out, entries)} (Website)\n${Object.keys(entries).map((p) => `  ${p}`).join("\n")}`);
 }

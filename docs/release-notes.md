@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Verbessert
+
+- **Updates und Downloads direkt von GitHub:** Die App holt Updates zuerst aus dem GitHub-Release, die Website ist nur noch Rückfall. Die Download-Knöpfe auf sesam-remote.app laden die Datei direkt (fester Name, immer die neueste Version), mit portabler Fassung daneben; die Website wählt das System des Besuchers vor. Die Website sagt jetzt richtig, dass die Mac-App noch nicht notarisiert ist (Rechtsklick › Öffnen), und Windows als «folgt».
+
 ## 26.11.2 — 2026-11-11
 
 ### Neu
