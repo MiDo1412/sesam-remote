@@ -32,7 +32,7 @@ node scripts/updates.mjs
 unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 ```
 
-Windows (WS-MD01, `docs/build-windows.md`): ohne Schlüssel bauen, dann die Dateien zum Mac bringen und dort
+Windows (`docs/build-windows.md`): ohne Schlüssel bauen, dann die Dateien zum Mac bringen und dort
 signieren:
 
 ```bash

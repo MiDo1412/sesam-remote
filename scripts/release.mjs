@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Cuts a release (.claude/rules/versioning-release-notes.md). A commit changes no number: every
+ * Cuts a release (docs/versionierung.md). A commit changes no number: every
  * change writes its lines under «## In Arbeit» in docs/release-notes.md, and a release turns
  * that section into the entry of the next number, YY.M.N — year, month, running number of the
  * month (26.10.1, 26.10.2, 26.11.1). Runs on every OS.
