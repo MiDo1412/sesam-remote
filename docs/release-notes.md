@@ -54,6 +54,9 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Verbessert
 
+- **Dateifenster wie Finder und Explorer:** Mehrere Dateien auswählen mit Umschalt-Klick (Bereich), ⌘-/Strg-Klick (einzeln dazu), ⌘A/Strg+A (alle), Umschalt+Pfeiltasten und Ziehen auf freier Fläche (Gummiband); Pfeiltasten, Pos1/Ende und Tippen der ersten Buchstaben springen zur Datei. Am Mac benennt Enter um und ⌘↓ öffnet (wie im Finder), unter Windows und Linux öffnet Enter und F2 benennt um. Alle Aktionen gelten für die ganze Auswahl; auf dem iPad gibt es «Alle auswählen» im Menü (lange drücken).
+- **Nie mehr still überschreiben:** Gibt es eine Datei am Ziel schon, fragt Sesam mit beiden Fassungen nebeneinander (Grösse, Datum, welche neuer ist): «Ersetzen», «Überspringen», «Beide behalten», «Nur wenn neuer», auf Wunsch «Für alle übernehmen». Bei Ordnern: «Zusammenführen» (fragt dann je Datei) oder «Beide behalten». Gilt in beide Richtungen und auch beim Ziehen aus Finder/Explorer und «Dateien».
+- **Pfad im Dateifenster:** Titel und Pfad überdecken sich nicht mehr; lange Pfade zeigen Anfang und aktuellen Ordner, die Mitte steckt in «…».
 - **iPad wie am Mac:** Gespeicherte Passwörter zeigt Sesam auf dem iPad jetzt nach Face ID, Touch ID oder dem Gerätecode. Dateien lassen sich aus der App «Dateien» (Split View oder Slide Over) auf ein Remote-Bild, eine Shell oder die Server-Seite im Dateifenster ziehen und werden hochgeladen. RDP nutzt auch auf dem iPad H.264 über den Decoder des Systems.
 - **Zuletzt verwendet am App-Symbol:** Rechtsklick aufs Sesam-Symbol im Dock (Mac) bzw. in der Taskleiste (Windows) zeigt die zuletzt verbundenen Verbindungen sowie «Neue Verbindung …» und «Schnelle Verbindung …». Ein Klick öffnet sie direkt.
 - **Vollbild auf dem iPad:** «Vollbild» blendet Leisten, Statusleiste und Home-Leiste aus; das Remote-Bild nimmt den ganzen Bildschirm. Die Verbindungsleiste kommt mit einem Tipp auf den Griff oben in der Mitte oder mit einem Wisch vom oberen Rand nach unten; dort beendet man das Vollbild auch wieder.
@@ -92,6 +95,8 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Behoben
 
+- **SSH und Dateien auf dem iPad:** Die erste Verbindung zu einem Server scheiterte auf dem echten iPad, weil Sesam den Server-Schlüssel in einem Ordner speichern wollte, den iPadOS nicht beschreiben lässt. Er liegt jetzt bei den Daten der App.
+- **Mehrere Dateien gleichzeitig ersetzen:** Ersetzte man mehrere Dateien auf einmal, konnte das Sichern der alten Fassungen in den Papierkorb scheitern.
 - **«Anpassen» bei Geräten mit festem Monitor:** Hat ein VNC-Server einen fest angeschlossenen Bildschirm (z. B. ein Raspberry Pi am HDMI-Monitor), vergrösserte «Anpassen» nur die Fläche und das Bild füllte bloss einen Teil davon. Sesam erkennt das jetzt, stellt die alte Grösse wieder her und skaliert das Bild auf die ganze Fläche.
 - **Ganzes Fenster:** Auf dem iPad keine weissen Balken mehr oben und unten; auf allen Systemen ist auch die Fläche hinter der App in der App-Farbe (hell und dunkel).
 - **Mac: Verbindungen ins eigene Netz:** «No route to host» zu Rechnern im lokalen Netz lag an der macOS-Freigabe «Lokales Netzwerk». Sesam Remote fragt jetzt mit eigenem Text danach, behält die Freigabe über Updates hinweg und erklärt bei einer Sperre, wo man sie einschaltet.

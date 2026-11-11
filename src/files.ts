@@ -1,4 +1,5 @@
 import { dropFiles } from "./dropfiles";
+import { askConflict, type Choice } from "./conflict";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
 import { ask, askHostKey, askPassword, askText, choose, tell } from "./ui";
@@ -60,6 +61,9 @@ interface Pane {
   pathEl: HTMLElement;
   listing: Listing | null;
   selected: Set<string>;
+  /** Ausgangspunkt für Umschalt-Klick und die Zeile mit dem Tastatur-Fokus. */
+  anchor: string | null;
+  cursor: string | null;
   /** Pfad-Trenner der Seite. */
   sep: string;
   sort: SortKey;
@@ -91,6 +95,8 @@ export function filesTab(ctx: TabCtx): TabHandle {
   const isWin = navigator.userAgent.includes("Windows");
 // iPad: links nur der Ordner der App («Auf meinem iPad › Sesam Remote» in der Dateien-App).
 const localName = isMobile ? "Auf meinem iPad" : "Dieser Computer";
+/** Apple-Tastenkürzel (⌘) auf Mac und iPad mit Tastatur. */
+const isMacUi = navigator.userAgent.includes("Mac");
 let localRoot = "";
   const panes: Record<Side, Pane> = {
     local: makePane("local", localName, isWin ? "\\" : "/"),
@@ -225,7 +231,7 @@ let localRoot = "";
     const scroller = el("div", "pane-list");
     scroller.append(table);
     root.append(head, tools, scroller);
-    const pane: Pane = { side, root, body, pathEl, listing: null, selected: new Set(), sep, sort: "name", desc: false, hidden: false, filter: "", back: [], fwd: [], nav: { back, fwd, up } };
+    const pane: Pane = { side, root, body, pathEl, listing: null, selected: new Set(), anchor: null, cursor: null, sep, sort: "name", desc: false, hidden: false, filter: "", back: [], fwd: [], nav: { back, fwd, up } };
     const goUp = () => pane.listing?.parent != null && load(pane, pane.listing.parent, "go");
     const reload = () => pane.listing && load(pane, pane.listing.path);
     up.onclick = goUp;
@@ -239,16 +245,52 @@ let localRoot = "";
     root.tabIndex = -1;
     root.onkeydown = (ev) => {
       const typing = (ev.target as HTMLElement).matches("input, textarea");
+      if (!typing && listKey(pane, ev)) return ev.preventDefault();
+      const mod = isMacUi ? ev.metaKey : ev.altKey;
       const act =
         ev.altKey && ev.key === "ArrowLeft" ? () => step(pane, "back")
         : ev.altKey && ev.key === "ArrowRight" ? () => step(pane, "fwd")
-        : (ev.altKey && ev.key === "ArrowUp") || (ev.key === "Backspace" && !typing && !ev.altKey) ? goUp
+        : (mod && ev.key === "ArrowUp") || (ev.key === "Backspace" && !typing && !ev.altKey && !ev.metaKey) ? goUp
         : ev.key === "F5" ? reload
         : null;
       if (!act) return;
       ev.preventDefault();
       act();
     };
+    // Gummiband: auf freier Fläche ziehen wählt die überstrichenen Zeilen (mit ⌘/Strg dazu).
+    scroller.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 || ev.pointerType === "touch" || (ev.target as HTMLElement).closest("tr[data-name], thead, button, input")) return;
+      root.focus({ preventScroll: true });
+      const add = ev.ctrlKey || ev.metaKey;
+      const base = add ? new Set(pane.selected) : new Set<string>();
+      if (!add) setSelection(pane, base);
+      const box = scroller.getBoundingClientRect();
+      const [sx, sy] = [ev.clientX, ev.clientY + scroller.scrollTop];
+      let band: HTMLElement | null = null;
+      const move = (m: PointerEvent) => {
+        const [x0, x1] = [Math.min(sx, m.clientX), Math.max(sx, m.clientX)];
+        const [y0, y1] = [Math.min(sy, m.clientY + scroller.scrollTop), Math.max(sy, m.clientY + scroller.scrollTop)];
+        if (!band && y1 - y0 < 4 && x1 - x0 < 4) return;
+        if (!band) scroller.append((band = el("div", "rubber-band")));
+        Object.assign(band.style, { left: `${x0 - box.left}px`, top: `${y0 - box.top}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
+        const hit = new Set(base);
+        for (const tr of pane.body.querySelectorAll<HTMLElement>("tr[data-name]")) {
+          const r = tr.getBoundingClientRect();
+          if (r.bottom + scroller.scrollTop > y0 && r.top + scroller.scrollTop < y1) hit.add(tr.dataset.name!);
+        }
+        setSelection(pane, hit);
+      };
+      const up = () => {
+        scroller.removeEventListener("pointermove", move);
+        scroller.removeEventListener("pointerup", up);
+        band?.remove();
+      };
+      try {
+        scroller.setPointerCapture(ev.pointerId);
+      } catch {}
+      scroller.addEventListener("pointermove", move);
+      scroller.addEventListener("pointerup", up);
+    });
     const redraw = () => (comparing ? renderAll() : render(pane));
     filter.oninput = () => ((pane.filter = filter.value.toLowerCase()), redraw());
     hiddenBox.onchange = () => ((pane.hidden = hiddenBox.checked), redraw());
@@ -279,6 +321,7 @@ let localRoot = "";
       if (cur !== l.path) (expanded.clear(), subLists.clear());
       p.listing = l;
       p.selected.clear();
+      p.anchor = p.cursor = null;
       if (comparing) renderAll();
       else render(p);
     } catch (e) {
@@ -321,8 +364,27 @@ let localRoot = "";
       if (i > 0 || lead || drives) p.pathEl.append(el("span", "crumb-sep", "›"));
       p.pathEl.append(crumb(p, part, acc));
     });
-    // Lange Pfade: das Ende (aktueller Ordner) bleibt sichtbar.
-    requestAnimationFrame(() => (p.pathEl.scrollLeft = p.pathEl.scrollWidth));
+    requestAnimationFrame(() => collapseCrumbs(p));
+  }
+  /** Zu lang: Anfang und aktueller Ordner bleiben, die Mitte wird zu «…» (Klick zeigt die versteckten Ordner). */
+  function collapseCrumbs(p: Pane) {
+    const el_ = p.pathEl;
+    const crumbs = [...el_.querySelectorAll<HTMLButtonElement>(".crumb")];
+    if (el_.scrollWidth <= el_.clientWidth + 1 || crumbs.length < 3) return;
+    const more = el("button", "crumb crumb-more", "…") as HTMLButtonElement;
+    more.type = "button";
+    more.title = "Weitere Ordner";
+    crumbs[0].after(el("span", "crumb-sep", "›"), more);
+    const hidden: HTMLButtonElement[] = [];
+    for (let i = 1; i < crumbs.length - 1 && el_.scrollWidth > el_.clientWidth + 1; i++) {
+      crumbs[i].hidden = true;
+      (crumbs[i].previousElementSibling as HTMLElement | null)?.classList.contains("crumb-sep") && ((crumbs[i].previousElementSibling as HTMLElement).hidden = true);
+      hidden.push(crumbs[i]);
+    }
+    more.onclick = async () => {
+      const v = await openMenu(more, hidden.map((b, i) => ({ value: String(i), label: b.textContent ?? "", icon: ICON.folder })));
+      if (v !== null) hidden[Number(v)].click();
+    };
   }
   function crumb(p: Pane, label: string, target: string) {
     const b = el("button", "crumb", label) as HTMLButtonElement;
@@ -392,18 +454,17 @@ let localRoot = "";
     tr.tabIndex = -1;
     tr.dataset.name = name;
     tr.setAttribute("aria-selected", String(p.selected.has(name)));
+    tr.classList.toggle("cursor", p.cursor === name);
     const td = el("td", "name");
     if (lead) td.append(lead);
     td.append(el("span", `icon ${fileKind(e.name, e.dir)}`), el("span", "fname", e.name));
     tr.append(td, el("td", "size", e.dir ? "—" : formatSize(e.size)), el("td", "date", formatDate(e.modified)));
     const at = { ...e, name };
-    tr.onclick = (ev) => select(p, name, ev.ctrlKey || ev.metaKey);
-    tr.ondblclick = () => activate(p, at);
-    tr.onkeydown = (ev) => {
-      if (ev.key === "Enter") activate(p, at);
-      if (ev.key === "F2") p.side === "remote" ? renameRemote() : renameLocal();
-      if (p.side === "remote" && ev.key === "Delete") deleteRemote();
+    tr.onclick = (ev) => {
+      select(p, name, ev.ctrlKey || ev.metaKey, ev.shiftKey);
+      p.root.focus({ preventScroll: true });
     };
+    tr.ondblclick = () => activate(p, at);
     tr.onpointerdown = (ev) => startDrag(p, name, ev);
     tr.oncontextmenu = (ev) => {
       ev.preventDefault();
@@ -416,11 +477,74 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     return tr;
   }
 
-  function select(p: Pane, name: string, toggle: boolean) {
-    if (!toggle) p.selected.clear();
-    if (toggle && p.selected.has(name)) p.selected.delete(name);
-    else p.selected.add(name);
-    for (const tr of p.body.querySelectorAll<HTMLElement>("tr[data-name]")) tr.setAttribute("aria-selected", String(p.selected.has(tr.dataset.name!)));
+  /** Klick: nur dieses; ⌘/Strg: dazu oder weg; Umschalt: Bereich ab dem Ausgangspunkt (mit ⌘/Strg dazu). */
+  function select(p: Pane, name: string, toggle: boolean, range = false) {
+    const rows = rowNames(p);
+    if (range && p.anchor && rows.includes(p.anchor)) {
+      const [a, b] = [rows.indexOf(p.anchor), rows.indexOf(name)].sort((x, y) => x - y);
+      const next = toggle ? new Set(p.selected) : new Set<string>();
+      for (const n of rows.slice(a, b + 1)) next.add(n);
+      p.cursor = name;
+      return setSelection(p, next);
+    }
+    const next = toggle ? new Set(p.selected) : new Set<string>();
+    if (toggle && next.has(name)) next.delete(name);
+    else next.add(name);
+    p.anchor = p.cursor = name;
+    setSelection(p, next);
+  }
+  const rowNames = (p: Pane) => [...p.body.querySelectorAll<HTMLElement>("tr[data-name]")].map((tr) => tr.dataset.name!);
+  function setSelection(p: Pane, names: Set<string>) {
+    p.selected = names;
+    for (const tr of p.body.querySelectorAll<HTMLElement>("tr[data-name]")) {
+      tr.setAttribute("aria-selected", String(names.has(tr.dataset.name!)));
+      tr.classList.toggle("cursor", tr.dataset.name === p.cursor);
+    }
+    p.body.querySelector<HTMLElement>("tr.cursor")?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Tastatur in der Liste wie im Finder bzw. Explorer. `true` = erledigt. */
+  let typed = "";
+  let typedAt = 0;
+  function listKey(p: Pane, ev: KeyboardEvent): boolean {
+    const rows = rowNames(p);
+    const cmd = isMacUi ? ev.metaKey : ev.ctrlKey;
+    const entry = (n: string | null) => (n == null ? null : (p.listing?.entries.find((e) => e.name === n) ?? null));
+    if (cmd && ev.key.toLowerCase() === "a") return setSelection(p, new Set(rows)), true;
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp" || ev.key === "Home" || ev.key === "End") {
+      if (isMacUi && ev.metaKey && ev.key === "ArrowDown") {
+        const e = entry(p.cursor);
+        if (e) activate(p, e);
+        return true;
+      }
+      if (ev.altKey || ev.metaKey) return false;
+      if (!rows.length) return true;
+      const i = p.cursor ? rows.indexOf(p.cursor) : -1;
+      const j = ev.key === "Home" ? 0 : ev.key === "End" ? rows.length - 1 : Math.max(0, Math.min(rows.length - 1, i + (ev.key === "ArrowDown" ? 1 : -1)));
+      if (ev.shiftKey) select(p, rows[j], false, true);
+      else select(p, rows[j], false);
+      return true;
+    }
+    // Mac wie Finder: Enter benennt um, ⌘↓ öffnet. Windows/Linux wie Explorer: Enter öffnet, F2 benennt um.
+    if (ev.key === "Enter" && !ev.metaKey && !ev.ctrlKey) {
+      const e = entry(p.cursor ?? [...p.selected][0] ?? null);
+      if (isMacUi && p.selected.size === 1) p.side === "remote" ? renameRemote() : renameLocal();
+      else if (e) activate(p, e);
+      return true;
+    }
+    if (ev.key === "F2") return p.side === "remote" ? renameRemote() : renameLocal(), true;
+    if (p.side === "remote" && (ev.key === "Delete" || (isMacUi && ev.metaKey && ev.key === "Backspace"))) return deleteRemote(), true;
+    if (ev.key === "Escape" && p.selected.size) return setSelection(p, new Set()), true;
+    // Tippen springt zum ersten passenden Namen.
+    if (ev.key.length === 1 && !ev.metaKey && !ev.ctrlKey && !ev.altKey && ev.key !== " ") {
+      const now = performance.now();
+      typed = now - typedAt > 800 ? ev.key.toLowerCase() : typed + ev.key.toLowerCase();
+      typedAt = now;
+      const hit = rows.find((n) => n.toLowerCase().startsWith(typed));
+      if (hit) select(p, hit, false);
+      return true;
+    }
+    return false;
   }
 
   function activate(p: Pane, e: Entry) {
@@ -739,11 +863,78 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   const other = (p: Pane) => (p.side === "local" ? panes.remote : panes.local);
   const running = new Set<string>();
 
-  function transfer(from: Pane, names: string[]) {
+  async function transfer(from: Pane, names: string[]) {
     const to = other(from);
     if (!sid || !to.listing || !from.listing) return;
     if (to.side === "local" && to.listing.path === "") return void (status.textContent = "Bitte zuerst links einen Ordner öffnen.");
-    for (const name of names) start(from.side === "local", join(from, name), to.listing.path, name);
+    // Im Vergleich können Namen Unterordner enthalten («a/b»): dort entscheidet «Synchronisieren», hier ohne Rückfrage.
+    const nested = names.filter((n) => !from.listing!.entries.some((e) => e.name === n));
+    for (const n of nested) start(from.side === "local", join(from, n), to.listing.path, n);
+    const items = from.listing.entries.filter((e) => names.includes(e.name));
+    await copyInto(from.side === "local", from.listing.path, items, to.listing.path, to.listing.entries, {});
+  }
+
+  const pjoin = (sep: string, dir: string, name: string) => (dir === "" ? name : dir.endsWith(sep) ? dir + name : dir + sep + name);
+  const listOf = (local: boolean, path: string) => (local ? api.localList(path) : api.sftpList(sid!, path));
+
+  /** Elemente aus `srcDir` nach `destDir` kopieren; vorhandene Namen nur nach Rückfrage (askConflict).
+   *  `policy`: «Für alle übernehmen», getrennt für Dateien und Ordner. `false` = abgebrochen. */
+  async function copyInto(upload: boolean, srcDir: string, items: Entry[], destDir: string, existing: Entry[], policy: { file?: Choice; dir?: Choice }): Promise<boolean> {
+    const [sSep, dSep] = upload ? [panes.local.sep, "/"] : ["/", panes.local.sep];
+    let left = items.filter((e) => existing.some((d) => d.name === e.name)).length;
+    for (const e of items) {
+      const src = pjoin(sSep, srcDir, e.name);
+      const dst = existing.find((d) => d.name === e.name);
+      // Datei gegen Ordner gleichen Namens: nie ersetzen, mit Nummer daneben.
+      if (!dst || e.dir !== dst.dir) {
+        start(upload, src, destDir, e.name);
+        continue;
+      }
+      left--;
+      const key = e.dir ? "dir" : "file";
+      let choice = policy[key];
+      if (!choice) {
+        const d = await askConflict(e, dst, upload ? localName : c.name, upload ? c.name : localName, destDir, left);
+        if (!d.choice) return false;
+        choice = d.choice;
+        if (d.all) policy[key] = choice;
+      }
+      if (choice === "skip" || (choice === "newer" && (e.modified ?? 0) <= (dst.modified ?? 0))) continue;
+      if (choice === "keep") start(upload, src, destDir, e.name);
+      else if (choice === "merge") {
+        try {
+          const [sl, dl] = await Promise.all([listOf(upload, src), listOf(!upload, pjoin(dSep, destDir, e.name))]);
+          if (!(await copyInto(upload, sl.path, sl.entries, dl.path, dl.entries, policy))) return false;
+        } catch (err) {
+          status.textContent = `«${e.name}» nicht zusammengeführt: ${err}`;
+        }
+      } else if (upload && ftp) {
+        // FTP kann nicht ersetzen: alte Datei löschen, dann hochladen (ohne Papierkorb).
+        api.sftpRemove(sid!, pjoin("/", destDir, e.name)).then(() => start(true, src, destDir, e.name)).catch((err) => (status.textContent = `«${e.name}» nicht ersetzt: ${err}`));
+      } else start(upload, src, destDir, e.name, true);
+    }
+    return true;
+  }
+
+  /** Pfade von aussen (Finder/Explorer, iPad-Dateiauswahl, «Dateien»): wie Auswahl links, mit Rückfrage bei Konflikten. */
+  async function uploadPaths(paths: string[]) {
+    const dest = panes.remote.listing;
+    if (!sid || !dest) return;
+    const byDir = new Map<string, string[]>();
+    for (const path of paths) {
+      const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+      const [dir, name] = [path.slice(0, i) || "/", path.slice(i + 1)];
+      byDir.set(dir, [...(byDir.get(dir) ?? []), name]);
+    }
+    const policy = {};
+    for (const [dir, names] of byDir) {
+      const items = await api.localList(dir).then((l) => l.entries.filter((e) => names.includes(e.name))).catch(() => null);
+      if (!items) {
+        for (const n of names) start(true, pjoin(panes.local.sep, dir, n), dest.path, n);
+        continue;
+      }
+      if (!(await copyInto(true, dir, items, dest.path, dest.entries, policy))) return;
+    }
   }
 
   /** Vor dem Ersetzen die alte Fassung in den Papierkorb kopieren; mit sudo, wenn dem Benutzer die Rechte fehlen
@@ -768,7 +959,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const dest = panes.remote.listing?.path;
     if (!sid || dest == null) return;
     const picked = await openDialog({ multiple: true, title: "Dateien hochladen" }).catch(() => null);
-    for (const f of (Array.isArray(picked) ? picked : picked ? [picked] : []).map(String)) start(true, f, dest, f.split("/").pop() || f);
+    void uploadPaths((Array.isArray(picked) ? picked : picked ? [picked] : []).map(String));
   }
 
   /** Hochladen ohne Schreibrecht im Ziel: in einen temporären Ordner laden, dann mit sudo an den Zielort verschieben. */
@@ -1063,6 +1254,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       items.push({ value: "copy", label: "Pfad kopieren", icon: ICON.copy });
       if (remote) items.push({ value: "delete", label: "Löschen", icon: ICON.trash, shortcut: "Entf", disabled: scp, separator: true });
     }
+    if (p.listing?.entries.length) items.push({ value: "all", label: "Alle auswählen", shortcut: isMacUi ? "⌘A" : "Strg+A", separator: !!e });
     if (p.listing?.path) {
       items.push({ value: "mkdir", label: "Neuer Ordner …", icon: ICON.newFolder, separator: !!e, disabled: remote && !sid });
       if (remote) items.push({ value: "touch", label: "Neue Datei …", icon: ICON.plus, disabled: !sid || scp });
@@ -1076,6 +1268,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     if (v === "delete") deleteRemote();
     if (v === "mkdir") mkdir(p);
     if (v === "touch") newFile();
+    if (v === "all") setSelection(p, new Set(rowNames(p)));
   }
 
   async function renameRemote() {
@@ -1263,9 +1456,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   }
 
   // iPad: aus «Dateien» auf die Server-Seite ziehen
-  dropFiles(panes.remote.root, () => ctx.isActive() && !!sid && !!panes.remote.listing, (paths) => {
-    for (const path of paths) start(true, path, panes.remote.listing!.path, path.split(/[\\/]/).pop() ?? path);
-  });
+  dropFiles(panes.remote.root, () => ctx.isActive() && !!sid && !!panes.remote.listing, (paths) => uploadPaths(paths));
   // Dateien aus Explorer/Finder auf die Server-Seite ziehen (nur im sichtbaren Tab).
   const unlistenDrop = getCurrentWebview().onDragDropEvent((ev) => {
     if (!ctx.isActive()) return;
@@ -1273,12 +1464,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const pos = "position" in ev.payload ? ev.payload.position : null;
     const over = pos ? paneAt(pos.x / devicePixelRatio, pos.y / devicePixelRatio) : undefined;
     panes.remote.root.classList.toggle("drop", t === "over" && over === panes.remote);
-    if (t === "drop" && over === panes.remote && sid && panes.remote.listing) {
-      for (const path of ev.payload.paths) {
-        const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
-        start(true, path, panes.remote.listing.path, name);
-      }
-    }
+    if (t === "drop" && over === panes.remote && sid && panes.remote.listing) void uploadPaths(ev.payload.paths);
   });
 
   const close = () => {

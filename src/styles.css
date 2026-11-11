@@ -898,3 +898,27 @@ body.mobile .panel-toggle { width: 44px; height: 44px; }
 body.mobile main { position: relative; }
 body.mobile #details { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(340px, calc(100% - 24px)); box-sizing: border-box; z-index: 10; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18); padding-top: 56px; }
 body.mobile .detail-close { display: inline-flex; align-items: center; justify-content: center; position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 22px; background: transparent; color: var(--muted); }
+
+/* Dateifenster: Titel und Pfad getrennt, Auswahl wie im Finder/Explorer */
+.pane-head h2 { flex-shrink: 0; padding-right: 6px; margin-right: 2px; border-right: 1px solid var(--line); }
+.pane-head .path.crumbs { overflow: hidden; }
+.crumb-more { flex-shrink: 0; }
+.pane-list { position: relative; }
+.pane:focus { outline: none; }
+.pane:focus .pane-list tr.cursor:not([aria-selected="true"]) { outline: 1px solid var(--accent); outline-offset: -1px; }
+.rubber-band { position: absolute; z-index: 3; pointer-events: none; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 2px; }
+dialog.conflict .sheet { width: min(720px, calc(100vw - 48px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; }
+dialog.conflict h2 { margin: 0; }
+.conflict-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.conflict-side { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.conflict-side.newer { border-color: var(--accent); }
+.conflict-where { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+dialog.conflict .sheet > label.conflict-all { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; font-weight: 400; color: var(--text); }
+dialog.conflict .conflict-all[hidden] { display: none; }
+dialog.conflict .conflict-all input { width: auto; margin: 0; }
+dialog.conflict .conflict-text { overflow-wrap: anywhere; }
+.conflict-label { font-weight: 600; }
+.conflict-badge { font-size: 11px; font-weight: 600; color: var(--accent); margin-left: 4px; }
+.conflict-meta { font-size: 12px; color: var(--muted); }
+.conflict-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.conflict-actions > span { flex: 1; }

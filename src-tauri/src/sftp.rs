@@ -198,9 +198,14 @@ impl Sftp {
     pub async fn trash_slot(&self) -> Result<String, String> {
         let root = rjoin(&self.s.canonicalize(".").await.map_err(err)?, TRASH);
         let slot = rjoin(&root, &chrono::Local::now().format("%Y%m%d-%H%M%S-%3f").to_string());
+        // Mehrere Ersetzungen gleichzeitig können denselben Zeitstempel bekommen: «gibt es schon» ist dann in Ordnung.
         for d in [&root, &slot] {
             if !self.s.try_exists(d).await.map_err(err)? {
-                self.s.create_dir(d).await.map_err(|e| format!("Papierkorb {d}: {e}"))?;
+                if let Err(e) = self.s.create_dir(d).await {
+                    if !self.s.try_exists(d).await.unwrap_or(false) {
+                        return Err(format!("Papierkorb {d}: {e}"));
+                    }
+                }
             }
         }
         Ok(slot)

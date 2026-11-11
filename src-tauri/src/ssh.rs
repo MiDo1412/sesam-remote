@@ -126,7 +126,14 @@ impl client::Handler for Client {
             *self.rejected.lock().unwrap() = Some("Server-Zertifikate werden noch nicht unterstützt".into());
             return Ok(false);
         };
-        match keys::check_known_hosts(&self.host, self.port, key) {
+        let file = match known_hosts_file() {
+            Ok(f) => f,
+            Err(e) => {
+                *self.rejected.lock().unwrap() = Some(e);
+                return Ok(false);
+            }
+        };
+        match keys::known_hosts::check_known_hosts_path(&self.host, self.port, key, &file) {
             Ok(true) => Ok(true),
             Ok(false) => {
                 let fp = key.fingerprint(keys::HashAlg::Sha256).to_string();
@@ -134,7 +141,7 @@ impl client::Handler for Client {
                     *self.rejected.lock().unwrap() = Some(format!("{HOSTKEY_UNKNOWN}{}|{fp}", key.algorithm()));
                     return Ok(false);
                 }
-                if let Err(e) = keys::known_hosts::learn_known_hosts(&self.host, self.port, key) {
+                if let Err(e) = keys::known_hosts::learn_known_hosts_path(&self.host, self.port, key, &file) {
                     *self.rejected.lock().unwrap() = Some(format!("known_hosts nicht schreibbar: {e}"));
                     return Ok(false);
                 }
@@ -152,6 +159,16 @@ impl client::Handler for Client {
             }
         }
     }
+}
+
+/// Desktop: ~/.ssh/known_hosts wie OpenSSH. iPad: Der Ordner der App selbst ist nicht beschreibbar (~/.ssh lässt sich
+/// nicht anlegen, darum scheiterte dort jede erste Verbindung); known_hosts liegt neben der Bibliothek.
+fn known_hosts_file() -> Result<std::path::PathBuf, String> {
+    #[cfg(mobile)]
+    if let Some(dir) = crate::LIBRARY_FILE.get().and_then(|p| p.parent()) {
+        return Ok(dir.join("known_hosts"));
+    }
+    std::env::home_dir().map(|h| h.join(".ssh").join("known_hosts")).ok_or_else(|| "Kein Benutzerordner für known_hosts".into())
 }
 
 /// Fehler-Präfix, auf das das Frontend mit einer Rückfrage reagiert: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>`.
