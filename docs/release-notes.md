@@ -10,6 +10,7 @@ So ist ein Eintrag gebaut (`docs/versionierung.md`):
 - `## <Version> — <Datum>`, darunter **ein Satz**, was die Version bringt.
 - Dann die Gruppen `### Neu`, `### Verbessert`, `### Behoben`, `### Entfernt` und `### Betrieb`,
   nur die, die es braucht. Je Zeile `- **Worum es geht:** ein, zwei einfache Sätze.`
+- **Ganzes Fenster:** Auf dem iPad keine weissen Balken mehr oben und unten; auf allen Systemen ist auch die Fläche hinter der App in der App-Farbe (hell und dunkel).
 - `### Betrieb` nennt die Handgriffe für den Betreiber.
 
 Jede Änderung schreibt ihre Zeilen unter «In Arbeit». `node scripts/release.mjs` macht daraus den
@@ -25,7 +26,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 - **Alles in einer App:** Bildschirm per RDP und VNC, Shell per SSH, Dateien per SFTP und FTP/FTPS.
 - **Bibliothek:** Verbindungen in Gruppen, mit Symbol des Betriebssystems und einem Punkt, der zeigt, ob der Rechner erreichbar ist und wie schnell er antwortet.
 - **Eine Anmeldung je Verbindung:** gilt für alle Dienste; eigene Zugangsdaten für RDP oder VNC nur, wo sie nötig sind. Passwörter liegen im Schlüsselbund des Systems.
-- **Ubuntu-PC hinzufügen:** Sesam liest die eingerichteten Zugänge und legt die Einträge selbst an; ein Einrichtungs-Script für GNOME Remote Desktop liegt bei.
+- **Ubuntu mit GNOME:** «Desktop freischalten …» richtet GNOME Remote Desktop über das beiliegende Einrichtungs-Script ein; feste Ports pro Benutzer liest der Verbindungsdialog per SSH aus.
 - **Aufwecken und verbinden:** schaltet einen schlafenden Rechner per Wake-on-LAN ein und verbindet, sobald er da ist.
 - **Sicher über SSH verbinden:** RDP und VNC laufen auf Wunsch durch eine SSH-Verbindung.
 - **Portweiterleitungen:** je Verbindung, lokal, entfernt oder als SOCKS-Proxy.

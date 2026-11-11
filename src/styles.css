@@ -843,9 +843,10 @@ body.one-bar #session-back { flex-shrink: 0; white-space: nowrap; padding: 0 8px
 /* iPad/Android (titlebar.ts isMobile): kein lokales Terminal */
 body.mobile .lib-term, body.mobile .term-btns, body.mobile [data-pane="terminal"] { display: none; }
 /* iPad: sichtbare Höhe statt 100vh (iPadOS rückt die Webansicht unter der Statusleiste ein) */
-body.mobile { height: 100dvh; }
-/* Fläche unter der Home-Leiste in der Farbe der App statt weiss */
-html:has(> body.mobile) { background: var(--bg); }
+/* iPad: die Webansicht reicht bis an die Ränder (viewport-fit=cover); Statusleiste und Home-Leiste
+   bekommen die App-Farbe, der Inhalt rückt um die sicheren Bereiche ein. */
+body.mobile { height: 100dvh; box-sizing: border-box; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--chrome-bg2, var(--bg)); }
+html { background: var(--bg); }
 /* iPad: keine Textauswahl, Lupe oder Zieh-Vorschau des Systems beim Antippen der Oberfläche (Eingabefelder und Terminal ausgenommen) */
 body.mobile { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 body.mobile :is(input, textarea, [contenteditable], .xterm, pre, code) { -webkit-user-select: text; user-select: text; }

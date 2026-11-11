@@ -2148,7 +2148,6 @@ pub fn run() {
                     .item(&MenuItemBuilder::with_id("cmd:new", "Neue Verbindung …").accelerator("CmdOrCtrl+N").build(app)?)
                     .item(&MenuItemBuilder::with_id("cmd:quick", "Schnelle Verbindung …").accelerator("CmdOrCtrl+K").build(app)?)
                     .item(&MenuItemBuilder::with_id("cmd:terminal", "Neues Terminal").accelerator("CmdOrCtrl+T").build(app)?)
-                    .text("cmd:addubuntu", "Ubuntu-PC hinzufügen …")
                     .separator()
                     // ⌘W wie in Safari: aktiven Tab schliessen, in der Bibliothek das Fenster (src/main.ts «close»)
                     .item(&MenuItemBuilder::with_id("cmd:close", "Schliessen").accelerator("CmdOrCtrl+W").build(app)?)

@@ -10,7 +10,7 @@ import { openHelp, topics } from "./help";
 import { connectionCommands, initPalette } from "./palette";
 import { clipHistory, initClipHistory } from "./cliphistory";
 import { initTitlebar, isMac, isMobile, keyLabel } from "./titlebar";
-import { explainRdpError, fetchPorts, initUbuntu } from "./ubuntu";
+import { explainRdpError, fetchPorts } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
 import { applyAppearance, openSettings, settingsWindow } from "./settings";
 import { openFirstAid, serviceOf, type Service } from "./firstaid";
@@ -1057,7 +1057,6 @@ $("open-settings").onclick = () => openSettings();
 // Befehle aus dem App-Menü und Tastenkürzel
 const quick = initQuick((c) => edit({ ...c, id: crypto.randomUUID(), name: c.address }, true));
 $("empty-new").onclick = () => edit(null);
-const ubuntu = initUbuntu(blank, () => reload());
 initTerminal();
 setLibrary(() => items);
 const palette = initPalette(() => [
@@ -1069,7 +1068,6 @@ const palette = initPalette(() => [
   { label: "Einstellungen", hint: keyLabel("Strg+,"), keywords: "optionen", run: () => void openSettings() },
   { label: "Zugangsdaten …", keywords: "passwort schlüssel ssh-key verwaltung anmeldung", run: () => void openSettings("creds") },
   { label: "Berechtigungen einrichten …", keywords: "freigabe datenschutz lokales netzwerk bedienungshilfen eingabeüberwachung", run: () => void openPermissions() },
-  { label: "Ubuntu-PC hinzufügen …", keywords: "gnome assistent neue verbindung", run: () => ubuntu.open() },
   { label: "Bibliothek anzeigen", keywords: "übersicht verbindungen", run: () => runTool("Bibliothek") },
   { label: "Vorheriger Tab", keywords: "sitzung wechseln", run: () => runTool("Vorheriger Tab") },
   { label: "Nächster Tab", keywords: "sitzung wechseln", run: () => runTool("Nächster Tab") },
@@ -1098,7 +1096,6 @@ const palette = initPalette(() => [
   })),
 ]);
 initClipHistory();
-$("empty-ubuntu").onclick = () => ubuntu.open();
 initFieldHelp(document.getElementById("editor-form")!);
 initFieldHelp(document.getElementById("quick-form")!);
 const command = (cmd: string) => {
@@ -1107,7 +1104,6 @@ const command = (cmd: string) => {
   else if (cmd === "permissions") void openPermissions();
   else if (cmd === "credentials") openSettings("creds");
   else if (cmd === "palette") palette.open();
-  else if (cmd === "addubuntu") ubuntu.open();
   else if (cmd === "terminal" && !isMobile) void openTerminal();
   else if (cmd === "new") edit(null);
   else if (cmd === "quick") quick.open();
