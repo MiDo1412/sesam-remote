@@ -1,0 +1,130 @@
+<h1>Support</h1>
+<p class="lead-sm">Hilfe zum Einrichten, Lösungen für häufige Probleme und der direkte Draht zu uns.</p>
+
+<div class="contact">
+  <div>
+    <h2 id="kontakt">Kontakt</h2>
+    <p>Schreib uns an <a href="mailto:support@sesam-remote.app?subject=Sesam%20Remote%20Support">support@sesam-remote.app</a>. Wir antworten per E-Mail, auf Deutsch oder Englisch.</p>
+    <p>Damit wir schnell helfen können, schick bitte mit:</p>
+    <ul>
+      <li>die Version: <i>Einstellungen › Über Sesam</i> (Mac: <i>Sesam Remote › Über Sesam Remote</i>)</li>
+      <li>dein Gerät und System, zum Beispiel «MacBook, macOS 26» oder «iPad Air, iPadOS 26»</li>
+      <li>das Zielsystem und den Dienst, zum Beispiel «Ubuntu 26.04, RDP»</li>
+      <li>was du getan hast, was passiert ist und was du erwartet hast</li>
+      <li>bei Verbindungsfehlern das Ergebnis von <i>Erste Hilfe …</i> und auf Wunsch das Protokoll <code>sesam.log</code> (siehe unten). Es enthält keine Passwörter, aber Adressen deiner Rechner.</li>
+    </ul>
+  </div>
+  <a class="btn primary" href="mailto:support@sesam-remote.app?subject=Sesam%20Remote%20Support">E-Mail an den Support</a>
+</div>
+
+<nav class="toc" aria-label="Themen">
+  <a href="#einrichten">Rechner einrichten</a>
+  <a href="#probleme">Häufige Probleme</a>
+  <a href="#ipad">iPad</a>
+  <a href="#daten">Daten und Umzug</a>
+  <a href="#system">Voraussetzungen</a>
+</nav>
+
+<h2 id="einrichten">Rechner für den Zugriff einrichten</h2>
+<p>Am einfachsten: Trag den Rechner mit seiner Adresse ein. Sesam prüft die üblichen Ports und schaltet ein, was antwortet. Läuft nur SSH, bietet die Karte <i>Desktop freischalten …</i> an; Sesam zeigt jeden Befehl, bevor es etwas ändert.</p>
+
+<details>
+  <summary>Windows (Remotedesktop, RDP)</summary>
+  <p>Remotedesktop gibt es auf Windows Pro und Enterprise, nicht auf Windows Home.</p>
+  <ol>
+    <li>Am Windows-PC: <i>Einstellungen › System › Remotedesktop</i> einschalten. Windows öffnet dabei Port 3389 in der Firewall.</li>
+    <li>Administratoren dürfen sich anmelden; weitere Konten unter <i>Remotedesktopbenutzer</i> hinzufügen.</li>
+    <li>In Sesam: Benutzername ist das Windows-Konto, bei einem Microsoft-Konto die E-Mail-Adresse. Die Domäne nur in einer Firmendomäne ausfüllen.</li>
+    <li>Beim ersten Verbinden den Fingerabdruck des Zertifikats bestätigen.</li>
+  </ol>
+</details>
+<details>
+  <summary>Mac (Bildschirmfreigabe, VNC)</summary>
+  <ol>
+    <li>Am Mac: <i>Systemeinstellungen › Allgemein › Teilen › Bildschirmfreigabe</i> einschalten und über ⓘ festlegen, wer zugreifen darf.</li>
+    <li>Für Shell und Dateien zusätzlich <i>Entfernte Anmeldung</i> einschalten.</li>
+    <li>In Sesam: Benutzername ist der Kurzname des macOS-Kontos, dazu dessen Passwort. Das Feld <i>VNC-Passwort</i> bleibt leer.</li>
+  </ol>
+</details>
+<details>
+  <summary>Ubuntu mit GNOME (RDP, auch unter Wayland)</summary>
+  <p>Ab Ubuntu 26.04 bietet GNOME Remote Desktop nur noch RDP. Es gibt den Anmeldebildschirm (jeder Benutzer meldet sich mit dem eigenen Konto an) und die Freigabe einer laufenden Sitzung.</p>
+  <ol>
+    <li>SSH einrichten (siehe Linux), dann in Sesam auf der Karte <i>Desktop freischalten …</i> wählen. Das Setup-Script von Sesam richtet Anmeldebildschirm (Port 3389), Freigabe pro Benutzer, Zertifikate und Firewall ein und fragt jeden Schritt nach.</li>
+    <li>Ohne Script: <i>Einstellungen › System › Remote-Desktop</i> am Ubuntu-PC. Die dort gesetzten Zugangsdaten trägst du in Sesam beim Dienst RDP ein.</li>
+  </ol>
+</details>
+<details>
+  <summary>Linux-Server und Raspberry Pi (SSH, SFTP)</summary>
+  <ol>
+    <li><code>sudo apt install openssh-server</code> und <code>sudo systemctl enable --now ssh</code></li>
+    <li>Bei aktiver Firewall: <code>sudo ufw allow 22/tcp</code></li>
+    <li>Beim ersten Verbinden zeigt Sesam den Fingerabdruck des Servers. Vergleiche ihn und bestätige ihn einmal.</li>
+    <li>Für die Anmeldung mit Schlüssel: <i>Einstellungen › Zugangsdaten</i>, Schlüssel erzeugen und auf dem Server installieren lassen.</li>
+  </ol>
+  <p>Den Desktop eines Raspberry Pi schaltet <i>Desktop freischalten …</i> ein (VNC über wayvnc bzw. RealVNC, Port 5900). Für Linux mit xrdp gelten Benutzer und Passwort des Linux-Kontos.</p>
+</details>
+
+<h2 id="probleme">Häufige Probleme</h2>
+<details>
+  <summary>Die Verbindung klappt nicht</summary>
+  <p>Öffne im Kontextmenü der Karte <i>Erste Hilfe …</i>. Sesam prüft Namensauflösung, Erreichbarkeit, Port, Dienst, Anmeldung und Zertifikat und zeigt beim fehlenden Schritt den passenden Knopf, etwa <i>Aufwecken</i>, <i>Berechtigungen …</i> oder <i>Über SSH-Tunnel verbinden</i>. Sesam ändert dabei nichts.</p>
+</details>
+<details>
+  <summary>Mac: Rechner im eigenen Netz sind nicht erreichbar</summary>
+  <p>macOS fragt beim ersten Verbinden nach dem Zugriff auf das lokale Netzwerk. Hast du abgelehnt: <i>Systemeinstellungen › Datenschutz &amp; Sicherheit › Lokales Netzwerk</i>, Sesam Remote einschalten. Alle Berechtigungen auf einen Blick: Menü <i>Sesam Remote › Berechtigungen einrichten …</i>.</p>
+</details>
+<details>
+  <summary>Mac: ⌘Tab oder ⌘Leertaste wirken auf den Mac statt auf den entfernten Rechner</summary>
+  <p>Dafür braucht Sesam die Berechtigungen <i>Bedienungshilfen</i> und <i>Eingabeüberwachung</i> unter <i>Systemeinstellungen › Datenschutz &amp; Sicherheit</i>. Sesam fängt Tasten nur ab, solange das entfernte Bild aktiv ist.</p>
+</details>
+<details>
+  <summary>Sesam warnt: Zertifikat oder Hostschlüssel hat sich geändert</summary>
+  <p>Das passiert nach einer Neuinstallation des Zielrechners oder einem neuen Zertifikat, kann aber auch auf einen Angriff hindeuten. Bestätige nur, wenn du die Änderung erklären kannst und der neue Fingerabdruck mit dem auf dem Rechner übereinstimmt.</p>
+</details>
+<details>
+  <summary>Schwarzer Bildschirm oder «Der Server sendet noch kein Bild»</summary>
+  <p>Meist ist die Sitzung gesperrt, der Bildschirm aus oder der Benutzer gleichzeitig direkt am Rechner angemeldet (bei xrdp). Trennen, am Rechner abmelden oder entsperren und neu verbinden. Rechner ohne Monitor brauchen unter GNOME einen virtuellen Monitor; das Setup-Script richtet ihn auf Wunsch ein.</p>
+</details>
+<details>
+  <summary>Der Rechner schläft</summary>
+  <p>War er einmal erreichbar, kennt Sesam seine MAC-Adresse und zeigt <i>Aufwecken und verbinden</i>. Wake-on-LAN muss im BIOS/UEFI und bei der Netzwerkkarte eingeschaltet sein und funktioniert nur im selben Netz.</p>
+</details>
+<details>
+  <summary>Wo finde ich das Protokoll sesam.log?</summary>
+  <p>Im App-Datenordner: macOS <code>~/Library/Application Support/ch.sesam.remote</code>, Windows <code>%APPDATA%\ch.sesam.remote</code>. Sesam schreibt keine Passwörter hinein.</p>
+</details>
+
+<h2 id="ipad">iPad</h2>
+<p>Einige Grenzen setzt iPadOS selbst:</p>
+<ul>
+  <li>Verbindungen enden kurz, nachdem Sesam in den Hintergrund geht. Beim Zurückkehren verbindest du neu; RDP-Sitzungen laufen auf dem Rechner weiter.</li>
+  <li>⌘Tab, ⌘Leertaste und die Globus-Taste bleiben beim iPad. Für Strg, Alt, Esc und F1 bis F12 gibt es die Tastenleiste von Sesam.</li>
+  <li>Dateien tauschst du über die Dateien-App aus; die Zwischenablage gleicht Sesam nur im Vordergrund ab.</li>
+  <li>Ein lokales Terminal gibt es auf dem iPad nicht.</li>
+</ul>
+
+<h2 id="daten">Daten, Umzug und Deinstallation</h2>
+<details>
+  <summary>Verbindungen auf ein anderes Gerät übertragen</summary>
+  <p><i>Einstellungen › Zugangsdaten › Sichern …</i> schreibt Bibliothek und Zugangsdaten samt Passwörtern in eine mit deinem Passwort verschlüsselte .sesam-Datei. Auf dem neuen Gerät <i>Einlesen …</i>: Sesam zeigt zuerst, was dazukommt, und lässt Bestehendes unverändert.</p>
+</details>
+<details>
+  <summary>Sesam vollständig entfernen</summary>
+  <p>Lösche zuerst in der App deine Verbindungen und Zugangsdaten; damit entfernt Sesam auch die Einträge im Schlüsselbund. Danach die App löschen und den App-Datenordner (siehe sesam.log) entfernen. Auf dem iPad genügt es, die App zu löschen.</p>
+</details>
+
+<h2 id="system">Voraussetzungen</h2>
+<table>
+  <tbody>
+    <tr><th scope="row">Mac</th><td>macOS, Download von <a href="/#laden">sesam-remote.app</a>, signiert und notarisiert</td></tr>
+    <tr><th scope="row">Windows</th><td>Windows 10 oder 11 mit Microsoft Edge WebView2 (bei Windows 11 vorinstalliert)</td></tr>
+    <tr><th scope="row">iPad</th><td>iPadOS 16 oder neuer, aus dem App Store</td></tr>
+    <tr><th scope="row">Zielrechner</th><td>RDP (Windows Pro/Enterprise, GNOME Remote Desktop, xrdp), VNC (macOS, wayvnc, RealVNC), SSH, SFTP, FTP oder FTPS</td></tr>
+  </tbody>
+</table>
+
+<h2>Sicherheitslücke gefunden?</h2>
+<p>Bitte schreib uns vertraulich an <a href="mailto:support@sesam-remote.app?subject=Sicherheit">support@sesam-remote.app</a> mit dem Betreff «Sicherheit», bevor du sie veröffentlichst. Wir melden uns und nennen dich auf Wunsch in den Versionshinweisen.</p>
+
+<p class="fine">Datenschutz: <a href="datenschutz.html">So geht Sesam mit Daten um</a>.</p>

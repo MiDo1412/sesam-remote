@@ -167,7 +167,30 @@ footer nav { display: flex; flex-wrap: wrap; gap: 20px; margin-left: auto; }
 footer a { color: var(--text-2); }
 
 /* Unterseiten */
-.page { padding: 64px 0 96px; max-width: 760px; }
+.page { padding-top: 64px; padding-bottom: 96px; max-width: 760px; }
 .page h1 { font-size: clamp(36px, 5vw, 52px); }
 .page h2 { font-size: 24px; margin-top: 40px; }
 .page p, .page li { color: var(--text-2); }
+
+/* Support und Datenschutz */
+.top nav a[aria-current="page"] { color: var(--text); font-weight: 600; }
+.lead-sm { font-size: 20px; color: var(--text) !important; margin-top: 16px; }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 8px; }
+.toc a { font-size: 14px; padding: 6px 12px; border-radius: 999px; background: var(--bg-alt); border: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.toc a:hover { border-color: var(--accent); }
+.contact { display: grid; grid-template-columns: 1fr auto; gap: 16px 32px; align-items: start; margin-top: 32px; padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.contact h2 { margin-top: 0; }
+.contact ul { padding-left: 20px; margin-bottom: 0; }
+@media (max-width: 700px) { .contact { grid-template-columns: 1fr; padding: 20px; } }
+.page details { border-bottom: 1px solid var(--line); }
+.page summary { cursor: pointer; font-weight: 600; padding: 14px 28px 14px 0; position: relative; list-style: none; color: var(--text); }
+.page summary::-webkit-details-marker { display: none; }
+.page summary::after { content: "+"; position: absolute; right: 4px; top: 10px; font-size: 22px; font-weight: 400; color: var(--text-2); }
+.page details[open] summary::after { content: "–"; }
+.page details > :not(summary) { margin-top: 0; }
+.page ol, .page ul { padding-left: 22px; }
+.page li { margin: 6px 0; }
+.page li b, .page th { color: var(--text); }
+.page table { margin-top: 16px; font-size: 15px; }
+.page code { word-break: break-word; }
+.fine { font-size: 14px; margin-top: 40px; }

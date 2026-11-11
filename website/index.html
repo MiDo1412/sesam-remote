@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sesam Remote – Fernzugriff auf Desktop, Shell und Dateien</title>
 <meta name="description" content="Sesam Remote verbindet Mac, Windows und iPad mit entfernten Rechnern: Desktop über RDP und VNC, Shell über SSH, Dateien über SFTP und FTP. Zugangsdaten im Schlüsselbund, kein Konto, keine Cloud. Quelloffen.">
-<link rel="canonical" href="https://sesam-remote.ch/">
-<link rel="alternate" hreflang="de" href="https://sesam-remote.ch/">
+<link rel="canonical" href="https://sesam-remote.app/">
+<link rel="alternate" hreflang="de" href="https://sesam-remote.app/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#fbfbf9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121413" media="(prefers-color-scheme: dark)">
@@ -23,8 +23,8 @@
 <meta property="og:site_name" content="Sesam Remote">
 <meta property="og:title" content="Sesam Remote – Sesam, öffne dich.">
 <meta property="og:description" content="Desktop, Shell und Dateien entfernter Rechner in einer App. Für Mac, Windows und iPad.">
-<meta property="og:url" content="https://sesam-remote.ch/">
-<meta property="og:image" content="https://sesam-remote.ch/img/og.png">
+<meta property="og:url" content="https://sesam-remote.app/">
+<meta property="og:image" content="https://sesam-remote.app/img/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Sesam Remote: Bibliothek mit Verbindungen zu Mac, Windows, Ubuntu und Raspberry Pi">
@@ -36,12 +36,12 @@
   "@graph": [
     {
       "@type": "SoftwareApplication",
-      "@id": "https://sesam-remote.ch/#app",
+      "@id": "https://sesam-remote.app/#app",
       "name": "Sesam Remote",
       "alternateName": "Sesam",
-      "url": "https://sesam-remote.ch/",
-      "image": "https://sesam-remote.ch/img/icon-512.png",
-      "screenshot": "https://sesam-remote.ch/img/lib-light-1440.webp",
+      "url": "https://sesam-remote.app/",
+      "image": "https://sesam-remote.app/img/icon-512.png",
+      "screenshot": "https://sesam-remote.app/img/lib-light-1440.webp",
       "applicationCategory": "UtilitiesApplication",
       "applicationSubCategory": "Remote Desktop",
       "operatingSystem": "macOS, Windows 10, Windows 11, iPadOS 16 oder neuer",
@@ -60,19 +60,21 @@
         "Desktop freischalten auf macOS, Raspberry Pi OS und Ubuntu per SSH",
         "Befehlspalette und schnelle Verbindung"
       ],
+      "softwareHelp": { "@type": "WebPage", "url": "https://sesam-remote.app/support.html" },
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CHF" }
     },
     {
       "@type": "WebSite",
-      "@id": "https://sesam-remote.ch/#web",
-      "url": "https://sesam-remote.ch/",
+      "@id": "https://sesam-remote.app/#web",
+      "url": "https://sesam-remote.app/",
       "name": "Sesam Remote",
       "inLanguage": "de-CH",
-      "about": { "@id": "https://sesam-remote.ch/#app" }
+      "about": { "@id": "https://sesam-remote.app/#app" },
+      "publisher": { "@type": "Organization", "name": "Sesam Remote", "email": "support@sesam-remote.app" }
     },
     {
       "@type": "FAQPage",
-      "@id": "https://sesam-remote.ch/#faq",
+      "@id": "https://sesam-remote.app/#faq",
       "mainEntity": [
         { "@type": "Question", "name": "Was ist Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Sesam Remote ist eine quelloffene Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen." } },
         { "@type": "Question", "name": "Mit welchen Rechnern kann sich Sesam Remote verbinden?", "acceptedAnswer": { "@type": "Answer", "text": "Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP." } },
@@ -98,6 +100,7 @@
       <a href="#sicherheit">Sicherheit</a>
       <a href="#plattformen">Plattformen</a>
       <a href="#fragen">Fragen</a>
+      <a href="support.html">Support</a>
     </nav>
     <a class="btn primary small" href="#laden">Laden</a>
   </div>
@@ -297,15 +300,7 @@
 </main>
 
 <footer>
-  <div class="wrap">
-    <span>© 2026 Sesam Remote · MPL-2.0</span>
-    <nav aria-label="Rechtliches">
-      <a href="impressum.html">Impressum</a>
-      <a href="datenschutz.html">Datenschutz</a>
-      <a href="llms.txt">Für KI-Assistenten</a>
-    </nav>
-  </div>
-</footer>
+  <div class="wrap"><span>© 2026 Sesam Remote · MPL-2.0</span><nav aria-label="Rechtliches"><a href="support.html">Support</a><a href="datenschutz.html">Datenschutz</a><a href="impressum.html">Impressum</a><a href="llms.txt">Für KI-Assistenten</a></nav></div></footer>
 
 <script>
 // Segmentsteuerung «Desktop / Shell / Dateien» als Tabs (Pfeiltasten wie in der App).

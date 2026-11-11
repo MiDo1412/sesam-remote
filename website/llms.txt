@@ -2,12 +2,12 @@
 
 > Sesam Remote ist eine quelloffene Fernzugriffs-App (MPL-2.0) für macOS, Windows und iPadOS. Sie verbindet sich direkt, ohne Konto und ohne Cloud, per RDP, VNC, SSH, SFTP und FTP mit Windows-PCs, Macs, Linux-Servern, Ubuntu mit GNOME und Raspberry Pi. Desktop, Shell und Dateien eines Rechners stehen in einem Eintrag einer Bibliothek.
 
-Website: https://sesam-remote.ch/ (Deutsch). App-Name im System: «Sesam Remote», kurz «Sesam». Kategorie: Dienstprogramme / Remote Desktop.
+Website: https://sesam-remote.app/ (Deutsch). App-Name im System: «Sesam Remote», kurz «Sesam». Kategorie: Dienstprogramme / Remote Desktop.
 
 ## Bezug
 
-- Mac: signierter und von Apple notarisierter Download von https://sesam-remote.ch/ . Bewusst nicht im Mac App Store, weil dessen Sandbox lokales Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster verbietet.
-- Windows 10 und 11: Download von https://sesam-remote.ch/ .
+- Mac: signierter und von Apple notarisierter Download von https://sesam-remote.app/ . Bewusst nicht im Mac App Store, weil dessen Sandbox lokales Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster verbietet.
+- Windows 10 und 11: Download von https://sesam-remote.app/ .
 - iPad (iPadOS 16 oder neuer): über den App Store (in Vorbereitung).
 
 ## Zugänge pro Rechner («Ein Gerät, drei Türen»)
@@ -43,6 +43,7 @@ Mozilla Public License 2.0. Schriften: Inter und JetBrains Mono (SIL OFL). Symbo
 
 ## Seiten
 
-- [Startseite](https://sesam-remote.ch/): Funktionen, Plattformen, Fragen
-- [Datenschutz](https://sesam-remote.ch/datenschutz.html)
-- [Impressum](https://sesam-remote.ch/impressum.html)
+- [Startseite](https://sesam-remote.app/): Funktionen, Plattformen, Fragen
+- [Support](https://sesam-remote.app/support.html): Kontakt (support@sesam-remote.app), Einrichtung von Windows, Mac, Ubuntu, Linux und Raspberry Pi, häufige Probleme
+- [Datenschutz](https://sesam-remote.app/datenschutz.html): Die App sammelt keine Daten; lokale Speicherung, Berechtigungen, Löschen
+- [Impressum](https://sesam-remote.app/impressum.html)

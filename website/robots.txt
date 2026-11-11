@@ -23,4 +23,4 @@ Allow: /
 User-agent: CCBot
 Allow: /
 
-Sitemap: https://sesam-remote.ch/sitemap.xml
+Sitemap: https://sesam-remote.app/sitemap.xml
