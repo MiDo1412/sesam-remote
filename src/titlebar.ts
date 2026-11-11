@@ -1,6 +1,7 @@
 /** Eigene Titelleiste: unter Windows ohne Fensterrahmen (Logo links, Menü «⋯» und Fenstersteuerung rechts),
  *  unter macOS bleibt die Menüleiste nativ und die Titelleiste ist transparent (Ampel links). */
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { openMenu, type MenuItem } from "./menu";
 import { fl } from "./icons";
 import minusSvg from "@fluentui/svg-icons/icons/subtract_20_regular.svg?raw";
@@ -19,7 +20,21 @@ export const isMac = navigator.userAgent.includes("Mac") && !isMobile;
 /** Apple-Tastatur (Mac oder iPad mit Tastatur): Kürzel mit ⌘ anzeigen. */
 const appleKeys = navigator.userAgent.includes("Mac") || /iPad|iPhone/.test(navigator.userAgent);
 
+/** Fenstermaterial und Bedienungshilfen des Systems als Klassen am body (docs/design-konzept.md):
+ *  material-vibrancy / material-mica / ohne = deckend, reduce-transparency, increase-contrast. */
+function initMaterial() {
+  invoke<{ material: string; reduceTransparency: boolean; increaseContrast: boolean }>("ui_material")
+    .then((m) => {
+      const b = document.body.classList;
+      if (m.material !== "none") b.add(`material-${m.material}`, "material");
+      b.toggle("reduce-transparency", m.reduceTransparency);
+      b.toggle("increase-contrast", m.increaseContrast);
+    })
+    .catch(() => {});
+}
+
 export function initTitlebar(actions: { command(c: string): void; tool(t: string): void; help(id: string): void }) {
+  initMaterial();
   // Fenster an allen freien Flächen von Titel-, Tab- und Sitzungsleiste ziehen («deep»: auch auf Text und leeren
   // Containern; Knöpfe, Tabs und Eingabefelder bleiben bedienbar). Doppelklick: Zoomen bzw. Maximieren.
   const bars = document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar");

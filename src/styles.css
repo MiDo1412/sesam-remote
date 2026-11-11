@@ -951,3 +951,137 @@ body.mobile .pane-tools { gap: 10px; flex-wrap: nowrap; overflow: hidden; }
 .transfer.paused progress { opacity: 0.5; }
 .pane td.empty { white-space: normal; }
 .pane td.empty .empty-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+
+/* ===================================================================================================
+   Design-System «Inhalt und Glas» (docs/design-konzept.md)
+   Zwei Ebenen: Inhalt deckend, Bedienung (Seitenleiste, Leisten, Tabs, Menüs, Blätter) als Glas darüber.
+   Konzentrische Ecken, Kapseln für schwebende Bedienelemente, Farbe sparsam. Letzter Abschnitt: gewinnt.
+   =================================================================================================== */
+:root {
+  --r-xs: 6px; --r-s: 8px; --r-m: 12px; --r-l: 16px; --r-xl: 22px; --r-pill: 999px;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px;
+  --h-control: 30px; --h-bar: 52px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1); --dur-s: 120ms; --dur-m: 220ms;
+  --glass-bg: rgba(250, 250, 252, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --glass-line: rgba(0, 0, 0, 0.08);
+  --glass-blur: blur(28px) saturate(1.5);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --elev-2: 0 8px 28px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+  --elev-3: 0 24px 64px rgba(0, 0, 0, 0.24), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+  --fill: color-mix(in srgb, var(--text) 6%, transparent);
+  --fill-strong: color-mix(in srgb, var(--text) 10%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme=light]) { --glass-bg: rgba(38, 38, 42, 0.7); --glass-edge: rgba(255, 255, 255, 0.12); --glass-line: rgba(255, 255, 255, 0.08); --elev-1: 0 0 0 1px rgba(255, 255, 255, 0.06); }
+}
+:root[data-theme=dark] { --glass-bg: rgba(38, 38, 42, 0.7); --glass-edge: rgba(255, 255, 255, 0.12); --glass-line: rgba(255, 255, 255, 0.08); --elev-1: 0 0 0 1px rgba(255, 255, 255, 0.06); }
+/* Windows: Fluent 2 – kleinere Radien, Leistenknöpfe nicht als Kapsel. */
+body.custom-titlebar { --r-xs: 4px; --r-s: 4px; --r-m: 8px; --r-l: 8px; --r-xl: 8px; --h-control: 32px; }
+
+/* Glas: eine Rezeptur für alle schwebenden Flächen. */
+.menu, .popover, .quality-pop, dialog, .fs-bar, .tab-pane.tab-desktop > .status:not(:empty) {
+  background: var(--glass-bg); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: var(--elev-2), inset 0 0.5px 0 var(--glass-edge);
+  border: 0;
+}
+dialog { box-shadow: var(--elev-3), inset 0 0.5px 0 var(--glass-edge); border-radius: var(--r-xl); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.22); }
+.menu { border-radius: var(--r-m); padding: var(--s-1); }
+.menu-item { border-radius: calc(var(--r-m) - var(--s-1)); }
+.popover, .quality-pop { border-radius: var(--r-m); }
+.fs-bar { border-radius: var(--r-pill); top: var(--s-2); padding: var(--s-1); color: var(--text); }
+.fs-bar button { border-radius: var(--r-pill); }
+.fs-bar.show { transform: translate(-50%, 0); }
+
+/* Fenstermaterial (macOS Vibrancy, Windows 11 Mica): Hintergrund und Seitenleiste durchsichtig, Inhalt deckend. */
+html:has(body.material), body.material { background: transparent; }
+body.material .app, body.material .toolbar, body.material .sidebar, body.material .session, body.material .session-bar { background: transparent; }
+body.material .settings-nav { background: transparent; }
+body.material main { box-shadow: -0.5px -0.5px 0 var(--glass-line); border: 0; }
+body.material .session-head { background: color-mix(in srgb, var(--chrome-bg2) 55%, transparent); }
+
+/* Inhaltsfläche: eine ruhige Ebene mit grossem Radius, keine Rahmen. */
+main { border: 0; border-top-left-radius: var(--r-l); box-shadow: -1px -1px 0 var(--line); }
+aside { border-left: 0; box-shadow: -1px 0 0 var(--line); }
+
+/* Steuerelemente: ruhig, gleiche Höhe, Kapsel in Leisten. */
+button { border-radius: var(--r-s); height: var(--h-control); transition: background-color var(--dur-s) var(--ease), box-shadow var(--dur-s) var(--ease), transform var(--dur-s) var(--ease); }
+button:active:not(:disabled) { transform: scale(0.98); }
+button.primary { border-radius: var(--r-pill); padding: 0 var(--s-4); box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+input:not([type=checkbox]):not([type=radio]), select, textarea { border-radius: var(--r-s); border-color: color-mix(in srgb, var(--field) 70%, transparent); }
+.search input[type=search] { border-radius: var(--r-pill); padding: 0 var(--s-4); background: var(--fill); border: 0; }
+.search input[type=search]:focus { background: var(--card); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); outline: none; }
+.segmented { border-radius: var(--r-pill); background: var(--fill); padding: 2px; }
+.segmented label { border-radius: var(--r-pill); }
+.segmented label:has(input:checked) { box-shadow: var(--elev-1); }
+.list-head .lib-term, .list-head .quick-btn, .list-head .panel-toggle, .list-head button { border-radius: var(--r-pill); }
+.list-head .quick-btn, .list-head .lib-term { box-shadow: none; background: var(--fill); }
+.list-head .quick-btn:hover, .list-head .lib-term button:hover { background: var(--fill-strong); }
+.panel-toggle { border-radius: var(--r-pill); }
+
+/* Seitenleiste: Auswahl als neutrale Fläche (liest sich auf jedem Material), Akzent nur im Symbol. */
+.nav-item { border-radius: var(--r-s); }
+.nav-item:hover { background: var(--fill); }
+.nav-item[aria-current=page] { background: var(--fill-strong); }
+.sidebar-settings { border-radius: var(--r-s); }
+.sidebar-settings:hover { background: var(--fill); }
+
+/* Karten: Inhalt, deckend; Vorschaubild konzentrisch zur Karte (Radius − Innenabstand). */
+.card { border-radius: var(--r-l); padding: 6px 6px 12px; box-shadow: var(--elev-1); border: 0; }
+.card .thumb { border-radius: calc(var(--r-l) - 6px); }
+.card[aria-pressed=true] { box-shadow: 0 0 0 2px var(--accent); }
+.card:hover { box-shadow: var(--elev-1), 0 10px 28px rgba(0, 0, 0, 0.1); }
+.badge { border-radius: var(--r-pill); padding: 2px 8px; }
+.active-sessions { border-radius: var(--r-l); }
+
+/* Sitzung: Tabs und Werkzeuge als Kapseln über dem Inhalt. */
+.tab { border-radius: var(--r-pill); }
+.tab[aria-selected=true] { background: var(--card); box-shadow: var(--elev-1), inset 0 -2px 0 var(--tab-color, transparent); }
+button.tool { border-radius: var(--r-pill); min-width: var(--h-control); }
+body.custom-titlebar button.tool, body.custom-titlebar .tab { border-radius: var(--r-xs); }
+.tab-pane.tab-desktop > .status:not(:empty) { border-radius: var(--r-pill); color: var(--text); }
+
+/* Dateifenster: Listen deckend; Übertragungen als ruhige Fläche; Auswahl wie Finder/Explorer. */
+.pane tr[aria-selected=true] td:first-child { border-radius: var(--r-xs) 0 0 var(--r-xs); }
+.pane tr[aria-selected=true] td:last-child { border-radius: 0 var(--r-xs) var(--r-xs) 0; }
+.transfers { border-top: 0; box-shadow: 0 -1px 0 var(--line); }
+
+/* Blätter (Dialoge): Formularfelder deckend auf dem Glas, grosszügiger Innenabstand. */
+.sheet { padding: var(--s-5); }
+dialog.conflict .conflict-side { border-radius: var(--r-m); background: var(--card); }
+
+/* Bedienungshilfen: Transparenz reduzieren / Kontrast erhöhen → deckend; Bewegung reduzieren → ohne. */
+body.reduce-transparency, body.increase-contrast { --glass-bg: var(--card); }
+body.reduce-transparency :is(.menu, .popover, .quality-pop, dialog, .fs-bar), body.increase-contrast :is(.menu, .popover, .quality-pop, dialog, .fs-bar) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass-bg: var(--card); }
+  .menu, .popover, .quality-pop, dialog, .fs-bar { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+body.increase-contrast { --line: color-mix(in srgb, var(--text) 40%, transparent); --elev-1: 0 0 0 1px color-mix(in srgb, var(--text) 45%, transparent); }
+@media (prefers-contrast: more) {
+  :root { --glass-bg: var(--card); --elev-1: 0 0 0 1px color-mix(in srgb, var(--text) 45%, transparent); }
+  :focus-visible { outline-width: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+  button:active:not(:disabled) { transform: none; }
+}
+
+/* Einstellungen: Navigation links auf dem Material (bzw. Glas), Inhalt rechts deckend. Eigenes Fenster (macOS): randlos. */
+.settings-nav { border-right: 0; box-shadow: 1px 0 0 var(--line); }
+.settings-nav button { border-radius: var(--r-s); }
+.settings-nav button[aria-selected=true] { background: var(--fill-strong); }
+.settings-nav button:hover:not([aria-selected=true]) { background: var(--fill); }
+.settings-pane, .settings-close { background: var(--surface); }
+.settings-close { border-top: 0; box-shadow: 0 -1px 0 var(--line); }
+body.settings-window dialog#settings { background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0; }
+body.settings-window:not(.material) dialog#settings { background: var(--bg); }
+/* Blätter mit Formularen: Glas kaum durchsichtig (HIG: viel Text → «regular»), Kopf und Knopfleiste in derselben Fläche. */
+dialog { --sheet-bg: color-mix(in srgb, var(--card) 90%, transparent); background: var(--sheet-bg); }
+#editor-form > h2, #editor-form > .actions { background: var(--sheet-bg); border-top: 0; }
+#editor-form > .actions { box-shadow: 0 -1px 0 var(--line); }
+.sheet-tabs { border-radius: var(--r-pill); }
+.sheet-tabs button { border-radius: var(--r-pill); }
+body.reduce-transparency dialog, body.increase-contrast dialog { --sheet-bg: var(--card); }
+body.settings-window dialog#settings .settings { max-width: none; max-height: none; }

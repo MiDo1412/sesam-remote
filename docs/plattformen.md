@@ -54,6 +54,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Einstellungen | ✓ eigenes Fenster (⌘,) | ✓ Dialog | ✓ Dialog | ✓ Blatt |
 | Menüleiste | ✓ native | ↻ Menü «☰» in der Titelleiste | ↻ Menü «☰» | ✗ gibt es nicht; ↻ Knöpfe und Kontextmenüs |
 | Befehlspalette | ✓ ⌘⇧P | ✓ Strg+Umschalt+P | ✓ | ✓ mit Tastatur |
+| Fenstermaterial (Design «Inhalt und Glas») | ✓ Vibrancy, Liquid Glass ab macOS 26 | ✓ Mica (Windows 11; Windows 10 deckend; ungeprüft) | – deckend | ↻ Glas in der App (CSS) |
 | Designs (Terminal) | ✓ | ✓ | ✓ | ✓ |
 
 ## System

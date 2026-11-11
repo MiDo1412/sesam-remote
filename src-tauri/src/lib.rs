@@ -1394,6 +1394,47 @@ fn immersive(window: tauri::WebviewWindow, on: bool) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UiMaterial {
+    /// "vibrancy" (macOS), "mica" (Windows 11) oder "none" (deckend).
+    material: &'static str,
+    reduce_transparency: bool,
+    increase_contrast: bool,
+}
+
+/// Fenstermaterial hinter der Webansicht (docs/design-konzept.md) und die Einstellungen «Transparenz reduzieren» /
+/// «Kontrast erhöhen» des Systems. WebKit kennt prefers-reduced-transparency nicht, darum hier nativ (macOS).
+#[tauri::command]
+fn ui_material(window: tauri::WebviewWindow) -> UiMaterial {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::runtime::{AnyObject, Bool};
+        use objc2::{class, msg_send};
+        use tauri::window::{Effect, EffectState, EffectsBuilder};
+        let (reduce, contrast) = unsafe {
+            let ws: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+            let r: Bool = msg_send![ws, accessibilityDisplayShouldReduceTransparency];
+            let c: Bool = msg_send![ws, accessibilityDisplayShouldIncreaseContrast];
+            (r.as_bool(), c.as_bool())
+        };
+        let ok = !reduce && !contrast && window.set_effects(EffectsBuilder::new().effect(Effect::Sidebar).state(EffectState::FollowsWindowActiveState).build()).is_ok();
+        return UiMaterial { material: if ok { "vibrancy" } else { "none" }, reduce_transparency: reduce, increase_contrast: contrast };
+    }
+    #[cfg(windows)]
+    {
+        use tauri::window::{Effect, EffectsBuilder};
+        // Windows 10 kennt Mica nicht (Fehler) → deckend. «Transparenzeffekte aus» schaltet Windows selbst ab.
+        let ok = window.set_effects(EffectsBuilder::new().effect(Effect::Mica).build()).is_ok();
+        return UiMaterial { material: if ok { "mica" } else { "none" }, reduce_transparency: false, increase_contrast: false };
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = window;
+        UiMaterial { material: "none", reduce_transparency: false, increase_contrast: false }
+    }
+}
+
 /// «Beenden» aus dem eigenen Menü (Windows/Linux).
 #[tauri::command]
 fn app_exit(app: AppHandle) {
@@ -1429,6 +1470,7 @@ async fn open_settings_window(app: AppHandle, tab: String) -> Result<(), String>
     tauri::WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App("index.html".into()))
         .initialization_script(format!("window.__SESAM_SETTINGS__ = '{tab}';"))
         .title("Einstellungen")
+        .transparent(true)
         .inner_size(820.0, 600.0)
         .min_inner_size(640.0, 440.0)
         .build()
@@ -1455,6 +1497,7 @@ async fn open_detached(app: AppHandle, token: String, title: String) -> Result<(
         .inner_size(1200.0, 800.0)
         .min_inner_size(480.0, 320.0)
         .decorations(cfg!(target_os = "macos"))
+        .transparent(true)
         .shadow(true);
     #[cfg(target_os = "macos")]
     let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
@@ -2486,6 +2529,7 @@ pub fn run() {
             app_exit,
             clip_read,
             clip_write,
+            ui_material,
             stage_file,
             folder_pick,
             folder_open,
