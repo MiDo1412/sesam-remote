@@ -1,7 +1,7 @@
 # Sesam Remote
 
 Quelloffene Fernzugriffs-App für Windows, macOS und iPad: VNC-Desktop, SSH-Shell und
-SFTP-Dateitransfer in einer Bibliothek. Lizenz: GPL-3.0-or-later (siehe `LICENSE`).
+SFTP-Dateitransfer in einer Bibliothek. Lizenz: Mozilla Public License 2.0 (MPL-2.0, siehe `LICENSE`).
 
 ## Zielbild
 

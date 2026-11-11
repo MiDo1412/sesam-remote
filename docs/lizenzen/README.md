@@ -9,7 +9,7 @@ Es gibt keine Verbindung zu Google Fonts oder einem anderen Dienst.
 | JetBrains Mono (variabel) | 5.3.0 | npm `@fontsource-variable/jetbrains-mono` | SIL Open Font License 1.1 (`JetBrainsMono-OFL.txt`) | Shell, Adressen, Pfade |
 
 Unter macOS/iOS nutzt Sesam die Systemschrift SF Pro (Apple HIG); sie wird nicht mitgeliefert.
-Die OFL erlaubt das Bündeln mit Software, auch unter GPL-3.0; die Schriften selbst bleiben unter der OFL.
+Die OFL erlaubt das Bündeln mit Software, auch unter der MPL-2.0; die Schriften selbst bleiben unter der OFL.
 
 # Symbole
 

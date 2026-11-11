@@ -44,7 +44,13 @@
     },
     "category": "Utility",
     "shortDescription": "Bildschirm, Shell und Dateien entfernter Rechner in einer App",
-    "longDescription": "Sesam Remote verbindet sich mit Rechnern per RDP, VNC, SSH, SFTP und FTP: Desktop, Shell und Dateien in einer App, mit Zugangsdaten im Schlüsselbund des Systems."
+    "longDescription": "Sesam Remote verbindet sich mit Rechnern per RDP, VNC, SSH, SFTP und FTP: Desktop, Shell und Dateien in einer App, mit Zugangsdaten im Schlüsselbund des Systems.",
+    "resources": {
+      "../LICENSE": "lizenzen/LICENSE.txt",
+      "../docs/lizenzen/Inter-OFL.txt": "lizenzen/Inter-OFL.txt",
+      "../docs/lizenzen/JetBrainsMono-OFL.txt": "lizenzen/JetBrainsMono-OFL.txt",
+      "../docs/lizenzen/FluentSystemIcons-MIT.txt": "lizenzen/FluentSystemIcons-MIT.txt"
+    }
   },
   "plugins": {
     "deep-link": {

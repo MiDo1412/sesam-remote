@@ -214,16 +214,16 @@ gegen einen echten Server ungetestet. macOS: VideoToolbox (`VTDecompressionSessi
 Videobereich) über die C-Schnittstelle ohne zusätzliche Pakete; Parametersätze (SPS/PPS) bauen die Sitzung
 neu auf. Derselbe I_PCM-Test läuft auf dem Mac, Werte exakt; gegen einen echten Server ebenfalls ungetestet.
 
-**Lizenz und Patente (GPL-3.0-or-later):**
+**Lizenz und Patente (MPL-2.0):**
 
-- Media Foundation und VideoToolbox gehören zum Betriebssystem. Die GPL erlaubt das Linken gegen
-  Systembibliotheken (GPLv3 §1, «System Libraries»); die H.264-Patentlizenz hat Microsoft bzw. Apple mit
-  dem System abgegolten. Sesam liefert keinen Codec mit. Das ist der bevorzugte Weg.
-- **OpenH264** (Cisco) steht unter BSD-2-Clause und ist damit GPL-kompatibel. Die Patentlizenz (Via LA,
+- Media Foundation und VideoToolbox gehören zum Betriebssystem; die MPL verlangt nur, dass Sesams eigene
+  Dateien offen bleiben, und das Linken gegen Systembibliotheken ist ohnehin frei. Die H.264-Patentlizenz
+  hat Microsoft bzw. Apple mit dem System abgegolten. Sesam liefert keinen Codec mit. Das ist der bevorzugte Weg.
+- **OpenH264** (Cisco) steht unter BSD-2-Clause und ist mit der MPL vereinbar. Die Patentlizenz (Via LA,
   früher MPEG LA) deckt Cisco aber **nur für die von Cisco gebauten und verteilten Binärdateien**, die
   zur Laufzeit von Cisco heruntergeladen werden (`ironrdp-egfx`, Feature `openh264-libloading`). Die
   Cisco-DLL darf nicht im Installer stecken, und Ciscos Hinweistext muss angezeigt werden. Selbst aus dem
-  Quelltext gebaut und mitgeliefert (`openh264-bundled`) wäre der Code GPL-kompatibel, aber ohne
+  Quelltext gebaut und mitgeliefert (`openh264-bundled`) wäre das lizenzrechtlich möglich, aber ohne
   Patentlizenz. Für Sesam darum höchstens als Rückfall auf Systemen ohne Decoder, nicht als Standard.
 - FFmpeg (LGPL/GPL) wäre lizenzrechtlich möglich, bringt aber C-Bibliotheken in den Bau und dieselbe
   Patentfrage wie OpenH264.

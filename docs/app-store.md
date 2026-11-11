@@ -18,18 +18,12 @@ Entscheidung von Mike braucht, ist als **Blocker** markiert.
   in `tauri.conf.json`. Store-Texte, Screenshots, Datenschutz-URL und Support-URL fehlen noch (iPad, Windows).
 - **Symbole:** alle Grössen in `src-tauri/icons` (macOS `.icns`, Windows `.ico` und Store-Logos, iOS-Satz,
   im Xcode-Projekt eingetragen).
-- **Lizenz (Blocker nur für den iPad App Store, Entscheidung):** Sesam steht unter GPL-3.0. Die GPL verträgt
-  sich nach verbreiteter Auffassung nicht mit den Nutzungsbedingungen des Apple App Store (zusätzliche
-  Einschränkungen für Nutzer). Für den Mac-Download, die Website und den Microsoft Store ist das kein Thema.
-  Für das iPad lösbar, weil
-  - alle 187 Commits von Mike stammen (alleiniger Urheber, keine fremden Beiträge), er also selbst zusätzlich
-    unter anderer Lizenz veröffentlichen kann (Doppellizenz oder Ausnahme für App-Store-Vertrieb), und
-  - keine Abhängigkeit unter GPL steht: 760 Rust-Crates und alle npm-Pakete sind MIT/Apache/BSD/ISC,
-    einige wenige MPL-2.0 (`cssparser`, `selectors`, `option-ext`, `dtoa-short`; Copyleft nur auf
-    Dateiebene, Store-tauglich), `r-efi` wahlweise MIT/Apache. Fremde Farbschemata und Schriften:
-    `docs/lizenzen/`.
-  Nimmt Sesam später Beiträge von anderen an, braucht es dafür eine Zustimmung (CLA), sonst geht die
-  Doppellizenz nicht mehr.
+- **Lizenz:** Sesam steht seit dem 11.11.2026 unter der Mozilla Public License 2.0 (vorher GPL-3.0; Mike ist
+  alleiniger Urheber, alle Commits von ihm). Die MPL verlangt nur, dass Sesams eigene Dateien offen bleiben,
+  und verträgt sich mit den Bedingungen von App Store und Microsoft Store. Keine Abhängigkeit steht unter
+  GPL: 760 Rust-Crates und alle npm-Pakete sind MIT/Apache/BSD/ISC, einige MPL-2.0 (`cssparser`,
+  `selectors`, `option-ext`, `dtoa-short`), `r-efi` wahlweise MIT/Apache. Fremde Farbschemata und
+  Schriften: `docs/lizenzen/`. Nimmt Sesam Beiträge von anderen an, gelten sie unter derselben Lizenz.
 - **Exportkontrolle (Entscheidung):** Sesam verschlüsselt selbst (SSH, TLS über ring/rustls). Für Apple
   heisst das `ITSAppUsesNonExemptEncryption`; ob die Ausnahme für Standardverfahren greift und ob eine
   jährliche Selbstauskunft (US BIS) nötig ist, entscheidet Mike bzw. die Beratung. Darum ist der Schlüssel
