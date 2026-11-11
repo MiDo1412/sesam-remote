@@ -1,5 +1,6 @@
 import { dropFiles } from "./dropfiles";
 import { askConflict, type Choice } from "./conflict";
+import { showPreview } from "./preview";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
 import { ask, askHostKey, askPassword, askText, choose, tell } from "./ui";
@@ -64,6 +65,12 @@ interface Pane {
   /** Ausgangspunkt für Umschalt-Klick und die Zeile mit dem Tastatur-Fokus. */
   anchor: string | null;
   cursor: string | null;
+  /** Suche in Unterordnern: Treffer mit relativem Pfad; `token` bricht eine alte Suche ab. */
+  deepOn: boolean;
+  deep: Entry[] | null;
+  token: number;
+  /** iPad: Tippen wählt dazu/weg (Häkchen). */
+  selectMode: boolean;
   /** Pfad-Trenner der Seite. */
   sep: string;
   sort: SortKey;
@@ -198,7 +205,22 @@ let localRoot = "";
     const hidden = el("label", "pane-hidden");
     const hiddenBox = Object.assign(document.createElement("input"), { type: "checkbox" });
     hidden.append(hiddenBox, document.createTextNode(" Versteckte Dateien"));
-    tools.append(filter, hidden);
+    const deepLabel = el("label", "pane-hidden");
+    const deepBox = Object.assign(document.createElement("input"), { type: "checkbox" });
+    deepLabel.append(deepBox, document.createTextNode(" Unterordner"));
+    deepLabel.title = "Filter durchsucht auch Unterordner (höchstens 5000 Einträge)";
+    tools.append(filter, deepLabel, hidden);
+    if (isMobile) {
+      const selBtn = el("button", "plain pane-select", "Auswählen") as HTMLButtonElement;
+      selBtn.type = "button";
+      selBtn.onclick = () => {
+        pane.selectMode = !pane.selectMode;
+        root.classList.toggle("select-mode", pane.selectMode);
+        selBtn.textContent = pane.selectMode ? "Fertig" : "Auswählen";
+        if (!pane.selectMode) setSelection(pane, new Set());
+      };
+      tools.append(selBtn);
+    }
     const table = el("table");
     const thead = el("thead");
     const tr = el("tr");
@@ -216,6 +238,21 @@ let localRoot = "";
       };
       h.dataset.key = key;
       h.append(b);
+      // Spaltenbreite ziehen (Grösse, Datum); gilt für die Seite.
+      if (key !== "name") {
+        const grip = el("span", "col-grip");
+        grip.title = "Breite ändern";
+        grip.onpointerdown = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const [x0, w0] = [ev.clientX, h.getBoundingClientRect().width];
+          const move = (m: PointerEvent) => root.style.setProperty(`--w-${key}`, `${Math.max(60, Math.min(320, w0 - (m.clientX - x0)))}px`);
+          const up = () => (removeEventListener("pointermove", move), removeEventListener("pointerup", up));
+          addEventListener("pointermove", move);
+          addEventListener("pointerup", up);
+        };
+        h.prepend(grip);
+      }
       return h;
     };
     tr.append(th("name", "Name", ""), th("size", "Grösse", "size"), th("date", "Geändert", "date"));
@@ -231,7 +268,7 @@ let localRoot = "";
     const scroller = el("div", "pane-list");
     scroller.append(table);
     root.append(head, tools, scroller);
-    const pane: Pane = { side, root, body, pathEl, listing: null, selected: new Set(), anchor: null, cursor: null, sep, sort: "name", desc: false, hidden: false, filter: "", back: [], fwd: [], nav: { back, fwd, up } };
+    const pane: Pane = { side, root, body, pathEl, listing: null, selected: new Set(), anchor: null, cursor: null, deepOn: false, deep: null, token: 0, selectMode: false, sep, sort: "name", desc: false, hidden: false, filter: "", back: [], fwd: [], nav: { back, fwd, up } };
     const goUp = () => pane.listing?.parent != null && load(pane, pane.listing.parent, "go");
     const reload = () => pane.listing && load(pane, pane.listing.path);
     up.onclick = goUp;
@@ -292,10 +329,14 @@ let localRoot = "";
       scroller.addEventListener("pointerup", up);
     });
     const redraw = () => (comparing ? renderAll() : render(pane));
-    filter.oninput = () => ((pane.filter = filter.value.toLowerCase()), redraw());
+    filter.oninput = () => ((pane.filter = filter.value.toLowerCase()), pane.deepOn ? deepSearch(pane) : redraw());
+    deepBox.onchange = () => ((pane.deepOn = deepBox.checked), (pane.deep = null), pane.deepOn ? deepSearch(pane) : redraw());
     hiddenBox.onchange = () => ((pane.hidden = hiddenBox.checked), redraw());
     marks.onclick = () => bookmarkMenu(pane, marks);
     pathEl.onclick = (ev) => ev.target === pathEl && editPath(pane);
+    // Breite geändert (Fenster, Spalten, Tab sichtbar): Pfad neu kürzen.
+    let lastW = 0;
+    new ResizeObserver(() => pathEl.clientWidth !== lastW && ((lastW = pathEl.clientWidth), pane.listing && renderCrumbs(pane))).observe(pathEl);
     scroller.oncontextmenu = (ev) => {
       ev.preventDefault();
       pane.selected.clear();
@@ -369,6 +410,8 @@ let localRoot = "";
   /** Zu lang: Anfang und aktueller Ordner bleiben, die Mitte wird zu «…» (Klick zeigt die versteckten Ordner). */
   function collapseCrumbs(p: Pane) {
     const el_ = p.pathEl;
+    if (!el_.clientWidth) return; // unsichtbar; der ResizeObserver ruft wieder, sobald es Platz gibt
+    if (el_.querySelector(".crumb-more")) return;
     const crumbs = [...el_.querySelectorAll<HTMLButtonElement>(".crumb")];
     if (el_.scrollWidth <= el_.clientWidth + 1 || crumbs.length < 3) return;
     const more = el("button", "crumb crumb-more", "…") as HTMLButtonElement;
@@ -436,6 +479,11 @@ let localRoot = "";
     p.nav.fwd.disabled = !p.fwd.length;
     p.nav.up.disabled = l.parent == null;
     if (cmpOn()) return renderCompare(p, cmpRows(cmpFilter));
+    if (p.deepOn && p.filter && p.deep) {
+      p.body.replaceChildren(...p.deep.map((e) => entryRow(p, e, e.name)));
+      if (!p.body.children.length) emptyRow(p, "Keine Treffer in den Unterordnern");
+      return;
+    }
     p.body.replaceChildren(...visible(p).map((e) => entryRow(p, e, e.name)));
     if (!p.body.children.length) emptyRow(p, !p.listing!.entries.length ? "Leerer Ordner" : p.filter ? "Keine Treffer" : "Nur versteckte Dateien – «Versteckte Dateien» einschalten");
   }
@@ -458,10 +506,11 @@ let localRoot = "";
     const td = el("td", "name");
     if (lead) td.append(lead);
     td.append(el("span", `icon ${fileKind(e.name, e.dir)}`), el("span", "fname", e.name));
-    tr.append(td, el("td", "size", e.dir ? "—" : formatSize(e.size)), el("td", "date", formatDate(e.modified)));
+    const dirSize = e.dir ? dirSizes.get(join(p, name)) : undefined;
+    tr.append(td, el("td", "size", e.dir ? (dirSize != null ? formatSize(dirSize) : "—") : formatSize(e.size)), el("td", "date", formatDate(e.modified)));
     const at = { ...e, name };
     tr.onclick = (ev) => {
-      select(p, name, ev.ctrlKey || ev.metaKey, ev.shiftKey);
+      select(p, name, ev.ctrlKey || ev.metaKey || p.selectMode, ev.shiftKey);
       p.root.focus({ preventScroll: true });
     };
     tr.ondblclick = () => activate(p, at);
@@ -535,6 +584,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     if (ev.key === "F2") return p.side === "remote" ? renameRemote() : renameLocal(), true;
     if (p.side === "remote" && (ev.key === "Delete" || (isMacUi && ev.metaKey && ev.key === "Backspace"))) return deleteRemote(), true;
     if (ev.key === "Escape" && p.selected.size) return setSelection(p, new Set()), true;
+    if (ev.key === " " && !ev.metaKey && !ev.ctrlKey && !ev.altKey) return void preview(p), true;
     // Tippen springt zum ersten passenden Namen.
     if (ev.key.length === 1 && !ev.metaKey && !ev.ctrlKey && !ev.altKey && ev.key !== " ") {
       const now = performance.now();
@@ -1025,6 +1075,11 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       return;
     }
     const row = el("div", "transfer");
+    row.dataset.batch = String(batch.id);
+    active++;
+    batch.n++;
+    batch[upload ? "up" : "down"]++;
+    let settledOnce = false;
     const label = el("span", "transfer-name", `${upload ? "↑" : "↓"} ${name} → ${upload ? c.name : localName}${replace ? " (ersetzt)" : ""}`);
     const bar = el("progress");
     bar.max = 1;
@@ -1037,10 +1092,22 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     transferList.prepend(row);
     let tid: string | null = null;
     let [lastAt, lastDone, speed] = [0, 0, 0];
-    const finish = (text: string) => {
+    const finish = (text: string, ok = false) => {
       state.textContent = text;
       cancel.hidden = true;
       if (tid) running.delete(tid);
+      if (settledOnce) return;
+      settledOnce = true;
+      row.classList.toggle("ok", ok);
+      if (!ok) {
+        batch.fail++;
+        // Wiederholen: dieselbe Übertragung neu starten (Ersetzen bleibt Ersetzen).
+        const again = el("button", "plain", "Wiederholen") as HTMLButtonElement;
+        again.type = "button";
+        again.onclick = () => (row.remove(), start(upload, src, destDir, name, replace, then));
+        row.append(again);
+      }
+      settled();
     };
     cancel.onclick = () => {
       if (tid) api.transferCancel(tid);
@@ -1058,7 +1125,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
           state.textContent = `${formatSize(p.done)} von ${formatSize(p.total)} · ${formatSize(speed)}/s${rest ? ` · noch ${rest < 60 ? `${rest} s` : `${Math.round(rest / 60)} min`}` : ""}`;
         } else if (p.state === "done") {
           bar.value = 1;
-          finish("Fertig");
+          finish("Fertig", true);
           if (then) return then();
           const to = upload ? panes.remote : panes.local;
           if (comparing) refreshCompareSoon();
@@ -1081,6 +1148,162 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         running.add(id);
       })
       .catch((e) => finish(`Fehler: ${e}`));
+  }
+
+  // ---------- Übertragungsliste: Zusammenfassung, wenn alles fertig ist ----------
+  let active = 0;
+  let batch = { id: 1, n: 0, up: 0, down: 0, fail: 0 };
+  function settled() {
+    if (--active > 0) return;
+    const b = batch;
+    batch = { id: b.id + 1, n: 0, up: 0, down: 0, fail: 0 };
+    if (b.n < 2) return;
+    const rows = [...transferList.querySelectorAll<HTMLElement>(`.transfer.ok[data-batch="${b.id}"]`)];
+    const parts = [b.up && `${b.up} hochgeladen`, b.down && `${b.down} heruntergeladen`].filter(Boolean).join(", ");
+    const sum = el("div", "transfer transfer-sum");
+    const text = el("span", "transfer-name", `✓ ${b.n - b.fail} von ${b.n} ${b.n === 1 ? "Element" : "Elementen"} fertig (${parts})${b.fail ? ` · ${b.fail} mit Fehler` : ""}`);
+    const toggle = el("button", "plain", "Details") as HTMLButtonElement;
+    toggle.type = "button";
+    toggle.onclick = () => {
+      const show = toggle.textContent === "Details";
+      for (const r of rows) r.hidden = !show;
+      toggle.textContent = show ? "Weniger" : "Details";
+    };
+    for (const r of rows) r.hidden = true;
+    sum.append(text, el("span"), el("span", "transfer-state", new Date().toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })), toggle);
+    transferList.prepend(sum);
+  }
+
+  // ---------- Vorschau (Leertaste), Bearbeiten, Ordnergrösse ----------
+  /** Datei vom Server in einen lokalen Ordner holen (ersetzt dort), ohne Zeile in der Liste. */
+  const fetchRemote = (src: string, dir: string) =>
+    new Promise<string>((ok, fail) => {
+      api.transferStart(sid!, false, src, dir, (pr: Progress) => (pr.state === "done" ? ok(pjoin(panes.local.sep, dir, src.split("/").pop()!)) : pr.state === "failed" && fail(pr.error)), true).catch(fail);
+    });
+
+  async function preview(p: Pane) {
+    const name = p.cursor ?? [...p.selected][0];
+    const e = name == null ? null : (p.deep ?? p.listing?.entries ?? []).find((x) => x.name === name);
+    if (!e || e.dir) return;
+    const MAX = 4_000_000;
+    try {
+      let path = join(p, e.name);
+      if (p.side === "remote") {
+        if (!sid) return;
+        if (e.size > 50_000_000) return void (status.textContent = "Für die Vorschau zu gross (über 50 MB). Bitte herunterladen.");
+        status.textContent = `Lade «${e.name}» für die Vorschau …`;
+        path = await fetchRemote(path, await api.localTemp("vorschau"));
+        status.textContent = "";
+      }
+      showPreview(e.name.split("/").pop() ?? e.name, await api.localRead(path, MAX), e.size, e.size > MAX);
+    } catch (err) {
+      status.textContent = `Keine Vorschau: ${err}`;
+    }
+  }
+
+  /** Datei vom Server im Standardprogramm öffnen; jedes Sichern lädt sie wieder hoch (mit Rückfrage, wenn sie sich
+   *  auf dem Server inzwischen geändert hat). Läuft, bis man «Beenden» drückt oder den Tab schliesst. */
+  const watchers = new Map<string, number>();
+  async function editRemote(e: Entry) {
+    const rp = panes.remote;
+    if (!sid || !rp.listing) return;
+    const remoteDir = rp.listing.path;
+    const remote = join(rp, e.name);
+    if (watchers.has(remote)) return void (status.textContent = `«${e.name}» ist schon zum Bearbeiten offen.`);
+    try {
+      status.textContent = `Öffne «${e.name}» …`;
+      const dir = await api.localTemp(`bearbeiten-${Date.now().toString(36)}`);
+      const local = await fetchRemote(remote, dir);
+      const mtime = async () => (await api.localList(dir)).entries.find((x) => x.name === e.name)?.modified ?? 0;
+      let base = await mtime();
+      let remoteMod = e.modified;
+      await api.localOpen(local);
+      status.textContent = "";
+      const row = el("div", "transfer");
+      const st = el("span", "transfer-state", "Sichern lädt hoch");
+      const stop = el("button", "plain", "Beenden") as HTMLButtonElement;
+      stop.type = "button";
+      row.append(el("span", "transfer-name", `✎ ${e.name} wird bearbeitet`), el("span"), st, stop);
+      transferList.prepend(row);
+      let busy = false;
+      const t = window.setInterval(async () => {
+        if (busy || !sid) return;
+        busy = true;
+        try {
+          const m = await mtime();
+          if (!m || m === base) return;
+          base = m;
+          const now = (await api.sftpList(sid, remoteDir)).entries.find((x) => x.name === e.name);
+          if (now && now.modified !== remoteMod && !(await ask(`«${e.name}» hat sich auf dem Server geändert`, "Seit dem Öffnen hat jemand die Datei auf dem Server geändert. Deine Fassung trotzdem hochladen? Die andere kommt in den Papierkorb.", "Hochladen"))) return;
+          const done = async () => {
+            remoteMod = (await api.sftpList(sid!, remoteDir)).entries.find((x) => x.name === e.name)?.modified ?? remoteMod;
+            st.textContent = `Hochgeladen um ${new Date().toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+            if (rp.listing?.path === remoteDir) load(rp, remoteDir);
+          };
+          if (ftp) await api.sftpRemove(sid, remote).then(() => start(true, local, remoteDir, e.name, false, done));
+          else start(true, local, remoteDir, e.name, true, done);
+        } catch (err) {
+          st.textContent = `Fehler: ${err}`;
+        } finally {
+          busy = false;
+        }
+      }, 1500);
+      watchers.set(remote, t);
+      stop.onclick = () => (clearInterval(t), watchers.delete(remote), row.remove());
+    } catch (err) {
+      status.textContent = "";
+      tell("Nicht geöffnet", String(err));
+    }
+  }
+
+  /** Ordnergrösse auf Wunsch: Server über du, lokal durch Aufsummieren (höchstens 20000 Einträge). */
+  const dirSizes = new Map<string, number>();
+  async function folderSize(p: Pane, name: string) {
+    const path = join(p, name);
+    status.textContent = `Berechne Grösse von «${name}» …`;
+    try {
+      let total = 0;
+      if (p.side === "remote") total = await api.sftpSize(sid!, path);
+      else {
+        const stack = [path];
+        for (let n = 0; stack.length && n < 20000; ) {
+          const l = await api.localList(stack.pop()!).catch(() => null);
+          for (const e of l?.entries ?? []) (n++, e.dir ? stack.push(pjoin(p.sep, l!.path, e.name)) : (total += e.size));
+        }
+      }
+      dirSizes.set(path, total);
+      status.textContent = `«${name}»: ${formatSize(total)}`;
+      render(p);
+    } catch (err) {
+      status.textContent = `Grösse nicht ermittelt: ${err}`;
+    }
+  }
+
+  /** Filter mit «Unterordner»: Breitensuche ab dem offenen Ordner, Treffer erscheinen laufend. */
+  async function deepSearch(p: Pane) {
+    const token = ++p.token;
+    p.deep = null;
+    if (!p.filter || !p.listing) return render(p);
+    const q = p.filter;
+    const sep = p.side === "local" ? p.sep : "/";
+    const out: Entry[] = [];
+    const queue: [string, string][] = [[p.listing.path, ""]];
+    let seen = 0;
+    while (queue.length && seen < 5000 && out.length < 500) {
+      const [dir, rel] = queue.shift()!;
+      const l = await listOf(p.side === "local", dir).catch(() => null);
+      if (token !== p.token) return;
+      for (const e of l?.entries ?? []) {
+        seen++;
+        if (!p.hidden && e.name.startsWith(".")) continue;
+        const r = rel ? `${rel}/${e.name}` : e.name;
+        if (e.name.toLowerCase().includes(q)) out.push({ ...e, name: r });
+        if (e.dir && rel.split("/").length < 8) queue.push([pjoin(sep, l!.path, e.name), r]);
+      }
+      p.deep = [...out];
+      render(p);
+    }
+    status.textContent = `${out.length} Treffer in Unterordnern${seen >= 5000 ? " (Suche nach 5000 Einträgen beendet)" : ""}`;
   }
 
   const mkdir = async (p: Pane = panes.remote) => {
@@ -1251,6 +1474,9 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
         { value: "rename", label: "Umbenennen …", icon: ICON.rename, shortcut: remote ? "F2" : undefined, disabled: !one || (remote && scp) },
       );
       if (remote) items.push({ value: "chmod", label: ftp ? "Rechte ändern …" : "Berechtigungen …", icon: ICON.permissions, disabled: !one || scp });
+      if (!e.dir) items.push({ value: "preview", label: "Vorschau", icon: ICON.eye, shortcut: "Leertaste", disabled: !one });
+      if (!e.dir && remote && !isMobile) items.push({ value: "edit", label: "Bearbeiten (Standardprogramm)", icon: ICON.rename, disabled: !one || !sid });
+      if (e.dir) items.push({ value: "size", label: "Grösse berechnen", icon: ICON.folder });
       items.push({ value: "copy", label: "Pfad kopieren", icon: ICON.copy });
       if (remote) items.push({ value: "delete", label: "Löschen", icon: ICON.trash, shortcut: "Entf", disabled: scp, separator: true });
     }
@@ -1269,6 +1495,9 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     if (v === "mkdir") mkdir(p);
     if (v === "touch") newFile();
     if (v === "all") setSelection(p, new Set(rowNames(p)));
+    if (v === "preview") preview(p);
+    if (v === "edit" && e) editRemote(e);
+    if (v === "size") for (const n of p.selected) folderSize(p, n);
   }
 
   async function renameRemote() {
@@ -1472,6 +1701,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     unlistenDrop.then((u) => u());
     for (const t of running) api.transferCancel(t);
     running.clear();
+    for (const t of watchers.values()) clearInterval(t);
     if (sid) api.sftpClose(sid);
     sid = null;
   };

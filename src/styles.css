@@ -294,8 +294,8 @@ label.option small { margin-top: 2px; }
 .pane table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
 .pane th { position: sticky; top: 0; background: var(--card); text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); padding: 4px 16px; }
 .pane td { padding: 5px 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; }
-.pane .size { width: 90px; color: var(--muted); }
-.pane .date { width: 120px; color: var(--muted); }
+.pane .size { width: var(--w-size, 90px); color: var(--muted); }
+.pane .date { width: var(--w-date, 120px); color: var(--muted); }
 .pane td.name { display: flex; align-items: center; gap: 8px; }
 .pane tr[aria-selected=true] { background: var(--accent); color: var(--on-accent); }
 .pane tr[aria-selected=true] td { color: inherit; }
@@ -922,3 +922,28 @@ dialog.conflict .conflict-text { overflow-wrap: anywhere; }
 .conflict-meta { font-size: 12px; color: var(--muted); }
 .conflict-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .conflict-actions > span { flex: 1; }
+
+/* Spaltenbreite ziehen */
+.col-grip { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; cursor: col-resize; }
+.col-grip::after { content: ""; position: absolute; left: 3px; top: 25%; bottom: 25%; border-left: 1px solid var(--line); }
+/* iPad: Auswahlmodus mit Häkchen */
+.pane-select { margin-left: auto; }
+.pane.select-mode td.name::before { content: ""; flex-shrink: 0; width: 20px; height: 20px; box-sizing: border-box; border: 1.5px solid var(--muted); border-radius: 50%; }
+.pane.select-mode tr[aria-selected=true] td.name::before { content: "✓"; border-color: currentColor; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+/* Übertragungen: Zusammenfassung */
+.transfer-sum .transfer-name { font-weight: 600; }
+/* Vorschau (Leertaste) */
+dialog.preview { width: min(900px, calc(100vw - 48px)); height: min(80vh, 900px); padding: 0; border: 0; border-radius: 14px; overflow: hidden; }
+dialog.preview[open] { display: flex; flex-direction: column; }
+.preview-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.preview-head strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-body { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; background: var(--surface); }
+.preview-body pre { align-self: start; justify-self: stretch; margin: 0; padding: 14px; font: 12px "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.preview-body pre.preview-none { align-self: center; justify-self: center; color: var(--muted); font-family: inherit; }
+.preview-body img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.preview-body iframe { width: 100%; height: 100%; border: 0; }
+.preview-foot { padding: 6px 14px; font-size: 11px; color: var(--muted); }
+.preview-foot:empty { display: none; }
+.pane-tools label { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.pane-filter { min-width: 80px; }
+body.mobile .pane-tools { gap: 10px; flex-wrap: nowrap; overflow: hidden; }

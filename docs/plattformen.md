@@ -33,7 +33,9 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Türöffner (lokale Dienste über SSH) | ✓ | ✓ | ✓ | ✓ |
 | Gehaltene Shell (tmux, «Nahtlos») | ✓ | ✓ | ✓ | ✓ wichtig, weil iPadOS Verbindungen im Hintergrund trennt |
 | Durchreiche (Dateien auf Shell/Remote-Bild ziehen) | ✓ | ✓ | ✓ | ✓ aus «Dateien» (Split View, Slide Over) ziehen; nur Dateien, keine Ordner |
-| Mehrfachauswahl, Tastatur, Gummiband | ✓ wie Finder (Enter benennt um, ⌘↓ öffnet) | ✓ wie Explorer (Enter öffnet, F2) | ✓ wie Explorer | ✓ Tippen, «Alle auswählen» im Menü, mit Tastatur wie am Mac; … Auswahlmodus mit Häkchen noch nicht |
+| Mehrfachauswahl, Tastatur, Gummiband | ✓ wie Finder (Enter benennt um, ⌘↓ öffnet) | ✓ wie Explorer (Enter öffnet, F2) | ✓ wie Explorer | ✓ Tippen, «Alle auswählen» im Menü, mit Tastatur wie am Mac; «Auswählen» mit Häkchen |
+| Vorschau (Leertaste), Suche in Unterordnern, Ordnergrösse, Spaltenbreite | ✓ | ✓ | ✓ | ✓ (Vorschau über «…»/lange drücken) |
+| Datei vom Server im Standardprogramm bearbeiten, beim Sichern hochladen | ✓ | ✓ | ✓ | ✗ kein Standardprogramm unter iPadOS |
 | Rückfrage vor dem Überschreiben, Ordner zusammenführen | ✓ | ✓ | ✓ | ✓ |
 | Papierkorb auf dem Server, Rückgängig | ✓ ⌘Z | ✓ Strg+Z | ✓ Strg+Z | ✓ (⌘Z mit Tastatur) |
 | Mit Administratorrechten (sudo auf dem Server) | ✓ | ✓ | ✓ | ✓ |
@@ -108,6 +110,5 @@ Mit dem bezahlten Team:
   plus den Schritt `appintentsmetadataprocessor` im Build. Bis dahin: Kurzbefehl mit «URL öffnen».
 - Windows: Sprungliste auf einem echten Windows-Rechner prüfen, Windows Hello vor dem Anzeigen von Passwörtern.
 - Linux: Tastenkürzel an den Remotecomputer.
-- Dateifenster: Vorschau mit Leertaste, Datei auf dem Server im lokalen Editor bearbeiten und beim Sichern
-  hochladen, zuletzt besuchte Ordner je Verbindung, Suche in Unterordnern, Spaltenbreite ändern, Ordnergrösse
-  auf Wunsch, Übertragungsliste mit Pause und Zusammenfassung, Auswahlmodus mit Häkchen auf dem iPad.
+- Dateifenster: Übertragungen pausieren (heute: Abbrechen und Wiederholen), zuletzt besuchte Ordner je
+  Verbindung, Bearbeiten auf dem iPad (dort gibt es kein Standardprogramm; denkbar über «Teilen»).

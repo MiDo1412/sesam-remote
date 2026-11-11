@@ -1611,6 +1611,47 @@ fn local_list(app: AppHandle, path: String) -> Result<sftp::Listing, String> {
     }
 }
 
+/// Vorschau (Leertaste): höchstens `max` Byte einer lokalen Datei, roh. iPad: nur aus den Ordnern der App.
+#[tauri::command]
+fn local_read(app: AppHandle, path: String, max: u64) -> Result<tauri::ipc::Response, String> {
+    #[cfg(mobile)]
+    {
+        let ok = [app.path().document_dir(), app.path().app_cache_dir()].into_iter().flatten().any(|d| std::path::Path::new(&path).canonicalize().ok().zip(d.canonicalize().ok()).is_some_and(|(p, r)| p.starts_with(r)));
+        if !ok {
+            return Err("Nur Dateien aus den Ordnern von Sesam".into());
+        }
+    }
+    #[cfg(desktop)]
+    let _ = &app;
+    use std::io::Read;
+    let mut buf = Vec::new();
+    std::fs::File::open(&path).and_then(|f| f.take(max).read_to_end(&mut buf)).map_err(|e| format!("{path}: {e}"))?;
+    Ok(tauri::ipc::Response::new(buf))
+}
+
+/// Arbeitsordner im Cache (Vorschau, Bearbeiten); `sub` nur aus Buchstaben, Ziffern und «-».
+#[tauri::command]
+fn local_temp(app: AppHandle, sub: String) -> Result<String, String> {
+    if sub.is_empty() || !sub.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err("Ungültiger Ordnername".into());
+    }
+    let d = app.path().app_cache_dir().map_err(|e| e.to_string())?.join(sub);
+    std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    Ok(d.to_string_lossy().into_owned())
+}
+
+/// Datei mit dem Standardprogramm des Systems öffnen («Bearbeiten»). Nur Desktop.
+#[tauri::command]
+fn local_open(path: String) -> Result<(), String> {
+    #[cfg(desktop)]
+    return tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string());
+    #[cfg(mobile)]
+    {
+        let _ = path;
+        Err("Auf dem iPad gibt es kein Standardprogramm zum Bearbeiten".into())
+    }
+}
+
 #[tauri::command]
 fn local_home(app: AppHandle) -> Result<String, String> {
     #[cfg(mobile)]
@@ -2378,6 +2419,9 @@ pub fn run() {
             clip_read,
             clip_write,
             stage_file,
+            local_read,
+            local_temp,
+            local_open,
             immersive,
             kbhook_set,
             kbhook_selftest,
