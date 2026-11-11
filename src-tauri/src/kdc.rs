@@ -101,8 +101,9 @@ async fn http(url: &url::Url, host: &str, data: &[u8]) -> Result<Vec<u8>, String
     let tcp = TcpStream::connect((host, port)).await.map_err(|e| e.to_string())?;
     let req = http_request(url, data);
     let raw = if url.scheme() == "https" {
-        // Strikte Prüfung gegen die Stammzertifikate des Systems, kein Pinning-Dialog.
-        let (tls, _) = ironrdp_tls::upgrade(tcp, host).await.map_err(|e| format!("TLS zum KDC-Proxy: {e}"))?;
+        // Strikte Prüfung gegen die Stammzertifikate des Systems, kein Pinning-Dialog. Ausdrücklich `Strict`: die
+        // Voreinstellung von ironrdp nimmt jedes Zertifikat (security-review-2026-11-11, S-02).
+        let (tls, _) = ironrdp_tls::upgrade_with_certificate_validation(tcp, host, ironrdp_tls::CertificateValidation::Strict).await.map_err(|e| format!("TLS zum KDC-Proxy: {e}"))?;
         exchange(tls, &req).await?
     } else {
         exchange(tcp, &req).await?
@@ -129,11 +130,10 @@ async fn exchange<S: AsyncRead + AsyncWrite + Unpin>(mut s: S, req: &[u8]) -> Re
     let mut raw = Vec::new();
     // Server schliessen nach «Connection: close»; manche TLS-Gegenstellen ohne close_notify, das ist hier unkritisch.
     let r = (&mut s).take(MAX_REPLY as u64 + 1).read_to_end(&mut raw).await;
-    if let Err(e) = r {
-        if raw.is_empty() {
+    if let Err(e) = r
+        && raw.is_empty() {
             return Err(e.to_string());
         }
-    }
     if raw.len() > MAX_REPLY {
         return Err("Antwort zu gross".into());
     }

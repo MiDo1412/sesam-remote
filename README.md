@@ -1,38 +1,38 @@
 # Sesam Remote
 
-Quelloffene Fernzugriffs-App für Windows, macOS und iPad: VNC-Desktop, SSH-Shell und
-SFTP-Dateitransfer in einer Bibliothek. Lizenz: Mozilla Public License 2.0 (MPL-2.0, siehe `LICENSE`).
+Quelloffene Fernzugriffs-App für macOS, Windows, Linux und iPad: Bildschirm per RDP und VNC, Shell per SSH,
+Dateien per SFTP und FTP/FTPS – in einer Bibliothek. Lizenz: Mozilla Public License 2.0 (MPL-2.0, siehe
+`LICENSE`).
 
-## Zielbild
+## Was Sesam kann
 
-- **Bibliothek** mit Verbindungen (Name, Gruppe, Adresse, VNC-Port, SSH-Port, Benutzer,
-  SSH-Schlüssel, Standardansicht). Doppelklick öffnet die Standardansicht.
-- **Tresor:** Passwörter und Schlüssel liegen im Schlüsselbund des Betriebssystems
-  (Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund). Die Verbindungsliste im
-  App-Datenordner (`library.json`) enthält keine Geheimnisse.
-- **VNC-Viewer** (RFB, nativ in Rust) mit «An Fenster anpassen» (ExtendedDesktopSize /
-  SetDesktopSize), «Skalieren», «Originalgrösse (1:1)», Quer-/Hochformat und Vollbild (F11).
-  Ziel-Hosts: wayvnc, GNOME Remote Desktop, macOS-Bildschirmfreigabe (Apple-Auth Typ 30).
-- **SSH-Shell** (`russh`) mit Terminal (xterm.js).
-- **Dateitransfer** über SFTP (`russh-sftp`), zweispaltig, mit Ziehen und Ablegen.
-- **Gemeinsame Zwischenablage:** Text über VNC (Extended Clipboard für UTF-8), Dateien und
-  Bilder über SFTP, wenn SSH vorhanden ist.
+- **Bibliothek** mit Gruppen, Suche, Karten und Liste, Online-Status und Aufwecken (Wake-on-LAN).
+- **Remotedesktop** per RDP (IronRDP, mit RD-Gateway, H.264, Ton, Zwischenablage, Laufwerk) und VNC (nativ in
+  Rust: VNC-Passwort, Apple-Anmeldung, VeNCrypt mit Zertifikat-Pinning, Tight/ZRLE).
+- **SSH-Shell** (russh, xterm.js) mit Schlüsseln, Agent, Sprungserver, Portweiterleitungen und tmux-Sitzungen,
+  die einen Abbruch überstehen.
+- **Dateien** zweispaltig über SFTP, SCP oder FTP/FTPS, mit Papierkorb und «Rückgängig», Konfliktabfrage,
+  Vorschau, Bearbeiten im Standardprogramm und Fortsetzen nach einem Abbruch.
+- **Zugangsdaten** nur im Schlüsselbund des Systems (macOS- bzw. iOS-Schlüsselbund, Windows-
+  Anmeldeinformationsverwaltung, Secret Service unter Linux). Die Bibliothek (`library.json`) enthält keine
+  Geheimnisse; Sicherungen sind mit eigenem Passwort verschlüsselt (AES-256-GCM, Argon2id).
 
-## Stand
+Was auf welchem System geht: [docs/plattformen.md](docs/plattformen.md).
 
-| Bereich | Stand |
-|---|---|
-| Bibliothek + Tresor | läuft, mit Tests |
-| Verbindung anlegen/bearbeiten (Sheet) | läuft |
-| SSH-Shell | läuft (Passwort oder ed25519-Schlüssel aus dem Tresor, Fingerabdruck bestätigen) |
-| VNC | Anzeige im Fenster, VNC-/Apple-Anmeldung, VeNCrypt (TLS) mit Zertifikat-Pinning, lokaler Mauszeiger; gegen echte Hosts noch ungetestet |
-| Dateien (SFTP) | zweispaltig, Ziehen und Ablegen, Übertragungsliste, Umbenennen/Löschen; gegen einen Test-Server geprüft |
-| Gemeinsame Zwischenablage | Text über VNC; Dateien und Bilder über SFTP nach `~/Sesam-Ablage`, `file://`-Listen vom Server als lokale Dateien |
+## Installieren
+
+- **macOS:** `.dmg` bzw. portabel als `.app` im ZIP.
+- **Windows:** MSI (Verknüpfung auf dem Desktop und im Startmenü, still installierbar, auch über Intune:
+  [docs/intune.md](docs/intune.md)) oder portabel als ZIP.
+- **Linux:** AppImage (portabel) bzw. `.deb`.
+- **iPad:** App Store (geplant, [docs/app-store.md](docs/app-store.md)).
+
+Portabler Betrieb: Liegt neben der App eine Datei `portable` oder ein Ordner `Sesam-Daten`, legt Sesam
+Bibliothek und Einstellungen dort ab ([docs/portabel.md](docs/portabel.md)).
 
 ## Entwickeln
 
-Voraussetzungen: Rust (stable, MSVC), Node 20+, unter Windows WebView2 und die
-MSVC Build Tools.
+Voraussetzungen: Rust (stable), Node 20+; unter Windows WebView2 und die MSVC Build Tools; für das iPad Xcode.
 
 ```bash
 npm install
@@ -46,4 +46,22 @@ npm run build
 cd src-tauri && cargo test
 ```
 
-Aufbau und Modulplan: [docs/architektur.md](docs/architektur.md). Welche Funktion auf welchem System: [docs/plattformen.md](docs/plattformen.md). Vertrieb und Stores: [docs/app-store.md](docs/app-store.md).
+Release (Nummer JJ.M.N, Abschnitt «In Arbeit» der Release-Notes): [docs/versionierung.md](docs/versionierung.md).
+
+## Dokumentation
+
+| Datei | Inhalt |
+|---|---|
+| [docs/architektur.md](docs/architektur.md) | Aufbau und Module |
+| [docs/plattformen.md](docs/plattformen.md) | Funktionen je System, Vertrieb |
+| [docs/design-konzept.md](docs/design-konzept.md) | Gestaltung «Inhalt und Glas», Tokens, Knöpfe, Blätter |
+| [docs/design-inventar.md](docs/design-inventar.md) | Prüfstand jedes Bildschirms, hell und dunkel |
+| [docs/beschriftungen.md](docs/beschriftungen.md) | Begriffe in der Oberfläche |
+| [docs/release-notes.md](docs/release-notes.md) | Änderungen je Version |
+| [docs/versionierung.md](docs/versionierung.md) | Versionsnummern und Release |
+| [docs/app-store.md](docs/app-store.md) | Stores und Signieren |
+| [docs/intune.md](docs/intune.md) | Windows: MSI über Intune verteilen |
+| [docs/portabel.md](docs/portabel.md) | Portable Fassungen |
+| [docs/security-review-2026-11-11.md](docs/security-review-2026-11-11.md) | Sicherheitsprüfung |
+| [docs/offene-punkte.md](docs/offene-punkte.md) | Bewusst Offenes |
+| [docs/hilfe/](docs/hilfe/) | Anleitungen in der App |

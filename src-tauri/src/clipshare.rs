@@ -58,16 +58,14 @@ pub fn read_local() -> Local {
 
 #[cfg(desktop)]
 fn read_local_from(cb: &mut arboard::Clipboard) -> Local {
-    if let Ok(files) = cb.get().file_list() {
-        if !files.is_empty() {
+    if let Ok(files) = cb.get().file_list()
+        && !files.is_empty() {
             return Local::Files(files);
         }
-    }
-    if let Ok(t) = cb.get_text() {
-        if !t.is_empty() {
+    if let Ok(t) = cb.get_text()
+        && !t.is_empty() {
             return Local::Text(t);
         }
-    }
     if let Ok(img) = cb.get_image() {
         return Local::Image { width: img.width, height: img.height, rgba: img.bytes.into_owned() };
     }
@@ -177,6 +175,10 @@ fn percent_decode(s: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+/// Grenzen für Dateien, die ein Server über die Zwischenablage schickt.
+const CLIP_FILES: usize = 100;
+const CLIP_BYTES: u64 = 512 * 1024 * 1024;
+
 pub struct ClipShare {
     pub enabled: bool,
     conn: Connection,
@@ -258,6 +260,22 @@ impl ClipShare {
     /// Dateien vom Server laden und als Dateien in die lokale Zwischenablage legen.
     pub async fn download_to_clipboard(&self, remote: &[String]) -> Result<usize, String> {
         let s = self.sftp().await?;
+        // Der Server bestimmt den Inhalt der Zwischenablage: nur einzelne Dateien, höchstens CLIP_FILES Stück und
+        // CLIP_BYTES zusammen, keine Ordnerbäume (security-review-2026-11-11, S-06).
+        if remote.len() > CLIP_FILES {
+            return Err(format!("Zwischenablage: mehr als {CLIP_FILES} Dateien, nicht übernommen"));
+        }
+        let mut total = 0u64;
+        for r in remote {
+            let m = s.s.metadata(r).await.map_err(|e| e.to_string())?;
+            if !m.is_regular() {
+                return Err("Zwischenablage: Ordner und Sonderdateien übernimmt Sesam nicht automatisch; bitte im Dateifenster holen".into());
+            }
+            total = total.saturating_add(m.size.unwrap_or(u64::MAX));
+        }
+        if total > CLIP_BYTES {
+            return Err("Zwischenablage: Dateien zusammen über 512 MB, nicht übernommen; bitte im Dateifenster holen".into());
+        }
         let dir = self.download_dir.join("Sesam-Ablage");
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let mut local = Vec::new();

@@ -15,6 +15,7 @@ mod unlock;
 mod ftp;
 mod library;
 mod perms;
+mod portable;
 mod localterm;
 mod profiles;
 mod rdp;
@@ -207,8 +208,14 @@ const SECRET_KINDS: [(Kind, &str); 5] =
 
 /// Verschlüsselte Sicherung von Bibliothek, Gruppen und Zugangsdaten samt Geheimnissen in eine Datei schreiben.
 #[tauri::command]
-fn backup_export(path: State<LibraryPath>, file: String, password: String) -> Result<String, String> {
+async fn backup_export(path: State<'_, LibraryPath>, file: String, password: String) -> Result<String, String> {
     diag::add_secret(&password);
+    // Die Sicherung enthält alle Passwörter: dieselbe Bestätigung wie «Passwort anzeigen» (security-review-2026-11-11, S-07).
+    // shortcut: Windows und Linux noch ohne Bestätigung, bis Windows Hello eingebaut ist (docs/offene-punkte.md).
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    tauri::async_runtime::spawn_blocking(|| auth::authenticate("eine Sicherung mit allen Passwörtern erstellen"))
+        .await
+        .map_err(|e| e.to_string())??;
     let conns = library::load(&path.0)?;
     let creds = creds::load(&creds_path(&path))?;
     let mut secrets = Vec::new();
@@ -270,27 +277,39 @@ fn backup_import(path: State<LibraryPath>, file: String, password: String) -> Re
     let mut conns = library::load(&path.0)?;
     let mut creds = creds::load(&creds_path(&path))?;
     let mut fresh_ids = std::collections::HashSet::new();
+    let mut fresh_creds = std::collections::HashSet::new();
     let mut added = (0, 0);
+    // Zugangsdaten zuerst: neue Verbindungen dürfen nur auf Zugangsdaten zeigen, die mit derselben Sicherung neu
+    // dazukommen. Sonst könnte eine fremde Sicherung vorhandene Passwörter an ihren Host schicken lassen
+    // (security-review-2026-11-11, S-08).
+    for cr in c.credentials {
+        creds::validate(&cr)?;
+        if !creds.iter().any(|x| x.id == cr.id) {
+            fresh_ids.insert(creds::vault_id(&cr.id));
+            fresh_creds.insert(cr.id.clone());
+            creds.push(cr);
+            added.1 += 1;
+        }
+    }
+    let mut unlinked = 0;
+    let imported_ids: std::collections::HashSet<String> = c.connections.iter().filter_map(|v| v.get("id")?.as_str().map(String::from)).collect();
     for v in c.connections {
-        let conn: Connection = serde_json::from_value(v).map_err(|e| format!("Verbindung nicht lesbar: {e}"))?;
+        let mut conn: Connection = serde_json::from_value(v).map_err(|e| format!("Verbindung nicht lesbar: {e}"))?;
         conn.validate()?;
+        // Verbindungen und Zugangsdaten teilen sich den Schlüsselbund («cred-<id>»): solche IDs nie als Verbindung.
         if !conns.iter().any(|x| x.id == conn.id) {
+            unlinked += import_unlink(&mut conn, &fresh_creds, &imported_ids)?;
             fresh_ids.insert(conn.id.clone());
             conns.push(conn);
             added.0 += 1;
         }
     }
-    for cr in c.credentials {
-        creds::validate(&cr)?;
-        if !creds.iter().any(|x| x.id == cr.id) {
-            fresh_ids.insert(creds::vault_id(&cr.id));
-            creds.push(cr);
-            added.1 += 1;
-        }
-    }
     for (id, kind, secret) in c.secrets {
         if let (true, Some((k, _))) = (fresh_ids.contains(&id), SECRET_KINDS.iter().find(|(_, n)| *n == kind)) {
-            vault::set(&id, *k, &secret)?;
+            // Nie ein vorhandenes Geheimnis ersetzen.
+            if vault::get(&id, *k)?.is_none() {
+                vault::set(&id, *k, &secret)?;
+            }
         }
     }
     let mut groups = library::load_groups(&groups_path(&path))?;
@@ -303,7 +322,36 @@ fn backup_import(path: State<LibraryPath>, file: String, password: String) -> Re
     library::save(&path.0, &conns)?;
     creds::save(&creds_path(&path), &creds)?;
     library::save(&groups_path(&path), &groups)?;
-    Ok(format!("{} Verbindungen und {} Zugangsdaten übernommen; Bestehendes blieb unverändert.", added.0, added.1))
+    let note = if unlinked > 0 { format!(" {unlinked} Zuweisung(en) zu Zugangsdaten, die nicht in der Sicherung stehen, wurden entfernt; bitte bei Bedarf neu zuweisen.") } else { String::new() };
+    Ok(format!("{} Verbindungen und {} Zugangsdaten übernommen; Bestehendes blieb unverändert.{note}", added.0, added.1))
+}
+
+/// Eingelesene Verbindung entschärfen: keine reservierte Kennung, Zugangsdaten nur aus derselben Sicherung.
+/// Gibt die Zahl entfernter Zuweisungen zurück.
+fn import_unlink(conn: &mut Connection, fresh_creds: &std::collections::HashSet<String>, fresh_conns: &std::collections::HashSet<String>) -> Result<usize, String> {
+    // Verbindungen und Zugangsdaten teilen sich den Schlüsselbund («cred-<id>»): solche IDs nie als Verbindung.
+    if conn.id.starts_with("cred-") {
+        return Err("Ungültige Sicherung: Verbindung mit reservierter Kennung".into());
+    }
+    let mut n = 0;
+    // Agent-Weiterleitung gibt dem Server den lokalen SSH-Agenten; aus einer fremden Datei nie still übernehmen.
+    if conn.agent_forward {
+        conn.agent_forward = false;
+        n += 1;
+    }
+    for r in [&mut conn.credential_id, &mut conn.rdp_credential_id, &mut conn.vnc_credential_id, &mut conn.gateway_credential_id] {
+        if r.as_ref().is_some_and(|id| !fresh_creds.contains(id)) {
+            *r = None;
+            n += 1;
+        }
+    }
+    // Sprungserver nur, wenn er mit derselben Sicherung kommt (sonst liefe der Zugang einer vorhandenen Verbindung
+    // als Sprung zu einem Ziel aus der fremden Datei).
+    if !conn.jump_host.is_empty() && !fresh_conns.contains(&conn.jump_host) {
+        conn.jump_host.clear();
+        n += 1;
+    }
+    Ok(n)
 }
 
 /// Gruppe umbenennen bzw. löschen (`to` = None): ändert auch die Verbindungen.
@@ -767,11 +815,10 @@ fn find_raw(path: &LibraryPath, id: &str) -> Result<Connection, String> {
 /// Passwort/SSH-Schlüssel: aus den gespeicherten Zugangsdaten, wenn zugewiesen, sonst aus der Verbindung.
 fn login_secret(c: &Connection, kind: Kind) -> Result<Option<String>, String> {
     // Schnelle Verbindung: hier eingetippt/gewählt geht vor gespeicherten Zugangsdaten.
-    if c.id.starts_with("quick-") {
-        if let Some(s) = vault::get(&c.id, kind)? {
+    if c.id.starts_with("quick-")
+        && let Some(s) = vault::get(&c.id, kind)? {
             return Ok(Some(s));
         }
-    }
     match (&c.credential_id, kind) {
         (Some(cid), Kind::Password | Kind::SshKey) => {
             cred_used(cid);
@@ -1357,12 +1404,11 @@ async fn conn_reach(path: State<'_, LibraryPath>, id: String) -> Result<Option<u
         let host = c.address.clone();
         if let Some(mac) = tauri::async_runtime::spawn_blocking(move || wake::mac_of(&host)).await.ok().flatten() {
             let _g = LIBRARY_LOCK.lock().unwrap();
-            if let Ok(mut items) = library::load(&path.0) {
-                if let Some(x) = items.iter_mut().find(|x| x.id == id) {
+            if let Ok(mut items) = library::load(&path.0)
+                && let Some(x) = items.iter_mut().find(|x| x.id == id) {
                     x.mac = mac;
                     let _ = library::save(&path.0, &items);
                 }
-            }
         }
     }
     Ok(ms)
@@ -1780,9 +1826,33 @@ fn local_temp(app: AppHandle, sub: String) -> Result<String, String> {
     Ok(d.to_string_lossy().into_owned())
 }
 
-/// Datei mit dem Standardprogramm des Systems öffnen («Bearbeiten»). Nur Desktop.
+/// Endungen, deren Standardaktion auf diesem System etwas ausführt statt es zu öffnen.
+#[cfg(windows)]
+const RUNS_ON_OPEN: &[&str] = &[
+    "exe", "com", "bat", "cmd", "vbs", "vbe", "js", "jse", "wsf", "wsh", "wsc", "hta", "msi", "msp", "msc", "scr", "pif", "cpl",
+    "lnk", "url", "website", "scf", "reg", "inf", "jar", "chm", "xll", "gadget", "diagcab", "mht", "mhtml", "ps1xml", "iso", "img",
+    "vhd", "vhdx", "appref-ms", "application", "settingcontent-ms", "library-ms", "search-ms", "appx", "msix",
+];
+#[cfg(target_os = "macos")]
+const RUNS_ON_OPEN: &[&str] =
+    &["app", "command", "tool", "terminal", "workflow", "pkg", "mpkg", "dmg", "fileloc", "inetloc", "webloc", "jar", "jnlp", "shortcut"];
+#[cfg(not(any(windows, target_os = "macos")))]
+const RUNS_ON_OPEN: &[&str] = &["desktop", "appimage", "jar"];
+
+/// Würde die Standardaktion die Datei ausführen? (security-review-2026-11-11, S-05)
+fn runs_on_open(path: &str) -> bool {
+    let name = path.trim_end_matches(['/', '\\', '.', ' ']).rsplit(['/', '\\']).next().unwrap_or(path).to_ascii_lowercase();
+    name.rsplit_once('.').is_some_and(|(_, ext)| RUNS_ON_OPEN.contains(&ext))
+}
+
+/// Datei mit dem Standardprogramm des Systems öffnen («Bearbeiten»). Nur Desktop. Dateien vom Server mit einer
+/// Endung, die ausgeführt würde (z. B. .bat, .js unter Windows, .command, .terminal auf dem Mac), öffnet Sesam nicht:
+/// ein Klick auf «Bearbeiten» darf nie Code vom Server starten.
 #[tauri::command]
 fn local_open(path: String) -> Result<(), String> {
+    if runs_on_open(&path) {
+        return Err("Diese Art Datei würde das System ausführen statt zum Bearbeiten öffnen. Bitte herunterladen und in einem Editor öffnen.".into());
+    }
     #[cfg(desktop)]
     return tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string());
     #[cfg(mobile)]
@@ -1826,13 +1896,12 @@ fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
-        if b[i] == b'%' && i + 2 < b.len() {
-            if let Some(v) = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+        if b[i] == b'%' && i + 2 < b.len()
+            && let Some(v) = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
                 out.push(v);
                 i += 3;
                 continue;
             }
-        }
         out.push(b[i]);
         i += 1;
     }
@@ -2353,6 +2422,7 @@ pub fn run() {
     if std::env::args().nth(1).as_deref() == Some("--kbhook-helper") {
         return kbhook::helper(std::env::args().nth(2).and_then(|p| p.parse().ok()).unwrap_or(0));
     }
+    portable::prepare_webview();
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
     let builder = builder.register_uri_scheme_protocol("sfsymbol", |_ctx, req| {
@@ -2505,7 +2575,10 @@ pub fn run() {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 let _ = app.deep_link().register_all();
             }
-            let dir = app.path().app_data_dir()?;
+            let dir = match portable::data_dir() {
+                Some(d) => d,
+                None => app.path().app_data_dir()?,
+            };
             diag::init(&dir);
             kbhook::init(app.handle().clone());
             let _ = LIBRARY_FILE.set(dir.join("library.json"));
@@ -2650,13 +2723,52 @@ pub fn run() {
         .run(|_app, _e| {
             // macOS: Klick aufs Dock-Symbol bei ausgeblendetem Hauptfenster (rotes Schliessen) holt es zurück.
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = _e {
-                if let Some(w) = _app.get_webview_window("main") {
+            if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = _e
+                && let Some(w) = _app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
                 }
-            }
         });
+}
+
+#[cfg(test)]
+mod import_tests {
+    use super::*;
+
+    #[test]
+    fn fremde_zuweisungen_und_reservierte_kennungen() {
+        let fresh: std::collections::HashSet<String> = ["neu".to_string()].into();
+        let mut c = Connection { id: "v1".into(), credential_id: Some("neu".into()), rdp_credential_id: Some("vorhanden".into()), gateway_credential_id: Some("vorhanden".into()), ..Default::default() };
+        let none = std::collections::HashSet::new();
+        c.agent_forward = true;
+        c.jump_host = "vorhandene-verbindung".into();
+        assert_eq!(import_unlink(&mut c, &fresh, &none).unwrap(), 4);
+        assert!(!c.agent_forward && c.jump_host.is_empty());
+        assert_eq!((c.credential_id.as_deref(), c.rdp_credential_id, c.gateway_credential_id), (Some("neu"), None, None));
+        let mut bad = Connection { id: "cred-abc".into(), ..Default::default() };
+        assert!(import_unlink(&mut bad, &fresh, &none).is_err());
+        let mut j = Connection { id: "v2".into(), jump_host: "v1".into(), ..Default::default() };
+        assert_eq!(import_unlink(&mut j, &fresh, &["v1".to_string()].into()).unwrap(), 0, "Sprung über mitgelieferte Verbindung bleibt");
+    }
+}
+
+#[cfg(test)]
+mod open_tests {
+    #[test]
+    fn ausfuehrbares_wird_nicht_geoeffnet() {
+        #[cfg(windows)]
+        let bad = ["/c/deploy.BAT", "C:\\x\\app.js", "/t/notes.txt.lnk", "/t/x.hta.", "/t/a.exe "];
+        #[cfg(target_os = "macos")]
+        let bad = ["/t/run.command", "/t/x.TERMINAL", "/t/Ort.fileloc", "/t/x.app/", "/t/a.pkg "];
+        #[cfg(not(any(windows, target_os = "macos")))]
+        let bad = ["/t/x.desktop", "/t/X.AppImage", "/t/a.jar"];
+        for p in bad {
+            assert!(super::runs_on_open(p), "{p}");
+        }
+        for p in ["/t/notes.txt", "/t/index.html", "/t/deploy.sh", "/t/config.yaml", "/t/Makefile", "/t/bild.png", "/t/bericht.docx"] {
+            assert!(!super::runs_on_open(p), "{p}");
+        }
+    }
 }
 
 #[cfg(test)]

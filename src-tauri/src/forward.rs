@@ -185,6 +185,33 @@ pub async fn socks5_reply<S: AsyncWrite + Unpin>(s: &mut S, ok: bool) -> std::io
     s.write_all(&[5, if ok { 0 } else { 5 }, 0, 1, 0, 0, 0, 0, 0, 0]).await
 }
 
+/// Tunnel für einen Desktop-Dienst: lokaler Port auf 127.0.0.1 (vom System gewählt) → `port` auf dem Server selbst.
+/// Der Tunnel lebt, bis der zurückgegebene Task abgebrochen wird.
+pub async fn tunnel(h: Arc<Handle<Client>>, port: u16) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
+    tunnel_to(h, "127.0.0.1", port).await
+}
+
+/// Wie `tunnel`, aber zu `host` auf dem Server (z. B. «::1» für Dienste, die nur auf IPv6 lauschen).
+pub async fn tunnel_to(h: Arc<Handle<Client>>, host: &'static str, port: u16) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
+    let l = TcpListener::bind(("127.0.0.1", 0)).await.map_err(|e| format!("SSH-Tunnel: {e}"))?;
+    let local = l.local_addr().map_err(|e| e.to_string())?.port();
+    let task = tokio::spawn(async move {
+        while let Ok((mut tcp, peer)) = l.accept().await {
+            let h = h.clone();
+            tokio::spawn(async move {
+                let _ = tcp.set_nodelay(true);
+                match h.channel_open_direct_tcpip(host, port.into(), peer.ip().to_string(), peer.port().into()).await {
+                    Ok(ch) => {
+                        let _ = tokio::io::copy_bidirectional(&mut tcp, &mut ch.into_stream()).await;
+                    }
+                    Err(e) => tracing::info!("SSH-Tunnel zu {host}:{port} abgelehnt: {e}"),
+                }
+            });
+        }
+    });
+    Ok((local, task))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,31 +261,4 @@ mod tests {
         b.write_all(&[4, 1]).await.unwrap();
         assert!(socks5_request(&mut a).await.is_err());
     }
-}
-
-/// Tunnel für einen Desktop-Dienst: lokaler Port auf 127.0.0.1 (vom System gewählt) → `port` auf dem Server selbst.
-/// Der Tunnel lebt, bis der zurückgegebene Task abgebrochen wird.
-pub async fn tunnel(h: Arc<Handle<Client>>, port: u16) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
-    tunnel_to(h, "127.0.0.1", port).await
-}
-
-/// Wie `tunnel`, aber zu `host` auf dem Server (z. B. «::1» für Dienste, die nur auf IPv6 lauschen).
-pub async fn tunnel_to(h: Arc<Handle<Client>>, host: &'static str, port: u16) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
-    let l = TcpListener::bind(("127.0.0.1", 0)).await.map_err(|e| format!("SSH-Tunnel: {e}"))?;
-    let local = l.local_addr().map_err(|e| e.to_string())?.port();
-    let task = tokio::spawn(async move {
-        while let Ok((mut tcp, peer)) = l.accept().await {
-            let h = h.clone();
-            tokio::spawn(async move {
-                let _ = tcp.set_nodelay(true);
-                match h.channel_open_direct_tcpip(host, port.into(), peer.ip().to_string(), peer.port().into()).await {
-                    Ok(ch) => {
-                        let _ = tokio::io::copy_bidirectional(&mut tcp, &mut ch.into_stream()).await;
-                    }
-                    Err(e) => tracing::info!("SSH-Tunnel zu {host}:{port} abgelehnt: {e}"),
-                }
-            });
-        }
-    });
-    Ok((local, task))
 }

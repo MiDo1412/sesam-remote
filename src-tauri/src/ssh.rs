@@ -136,9 +136,13 @@ impl client::Handler for Client {
         match keys::known_hosts::check_known_hosts_path(&self.host, self.port, key, &file) {
             Ok(true) => Ok(true),
             Ok(false) => {
+                // Ist für diesen Host schon ein Schlüssel eines anderen Typs bekannt, sagt die Rückfrage das deutlich
+                // (dritter Teil «anders»): sonst sähe ein Angreifer mit anderem Schlüsseltyp aus wie ein neuer Host
+                // (security-review-2026-11-11, S-09). Kein harter Abbruch: ältere known_hosts kennen oft nur RSA/ECDSA.
+                let other = keys::known_hosts::known_host_keys_path(&self.host, self.port, &file).is_ok_and(|v| !v.is_empty());
                 let fp = key.fingerprint(keys::HashAlg::Sha256).to_string();
                 if self.trusted.as_deref() != Some(fp.as_str()) {
-                    *self.rejected.lock().unwrap() = Some(format!("{HOSTKEY_UNKNOWN}{}|{fp}", key.algorithm()));
+                    *self.rejected.lock().unwrap() = Some(format!("{HOSTKEY_UNKNOWN}{}|{fp}{}", key.algorithm(), if other { "|anders" } else { "" }));
                     return Ok(false);
                 }
                 if let Err(e) = keys::known_hosts::learn_known_hosts_path(&self.host, self.port, key, &file) {
@@ -507,10 +511,6 @@ pub async fn tmux_kill(h: &Handle<Client>, name: &str) -> Result<(), String> {
     }
     let o = crate::scp::Remote::run(h, format!("tmux kill-session -t {name}")).await?;
     if o.code == 0 { Ok(()) } else { Err(String::from_utf8_lossy(&o.err).trim().to_string()) }
-}
-
-pub async fn open(t: Target, cols: u32, rows: u32, on_event: crate::relay::Relay<ShellEvent>) -> Result<Shell, String> {
-    open_with(t, cols, rows, on_event, None).await
 }
 
 /// Wie `open`, mit `hold` = Name einer tmux-Sitzung, in der die Shell läuft (übersteht Unterbrüche).

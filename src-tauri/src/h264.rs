@@ -41,7 +41,7 @@ pub fn nv12_to_yuv420(buf: &[u8], width: u16, height: u16, stride: usize, rows: 
     }
     let (mut u, mut v) = (Vec::with_capacity(cw * ch), Vec::with_capacity(cw * ch));
     for row in buf[uv_start..].chunks(stride).take(ch) {
-        for p in row[..cw * 2].chunks_exact(2) {
+        for p in row[..cw * 2].as_chunks::<2>().0 {
             u.push(p[0]);
             v.push(p[1]);
         }
@@ -508,7 +508,7 @@ mod tests {
         struct Bits(Vec<u8>, u32);
         impl Bits {
             fn bit(&mut self, b: u32) {
-                if self.1 % 8 == 0 {
+                if self.1.is_multiple_of(8) {
                     self.0.push(0);
                 }
                 if b != 0 {
@@ -526,7 +526,7 @@ mod tests {
                 self.u(len, x);
             }
             fn align_zero(&mut self) {
-                while self.1 % 8 != 0 {
+                while !self.1.is_multiple_of(8) {
                     self.bit(0);
                 }
             }

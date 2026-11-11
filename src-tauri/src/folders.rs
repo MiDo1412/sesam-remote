@@ -19,6 +19,7 @@ fn canon(p: &Path) -> PathBuf {
     p.canonicalize().unwrap_or_else(|_| p.to_path_buf())
 }
 
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))] // Ordner aus «Dateien» gibt es nur auf dem iPad
 pub fn add_root(p: &Path) {
     let c = canon(p);
     let mut r = ROOTS.lock().unwrap();
@@ -33,6 +34,7 @@ pub fn remove_root(p: &Path) {
 }
 
 /// Liegt `p` in einem freigegebenen Ordner? `Some(true)`, wenn `p` selbst ein freigegebener Ordner ist.
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub fn inside(p: &Path) -> Option<bool> {
     let c = canon(p);
     ROOTS.lock().unwrap().iter().find(|r| c.starts_with(r)).map(|r| *r == c)

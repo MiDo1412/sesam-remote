@@ -52,6 +52,19 @@
       "../docs/lizenzen/Inter-OFL.txt": "lizenzen/Inter-OFL.txt",
       "../docs/lizenzen/JetBrainsMono-OFL.txt": "lizenzen/JetBrainsMono-OFL.txt",
       "../docs/lizenzen/FluentSystemIcons-MIT.txt": "lizenzen/FluentSystemIcons-MIT.txt"
+    },
+    "publisher": "Sesam Remote",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "wix": {
+        "upgradeCode": "26F306D2-BA30-5F9C-B735-610DBA9E864E",
+        "language": [
+          "de-DE"
+        ]
+      }
     }
   },
   "plugins": {

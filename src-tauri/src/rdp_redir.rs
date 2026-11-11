@@ -83,7 +83,7 @@ impl<'a> Cur<'a> {
 
 /// UTF-16LE ohne abschliessende Nullen.
 fn utf16(b: &[u8]) -> Option<String> {
-    let units: Vec<u16> = b.chunks_exact(2).map(|p| u16::from_le_bytes([p[0], p[1]])).collect();
+    let units: Vec<u16> = b.as_chunks::<2>().0.iter().map(|p| u16::from_le_bytes([p[0], p[1]])).collect();
     let end = units.iter().rposition(|u| *u != 0).map_or(0, |i| i + 1);
     String::from_utf16(&units[..end]).ok()
 }

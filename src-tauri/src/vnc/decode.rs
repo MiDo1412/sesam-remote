@@ -86,7 +86,7 @@ impl Framebuffer {
         if pixels.len() != r.w as usize * r.h as usize * 4 {
             return Err("Raw-Daten haben die falsche Länge".into());
         }
-        for (i, px) in pixels.chunks_exact(4).enumerate() {
+        for (i, px) in pixels.as_chunks::<4>().0.iter().enumerate() {
             self.set(r.x as usize + i % r.w as usize, r.y as usize + i / r.w as usize, [px[0], px[1], px[2]]);
         }
         Ok(())
@@ -109,7 +109,7 @@ impl Framebuffer {
 pub fn cursor(px: &[u8], mask: &[u8], w: u16, h: u16) -> Vec<u8> {
     let (w, stride) = (w as usize, (w as usize).div_ceil(8));
     let mut out = Vec::with_capacity(w * h as usize * 4);
-    for (i, p) in px.chunks_exact(4).enumerate() {
+    for (i, p) in px.as_chunks::<4>().0.iter().enumerate() {
         let (row, col) = (i / w, i % w);
         let visible = mask[row * stride + col / 8] >> (7 - col % 8) & 1 == 1;
         out.extend_from_slice(&[p[0], p[1], p[2], if visible { 255 } else { 0 }]);
@@ -201,7 +201,7 @@ impl Tight {
         }
         let put = |fb: &mut Framebuffer, i: usize, px: [u8; 3]| fb.set(r.x as usize + i % w, r.y as usize + i / w, px);
         match filter {
-            0 => data.chunks_exact(3).enumerate().for_each(|(i, p)| put(fb, i, [p[0], p[1], p[2]])),
+            0 => data.as_chunks::<3>().0.iter().enumerate().for_each(|(i, p)| put(fb, i, [p[0], p[1], p[2]])),
             1 => {
                 let color = |k: usize| palette.get(k).copied().ok_or("Tight: Farbe ausserhalb der Palette");
                 if palette.len() <= 2 {

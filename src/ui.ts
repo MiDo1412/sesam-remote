@@ -85,10 +85,12 @@ export async function askPassword(title: string, text: string, ok: string): Prom
 
 /** Fingerabdruck eines unbekannten SSH-Servers bestätigen lassen. `msg` beginnt mit HOSTKEY_UNKNOWN. */
 export async function askHostKey(address: string, msg: string): Promise<string | null> {
-  const [alg, fp] = msg.slice(HOSTKEY_UNKNOWN.length).split("|");
+  const [alg, fp, other] = msg.slice(HOSTKEY_UNKNOWN.length).split("|");
   const ok = await ask(
-    "Unbekannter Server",
-    `${address} ist noch nicht bekannt. Vergleiche den Fingerabdruck mit dem Server (ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub), bevor du ihm vertraust.\n\n${alg}\n${fp}`,
+    other ? "Anderer Server-Schlüssel" : "Unbekannter Server",
+    other
+      ? `Achtung: Für ${address} ist schon ein Schlüssel eines anderen Typs bekannt. Jetzt zeigt der Server diesen ${alg}-Schlüssel. Das ist normal, wenn der Server mehrere Schlüssel hat, kann aber auch ein Angriff im Netz sein. Nur vertrauen, wenn der Fingerabdruck mit dem Server übereinstimmt (ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub).\n\n${alg}\n${fp}`
+      : `${address} ist noch nicht bekannt. Vergleiche den Fingerabdruck mit dem Server (ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub), bevor du ihm vertraust.\n\n${alg}\n${fp}`,
     "Vertrauen und verbinden",
   );
   return ok ? fp : null;

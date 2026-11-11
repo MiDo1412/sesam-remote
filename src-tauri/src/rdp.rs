@@ -163,8 +163,8 @@ pub fn scancode(code: &str) -> Option<u16> {
         let n: u16 = d.parse().ok().filter(|n| *n <= 9)?;
         return Some(if n == 0 { 0x0B } else { 0x01 + n });
     }
-    if let Some(f) = code.strip_prefix('F') {
-        if let Ok(n) = f.parse::<u16>() {
+    if let Some(f) = code.strip_prefix('F')
+        && let Ok(n) = f.parse::<u16>() {
             return match n {
                 1..=10 => Some(0x3A + n),
                 11 => Some(0x57),
@@ -172,7 +172,6 @@ pub fn scancode(code: &str) -> Option<u16> {
                 _ => None,
             };
         }
-    }
     Some(match code {
         "Escape" => 0x01,
         "Minus" => 0x0C,
@@ -268,10 +267,10 @@ struct Hop {
 }
 
 fn utf16_text(b: &[u8]) -> Option<String> {
-    if b.len() % 2 != 0 {
+    if !b.len().is_multiple_of(2) {
         return None;
     }
-    let units: Vec<u16> = b.chunks_exact(2).map(|p| u16::from_le_bytes([p[0], p[1]])).take_while(|u| *u != 0).collect();
+    let units: Vec<u16> = b.as_chunks::<2>().0.iter().map(|p| u16::from_le_bytes([p[0], p[1]])).take_while(|u| *u != 0).collect();
     String::from_utf16(&units).ok().filter(|s| !s.is_empty() && !s.chars().any(char::is_control))
 }
 
@@ -446,10 +445,18 @@ async fn transport(t: &Target, host: &str) -> Result<(Stream, std::net::SocketAd
             smart_card: None,
             server: host.to_string(),
         };
-        // Gateway-Zertifikat strikt gegen die Stammzertifikate des Systems (wie mstsc), kein Pinning.
+        // Gateway-Zertifikat strikt gegen die Stammzertifikate des Systems (wie mstsc), kein Pinning. Ausdrücklich
+        // `Strict`: die Voreinstellung von ironrdp nimmt jedes Zertifikat, dann gingen Gateway-Benutzer und -Passwort
+        // an jeden im Netz (security-review-2026-11-11, S-01).
         let (gw, addr) = tokio::time::timeout(
             std::time::Duration::from_secs(30),
-            ironrdp_mstsgu::GwClient::connect_with_port(&target, "Sesam Remote", t.port),
+            ironrdp_mstsgu::GwClient::connect_with_port_and_certificate_validation(
+                &target,
+                "Sesam Remote",
+                t.port,
+                ironrdp_tls::CertificateValidation::Strict,
+                None,
+            ),
         )
         .await
         .map_err(|_| "RD-Gateway: Zeitüberschreitung".to_string())?
@@ -736,16 +743,15 @@ async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) 
         let written = match connector.next_pdu_hint() {
             Some(hint) => {
                 let pdu = framed.read_by_hint(hint).await.map_err(|e| format!("Verbindungsaufbau: Verbindung beendet: {e}"))?;
-                if let ClientConnectorState::LicensingExchange { user_channel_id, .. } | ClientConnectorState::MultitransportBootstrapping { user_channel_id, .. } = &connector.state {
-                    if let Some(reply) = connect_time_autodetect(&pdu, *user_channel_id, &mut bw) {
+                if let ClientConnectorState::LicensingExchange { user_channel_id, .. } | ClientConnectorState::MultitransportBootstrapping { user_channel_id, .. } = &connector.state
+                    && let Some(reply) = connect_time_autodetect(&pdu, *user_channel_id, &mut bw) {
                         if let Some(r) = reply {
                             framed.write_all(&r).await.map_err(|e| format!("Verbindungsaufbau: {e}"))?;
                         }
                         continue;
                     }
-                }
-                if let ClientConnectorState::LicensingExchange { io_channel_id, user_channel_id, .. } = &connector.state {
-                    if license_flag(&pdu) == Some(false) {
+                if let ClientConnectorState::LicensingExchange { io_channel_id, user_channel_id, .. } = &connector.state
+                    && license_flag(&pdu) == Some(false) {
                         let head: String = pdu.iter().take(32).map(|b| format!("{b:02x}")).collect();
                         tracing::info!(head = %head, "Server überspringt die Lizenzierung");
                         connector.state = ClientConnectorState::MultitransportBootstrapping {
@@ -755,7 +761,6 @@ async fn finalize_tolerant(mut connector: ClientConnector, framed: &mut Framed) 
                             requests_seen: 0,
                         };
                     }
-                }
                 let state = connector.state.name();
                 connector.step(&pdu, framed.last_read_at(), &mut buf).map_err(|e| {
                     let head: String = pdu.iter().take(48).map(|b| format!("{b:02x}")).collect();
@@ -1044,7 +1049,7 @@ async fn reconnect(t: &mut Target, hop: &mut Hop, seen: &SeenCert, redirects: &m
 
 /// Ganzes Bild (fast) eine Farbe? Prüft jeden 997. Bildpunkt (RGBA).
 fn is_uniform(px: &[u8]) -> bool {
-    let mut it = px.chunks_exact(4).step_by(997).map(|p| u16::from(p[0]) + u16::from(p[1]) + u16::from(p[2]));
+    let mut it = px.as_chunks::<4>().0.iter().step_by(997).map(|p| u16::from(p[0]) + u16::from(p[1]) + u16::from(p[2]));
     let Some(first) = it.next() else { return false };
     let (lo, hi) = it.fold((first, first), |(lo, hi), v| (lo.min(v), hi.max(v)));
     hi - lo < 12
@@ -1065,7 +1070,7 @@ fn crop(img: &DecodedImage, r: Rect) -> Vec<u8> {
         out.extend_from_slice(&data[s..s + r.w as usize * 4]);
     }
     // Alpha ist bei RDP bedeutungslos; immer deckend zeichnen.
-    out.chunks_exact_mut(4).for_each(|p| p[3] = 255);
+    out.as_chunks_mut::<4>().0.iter_mut().for_each(|p| p[3] = 255);
     out
 }
 
@@ -1444,7 +1449,7 @@ mod tests {
     fn license_flag_detects_license_and_other_pdus() {
         // TPKT + X.224 Data + MCS Send Data Indication (Kanal 1003) + Nutzdaten
         let frame = |user: &[u8]| {
-            let mut mcs = vec![0x68, 0x00, 0x01, 0x03, 0xEB, 0x70, 0x80 | 0, user.len() as u8];
+            let mut mcs = vec![0x68, 0x00, 0x01, 0x03, 0xEB, 0x70, 0x80, user.len() as u8];
             mcs.extend_from_slice(user);
             let mut f = vec![0x03, 0x00, 0x00, 0x00, 0x02, 0xF0, 0x80];
             f.extend(mcs);

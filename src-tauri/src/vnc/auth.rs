@@ -13,7 +13,7 @@ pub fn vnc_response(password: &[u8], challenge: &[u8; 16]) -> [u8; 16] {
     }
     let cipher = Des::new_from_slice(&key).expect("DES-Schlüssel hat 8 Byte");
     let mut out = *challenge;
-    for chunk in out.chunks_exact_mut(8) {
+    for chunk in out.as_chunks_mut::<8>().0 {
         let mut b = des::cipher::Block::<Des>::default();
         b.copy_from_slice(chunk);
         cipher.encrypt_block(&mut b);
@@ -40,11 +40,19 @@ fn ard_with(
     mut creds: [u8; 128],
 ) -> Result<Vec<u8>, String> {
     let len = prime.len();
-    if len == 0 || server_pub.len() != len {
+    if !(64..=1024).contains(&len) || server_pub.len() != len {
         return Err("Ungültige Apple-Auth-Parameter".into());
     }
     let p = BigUint::from_bytes_be(prime);
     let g = BigUint::from_bytes_be(generator);
+    // Keine schwachen DH-Werte vom Server (1, p-1, ausserhalb): sonst wäre das gemeinsame Geheimnis vorhersagbar
+    // (security-review-2026-11-11, S-03).
+    let one = BigUint::from(1u8);
+    let y = BigUint::from_bytes_be(server_pub);
+    let pm1 = &p - &one;
+    if g <= one || g >= pm1 || y <= one || y >= pm1 {
+        return Err("Ungültige Apple-Auth-Parameter".into());
+    }
     let x = BigUint::from_bytes_be(private);
     let client_pub = g.modpow(&x, &p);
     let shared = BigUint::from_bytes_be(server_pub).modpow(&x, &p);
@@ -60,7 +68,7 @@ fn ard_with(
         creds[field + b.len()] = 0;
     }
     let aes = Aes128::new_from_slice(&key).expect("AES-Schlüssel hat 16 Byte");
-    for chunk in creds.chunks_exact_mut(16) {
+    for chunk in creds.as_chunks_mut::<16>().0 {
         let mut b = aes::cipher::Block::<Aes128>::default();
         b.copy_from_slice(chunk);
         aes.encrypt_block(&mut b);
@@ -98,22 +106,23 @@ mod tests {
 
     #[test]
     fn ard_server_can_decrypt() {
-        // 2^127 - 1 ist prim; reicht für den Test.
-        let prime = (BigUint::from(1u8) << 127u32) - 1u8;
-        let p = left_pad(&prime.to_bytes_be(), 16);
+        // 2^521 - 1 ist prim (66 Byte); reicht für den Test.
+        let prime = (BigUint::from(1u8) << 521u32) - 1u8;
+        let n = 66;
+        let p = left_pad(&prime.to_bytes_be(), n);
         let g = [0u8, 2];
         let server_priv = BigUint::from(123_456_789u64);
-        let server_pub = left_pad(&BigUint::from(2u8).modpow(&server_priv, &prime).to_bytes_be(), 16);
+        let server_pub = left_pad(&BigUint::from(2u8).modpow(&server_priv, &prime).to_bytes_be(), n);
 
         let out = ard_with(&g, &p, &server_pub, "mike", "geheim", &[7u8; 16], [0xAA; 128]).unwrap();
-        assert_eq!(out.len(), 128 + 16);
+        assert_eq!(out.len(), 128 + n);
 
         let client_pub = BigUint::from_bytes_be(&out[128..]);
         let shared = client_pub.modpow(&server_priv, &prime);
-        let key = md5::compute(left_pad(&shared.to_bytes_be(), 16)).0;
+        let key = md5::compute(left_pad(&shared.to_bytes_be(), n)).0;
         let aes = Aes128::new_from_slice(&key).unwrap();
         let mut creds = out[..128].to_vec();
-        for chunk in creds.chunks_exact_mut(16) {
+        for chunk in creds.as_chunks_mut::<16>().0 {
             let mut b = aes::cipher::Block::<Aes128>::default();
             b.copy_from_slice(chunk);
             aes.decrypt_block(&mut b);
@@ -121,5 +130,14 @@ mod tests {
         }
         assert_eq!(&creds[..5], b"mike\0");
         assert_eq!(&creds[64..71], b"geheim\0");
+
+        // Schwache Werte vom Server: zu kurze Primzahl, g = 1, y = 1 bzw. p-1.
+        let short = left_pad(&((BigUint::from(1u8) << 127u32) - 1u8).to_bytes_be(), 16);
+        assert!(ard_with(&g, &short, &short, "m", "p", &[7u8; 16], [0; 128]).is_err());
+        assert!(ard_with(&[0, 1], &p, &server_pub, "m", "p", &[7u8; 16], [0; 128]).is_err());
+        let one = left_pad(&[1], n);
+        let pm1 = left_pad(&(&prime - 1u8).to_bytes_be(), n);
+        assert!(ard_with(&g, &p, &one, "m", "p", &[7u8; 16], [0; 128]).is_err());
+        assert!(ard_with(&g, &p, &pm1, "m", "p", &[7u8; 16], [0; 128]).is_err());
     }
 }

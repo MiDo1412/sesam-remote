@@ -46,9 +46,11 @@ export function shellTab(ctx: TabCtx): TabHandle {
     macOptionClickForcesSelection: true,
   });
   // OSC 52: Programme (tmux mit set-clipboard, vim, ssh-Kopierhilfen) legen Text in die Zwischenablage dieses Rechners.
+  // Nur mit «Gemeinsame Zwischenablage» der Verbindung und nur, solange Sesam vorne ist: sonst könnte der Server
+  // unbemerkt einen Befehl in die Zwischenablage legen, der später lokal eingefügt wird (security-review-2026-11-11, S-10).
   term.parser.registerOscHandler(52, (data) => {
     const text = osc52Text(data);
-    if (text != null) api.clipWrite(text).catch(() => {});
+    if (text != null && ctx.conn.sharedClipboard !== false && document.hasFocus() && ctx.isActive()) api.clipWrite(text).catch(() => {});
     return true;
   });
   const fit = new FitAddon();

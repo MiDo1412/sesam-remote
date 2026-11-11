@@ -139,11 +139,10 @@ impl Sftp {
                 continue;
             }
             let mut m = e.metadata();
-            if e.file_type().is_symlink() {
-                if let Ok(target) = self.s.metadata(rjoin(&path, &name)).await {
+            if e.file_type().is_symlink()
+                && let Ok(target) = self.s.metadata(rjoin(&path, &name)).await {
                     m = target;
                 }
-            }
             let modified = m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs());
             let dir = m.file_type().is_dir();
             entries.push(Entry { name, dir, size: if dir { 0 } else { m.len() }, modified, perm: m.permissions.map(|p| p & 0o7777) });
@@ -205,13 +204,11 @@ impl Sftp {
         let slot = rjoin(&root, &chrono::Local::now().format("%Y%m%d-%H%M%S-%3f").to_string());
         // Mehrere Ersetzungen gleichzeitig können denselben Zeitstempel bekommen: «gibt es schon» ist dann in Ordnung.
         for d in [&root, &slot] {
-            if !self.s.try_exists(d).await.map_err(err)? {
-                if let Err(e) = self.s.create_dir(d).await {
-                    if !self.s.try_exists(d).await.unwrap_or(false) {
+            if !self.s.try_exists(d).await.map_err(err)?
+                && let Err(e) = self.s.create_dir(d).await
+                    && !self.s.try_exists(d).await.unwrap_or(false) {
                         return Err(format!("Papierkorb {d}: {e}"));
                     }
-                }
-            }
         }
         Ok(slot)
     }
@@ -422,7 +419,10 @@ pub fn move_script(from: &str, dest_dir: &str, replace: bool) -> Result<String, 
     } else {
         String::new()
     };
-    Ok(format!("{exists}if [ -e {t} ]; then echo \"{EXISTS}«{name}» gibt es dort schon\" >&2; exit 3; fi; cp -R -- {f} {d}/ && rm -rf -- {f} && rmdir -- {tq}"))
+    // Meldung gequotet: der Name kommt vom Server und darf nie als Shell-Code laufen (läuft als root;
+    // security-review-2026-11-11, S-04).
+    let msg = q(&format!("{EXISTS}«{name}» gibt es dort schon"))?;
+    Ok(format!("{exists}if [ -e {t} ]; then printf '%s\\n' {msg} >&2; exit 3; fi; cp -R -- {f} {d}/ && rm -rf -- {f} && rmdir -- {tq}"))
 }
 
 /// Fehlertext-Anfang: Ziel belegt, die Oberfläche fragt «Ersetzen?».
@@ -450,7 +450,8 @@ pub fn sudo_op_script(op: &str, path: &str, arg: &str) -> Result<String, String>
         "rename" => {
             valid_name(arg)?;
             let t = q(&rjoin(&rparent(path).ok_or("Ungültiger Pfad")?, arg))?;
-            Ok(format!("if [ -e {t} ]; then echo \"«{arg}» gibt es dort schon\" >&2; exit 3; fi; mv -- {p} {t}"))
+            let msg = q(&format!("«{arg}» gibt es dort schon"))?;
+            Ok(format!("if [ -e {t} ]; then printf '%s\\n' {msg} >&2; exit 3; fi; mv -- {p} {t}"))
         }
         "mkdir" => {
             valid_name(arg)?;
@@ -459,7 +460,8 @@ pub fn sudo_op_script(op: &str, path: &str, arg: &str) -> Result<String, String>
         "touch" => {
             valid_name(arg)?;
             let t = q(&rjoin(path, arg))?;
-            Ok(format!("if [ -e {t} ]; then echo \"«{arg}» gibt es dort schon\" >&2; exit 3; fi; : > {t}"))
+            let msg = q(&format!("«{arg}» gibt es dort schon"))?;
+            Ok(format!("if [ -e {t} ]; then printf '%s\\n' {msg} >&2; exit 3; fi; : > {t}"))
         }
         // In den Papierkorb (Zeitstempel-Ordner von `trash_slot`) verschieben, statt zu löschen.
         "trash" => {
@@ -1374,5 +1376,34 @@ pub(crate) mod tests {
         assert!(super::sudo_op_script("restore", "/etc/passwd", "/tmp/x").is_err() && super::sudo_op_script("backup", "/etc/x", "/tmp").is_err());
         assert_eq!(super::sudo_error("sudo: a password is required", 1), super::SUDO_PASSWORD);
         assert!(super::sudo_error("Sorry, try again.\nsudo: 1 incorrect password attempt", 1).contains("stimmt nicht"));
+    }
+
+    /// Ein Dateiname vom Server darf in den sudo-Skripten nie als Shell-Code laufen (security-review-2026-11-11,
+    /// S-04): Skript mit einem bösartigen Namen lokal ausführen, wenn das Ziel schon existiert (Zweig mit Meldung).
+    #[cfg(unix)]
+    #[test]
+    fn dateiname_laeuft_nie_als_shell_code() {
+        let base = std::env::temp_dir().join(format!("sesam-inj-{}", std::process::id()));
+        let marker = base.join("ausgefuehrt");
+        let evil = "x$(touch ausgefuehrt)`touch ausgefuehrt`".to_string();
+        let tmp = base.join("tmp.ab12");
+        let dest = base.join("ziel");
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(tmp.join(&evil), b"neu").unwrap();
+        std::fs::write(dest.join(&evil), b"alt").unwrap();
+        let from = format!("{}/{evil}", tmp.display());
+        let scripts = [
+            super::move_script(&from, &dest.display().to_string(), false).unwrap(),
+            super::sudo_op_script("rename", &format!("{}/a", dest.display()), &evil).unwrap(),
+            super::sudo_op_script("touch", &dest.display().to_string(), &evil).unwrap(),
+        ];
+        for script in scripts {
+            let o = std::process::Command::new("sh").arg("-c").arg(&script).current_dir(&base).output().unwrap();
+            assert_eq!(o.status.code(), Some(3), "{script}");
+            assert!(String::from_utf8_lossy(&o.stderr).contains(&evil), "Meldung mit Namen");
+            assert!(!marker.exists(), "Name wurde als Befehl ausgeführt: {script}");
+        }
+        std::fs::remove_dir_all(&base).unwrap();
     }
 }

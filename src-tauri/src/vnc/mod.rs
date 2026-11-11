@@ -156,6 +156,18 @@ async fn vencrypt(mut s: Stream, l: &Login<'_>, pw: Option<&str>, vpw: Option<&s
     Ok(s)
 }
 
+/// Grösste Bildfläche, die Sesam annimmt (je Seite 16384, zusammen höchstens 8192², rund 256 MB): sonst könnte ein Server mit
+/// 65535×65535 rund 17 GB Bildspeicher anfordern (security-review-2026-11-11, S-11).
+fn check_size(w: u16, h: u16) -> Result<(), String> {
+    if w > 16384 || h > 16384 || u32::from(w) * u32::from(h) > 8192 * 8192 {
+        return Err(format!("Server meldet eine unplausible Bildgrösse ({w}×{h})"));
+    }
+    Ok(())
+}
+
+/// Server bietet keine Verschlüsselung mehr an, obwohl er sie früher hatte.
+pub const DOWNGRADE: &str = "Der Server bietet keine verschlüsselte Anmeldung (VeNCrypt) mehr an, obwohl er sie bisher hatte. Das kann ein Angriff im Netz sein; Sesam schickt das Passwort deshalb nicht. Ist das gewollt, das gemerkte Zertifikat unter Einstellungen › Sicherheit entfernen.";
+
 /// Version aushandeln, anmelden, ClientInit/ServerInit, Pixelformat und Kodierungen setzen.
 pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stream, ServerInit), String> {
     let mut s: Stream = Box::new(stream);
@@ -169,12 +181,20 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
 
     let pw = l.password.filter(|p| !p.is_empty());
     let vpw = l.vnc_password.filter(|p| !p.is_empty()).or(pw);
+    // Lief die Verbindung schon verschlüsselt (Zertifikat gemerkt), nie auf ein unverschlüsseltes Verfahren
+    // zurückfallen: die Liste der Verfahren kommt ungeschützt, ein Angreifer im Netz könnte VeNCrypt streichen und
+    // das Kontopasswort über Apple-Auth oder VNC-Auth abgreifen (security-review-2026-11-11, S-03).
+    let pinned = l.cert.expected.is_some();
     let chosen = if minor == 3 {
         let t = s.read_u32().await.map_err(io)?;
         if t == 0 {
             return Err(read_reason(&mut s).await);
         }
-        u8::try_from(t).map_err(|_| "Unbekanntes Anmeldeverfahren")?
+        let t = u8::try_from(t).map_err(|_| "Unbekanntes Anmeldeverfahren")?;
+        if pinned && t != 1 {
+            return Err(DOWNGRADE.into());
+        }
+        t
     } else {
         let n = s.read_u8().await.map_err(io)?;
         if n == 0 {
@@ -190,6 +210,9 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
                 _ => true,
             }
         });
+        if pinned && pick.is_some_and(|t| t != 19 && t != 1) {
+            return Err(DOWNGRADE.into());
+        }
         let Some(t) = pick else {
             let offered = types.iter().map(|&t| security_name(t)).collect::<Vec<_>>().join(", ");
             return Err(if vpw.is_none() && (types.contains(&2) || types.contains(&30)) {
@@ -232,6 +255,7 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
     s.write_u8(1).await.map_err(io)?; // ClientInit: geteilte Sitzung
     let width = s.read_u16().await.map_err(io)?;
     let height = s.read_u16().await.map_err(io)?;
+    check_size(width, height)?;
     let mut pf = [0u8; 16];
     s.read_exact(&mut pf).await.map_err(io)?;
     let len = s.read_u32().await.map_err(io)?.min(4096);
@@ -470,7 +494,7 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                 let f = if filter { self.rd.read_u8().await.map_err(io)? } else { 0 };
                 let palette: Vec<[u8; 3]> = if f == 1 {
                     let n = self.rd.read_u8().await.map_err(io)? as u32 + 1;
-                    self.bytes(n * 3).await?.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()
+                    self.bytes(n * 3).await?.as_chunks::<3>().0.iter().map(|c| [c[0], c[1], c[2]]).collect()
                 } else {
                     Vec::new()
                 };
@@ -594,6 +618,7 @@ impl<R: AsyncRead + Unpin> Reader<R> {
                         e => return Err(format!("Server nutzt nicht angefragte Kodierung {e}")),
                     }
                     if let Some((w, h)) = new_size.take() {
+                        check_size(w, h)?;
                         self.fb.resize(w, h);
                         dirty.clear();
                         resized = true;
@@ -695,6 +720,25 @@ mod tests {
         });
         let e = handshake(c, &login("mike", Some("pw"))).await.err().unwrap();
         assert!(e.contains("X509"), "{e}");
+    }
+
+    /// War die Verbindung schon verschlüsselt (Zertifikat gemerkt), schickt Sesam kein Passwort über Apple- oder
+    /// VNC-Anmeldung, auch wenn ein Angreifer VeNCrypt aus der Liste streicht.
+    #[tokio::test]
+    async fn kein_rueckfall_nach_gemerktem_zertifikat() {
+        let (c, mut s) = duplex(4096);
+        tokio::spawn(async move {
+            s.write_all(b"RFB 003.008\n").await.unwrap();
+            let mut v = [0u8; 12];
+            s.read_exact(&mut v).await.unwrap();
+            s.write_all(&[2, 30, 2]).await.unwrap(); // nur Apple und VNC-Auth
+            let mut rest = Vec::new();
+            let _ = s.read_to_end(&mut rest).await;
+            assert!(rest.is_empty(), "Sesam hat ein Verfahren gewählt: {rest:?}");
+        });
+        let l = Login { host: "localhost", user: "mike", password: Some("pw"), vnc_password: None, cert: tls::Pinned::new(Some("SHA256:alt".into())) };
+        let e = handshake(c, &l).await.err().unwrap();
+        assert_eq!(e, DOWNGRADE);
     }
 
     #[test]

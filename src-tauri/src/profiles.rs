@@ -15,6 +15,7 @@ pub struct Profile {
     pub icon: String,
 }
 
+#[cfg_attr(not(windows), allow(dead_code))] // nur Windows hat feste Profile (PowerShell, cmd, WSL)
 fn p(id: &str, name: &str, command: impl Into<String>, args: &[&str], icon: &str) -> Profile {
     Profile { id: id.into(), name: name.into(), command: command.into(), args: args.iter().map(|s| s.to_string()).collect(), icon: icon.into() }
 }
@@ -38,10 +39,11 @@ pub fn which(name: &str) -> Option<PathBuf> {
     None
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 /// Ausgabe von `wsl.exe -l -q` (UTF-16LE, teils mit BOM/NUL) → Namen der Distributionen.
 pub fn parse_wsl_list(bytes: &[u8]) -> Vec<String> {
     let text = if bytes.len() >= 2 && bytes.iter().skip(1).step_by(2).take(8).all(|&b| b == 0) || bytes.starts_with(&[0xFF, 0xFE]) {
-        let u: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let u: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
         String::from_utf16_lossy(&u)
     } else {
         String::from_utf8_lossy(bytes).into_owned()
