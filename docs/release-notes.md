@@ -18,6 +18,8 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.1 — 2026-11-11
+
 Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App.
 
 ### Neu

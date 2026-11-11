@@ -1,6 +1,6 @@
 [package]
 name = "sesam-remote"
-version = "0.1.0"
+version = "26.11.1"
 description = "Sesam Remote – VNC, SSH und SFTP in einer App"
 authors = ["Sesam Remote Mitwirkende"]
 license = "MPL-2.0"
