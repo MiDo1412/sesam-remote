@@ -604,6 +604,8 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
     { value: "open:shell", label: "Shell öffnen", disabled: !c.sshPort },
     { value: "open:files", label: "Dateien öffnen", disabled: !filesProtocol(c) },
     { value: "edit", label: "Bearbeiten …", separator: true },
+    { value: "new", label: "Neue Verbindung …" },
+    { value: "same", label: "Neue Verbindung zum gleichen Gerät …" },
     { value: "aid", label: "Erste Hilfe …" },
     ...(c.sshPort && !desktopProtocol(c) ? [{ value: "unlock", label: "Desktop freischalten …" }] : []),
     // Verknüpfungen auf dem Schreibtisch gibt es nur auf Computern.
@@ -624,6 +626,9 @@ async function cardMenu(anchor: HTMLElement, c: Connection) {
   if (cmd === "merge") return void mergeInto(c, items.find((x) => x.id === arg)!);
   if (cmd === "open") open(c, arg as Connection["defaultView"]);
   if (cmd === "edit") edit(c);
+  if (cmd === "new") edit({ ...blank(), group: c.group }, true);
+  // Gleiches Gerät: Adresse, Gruppe und Benutzer übernehmen, Dienste wählt man neu.
+  if (cmd === "same") edit({ ...blank(), group: c.group, address: c.address, user: c.user, os: c.os, mac: c.mac }, true);
   if (cmd === "aid") firstAid(c, null);
   if (cmd === "unlock") unlock(c);
   if (cmd === "lnk")
@@ -1048,6 +1053,19 @@ form.onsubmit = async (ev) => {
 };
 
 $("new").onclick = () => edit(null);
+addEventListener("sesam:new-connection", (e) => edit({ ...blank(), group: (e as CustomEvent<{ group: string }>).detail.group }, true));
+// Freie Fläche der Bibliothek (nicht auf einer Karte oder Zeile): Neue Verbindung, Schnelle Verbindung.
+document.querySelector<HTMLElement>("main > section.list")!.addEventListener("contextmenu", async (e) => {
+  if ((e.target as Element).closest(".card, tr, button, input, a")) return;
+  e.preventDefault();
+  const at = Object.assign(document.createElement("span"), { style: `position:fixed;left:${e.clientX}px;top:${e.clientY}px;width:0;height:0` });
+  document.body.append(at);
+  const v = await openMenu(at, [
+    { value: "new", label: "Neue Verbindung …" },
+    { value: "quick", label: "Schnelle Verbindung …" },
+  ]).finally(() => at.remove());
+  if (v) command(v);
+});
 if (!detachedWindow && !settingsWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
 listen<string>("help", (e) => openHelp(e.payload));

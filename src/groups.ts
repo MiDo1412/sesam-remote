@@ -102,6 +102,7 @@ export async function pickGroupColor(anchor: HTMLElement, name: string) {
 /** Kontextmenü einer Gruppe. Ergebnis: geänderter Name (nach Umbenennen/Anlegen), "" = sonst geändert, null = nichts. */
 export async function groupMenu(anchor: HTMLElement, g: Group | null, count: number, index: number, total: number): Promise<string | null> {
   const v = await openMenu(anchor, [
+    { value: "conn", label: "Neue Verbindung …" },
     ...(g
       ? [
           { value: "rename", label: "Umbenennen …" },
@@ -110,9 +111,10 @@ export async function groupMenu(anchor: HTMLElement, g: Group | null, count: num
           { value: "down", label: "Nach unten", disabled: index >= total - 1 },
         ]
       : []),
-    { value: "new", label: "Neue Gruppe …", separator: !!g },
+    { value: "new", label: "Neue Gruppe …", separator: true },
     ...(g ? [{ value: "delete", label: "Gruppe löschen …", separator: true }] : []),
   ]);
+  if (v === "conn") return void dispatchEvent(new CustomEvent("sesam:new-connection", { detail: { group: g?.name ?? "" } })), null;
   if (v === "new") return newGroup();
   if (!g) return null;
   if (v === "rename") return renameGroup(g.name);

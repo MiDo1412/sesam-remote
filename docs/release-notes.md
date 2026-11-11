@@ -54,6 +54,7 @@ Die erste Version: Bildschirm, Shell und Dateien entfernter Rechner in einer App
 
 ### Verbessert
 
+- **Neue Verbindung per Kontextmenü:** Rechtsklick (iPad: lange drücken) auf freie Fläche, Gruppe oder Karte bietet «Neue Verbindung …»; auf einer Karte auch «Neue Verbindung zum gleichen Gerät …» mit Adresse, Gruppe und Benutzer vorausgefüllt.
 - **iPad:** Sesam läuft als iPad-App (iPadOS 16 oder neuer). Im Simulator getestet: Bibliothek, Einstellungen, SSH-Shell mit Zusatztasten über der Bildschirmtastatur, Erste Hilfe und VNC mit Touch (Pinch-Zoom, Touchpad/Direkt). Ausgeblendet ist, was es nur auf Computern gibt (lokales Terminal, Verknüpfungen, eigene Fenster, Mac-Tastenkürzel).
 - **Zusatztasten für Touch:** Die Leiste über der Bildschirmtastatur hat jetzt auch Pos1, Ende, Bild auf/ab, die Zeichen | ~ / - und ausklappbare F1–F12.
 - **Tastentest:** Befehlspalette › «Diagnose: Tastentest» drückt Win, Win+R und Alt+Tab und zeigt, ob sie drüben ankamen und lokal nichts aufging.
