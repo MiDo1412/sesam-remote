@@ -46,4 +46,3 @@ Mozilla Public License 2.0. Schriften: Inter und JetBrains Mono (SIL OFL). Symbo
 - [Startseite](https://sesam-remote.app/): Funktionen, Plattformen, Fragen
 - [Support](https://sesam-remote.app/support.html): Kontakt (support@sesam-remote.app), Einrichtung von Windows, Mac, Ubuntu, Linux und Raspberry Pi, häufige Probleme
 - [Datenschutz](https://sesam-remote.app/datenschutz.html): Die App sammelt keine Daten; lokale Speicherung, Berechtigungen, Löschen
-- [Impressum](https://sesam-remote.app/impressum.html)
