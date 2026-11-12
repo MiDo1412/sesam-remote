@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Verbessert
+
+- **Protokoll der letzten Läufe bleibt:** Beim Start legt Sesam `sesam.log` nicht mehr über das alte; die zwei vorigen Läufe bleiben als `sesam.1.log` und `sesam.2.log` (je höchstens 5 MB, bei mehr das Ende). So lässt sich z. B. nachlesen, was ein Update vor dem Neustart heruntergeladen und installiert hat.
+
 ## 26.11.3 — 2026-11-12
 
 ### Neu

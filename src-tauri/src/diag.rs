@@ -62,9 +62,30 @@ impl<'a> MakeWriter<'a> for Make {
     }
 }
 
-/// Log neu anlegen (jeder Start überschreibt) und tracing einschalten. Gibt den Pfad zurück.
+/// Höchstgrösse eines aufbewahrten Logs; von einem grösseren bleibt das Ende (dort steht, was zuletzt geschah).
+const KEEP_MAX: u64 = 5 * 1024 * 1024;
+
+/// Logs der letzten Läufe aufbewahren: sesam.log → sesam.1.log → sesam.2.log (das älteste fällt weg).
+/// So bleibt z. B. nachlesbar, was ein Update vor dem Neustart heruntergeladen und installiert hat.
+fn rotate(dir: &Path) {
+    let (cur, one, two) = (dir.join("sesam.log"), dir.join("sesam.1.log"), dir.join("sesam.2.log"));
+    let _ = std::fs::rename(&one, &two);
+    let Ok(len) = std::fs::metadata(&cur).map(|m| m.len()) else { return };
+    if len <= KEEP_MAX {
+        let _ = std::fs::rename(&cur, &one);
+    } else if let Ok(mut f) = File::open(&cur) {
+        use std::io::{Read, Seek, SeekFrom};
+        let mut tail = Vec::new();
+        if f.seek(SeekFrom::Start(len - KEEP_MAX)).is_ok() && f.read_to_end(&mut tail).is_ok() {
+            let _ = std::fs::write(&one, tail);
+        }
+    }
+}
+
+/// Log neu anlegen (die zwei vorigen bleiben als sesam.1.log/sesam.2.log) und tracing einschalten. Gibt den Pfad zurück.
 pub fn init(dir: &Path) -> Option<PathBuf> {
     std::fs::create_dir_all(dir).ok()?;
+    rotate(dir);
     let path = dir.join("sesam.log");
     *FILE.lock().unwrap() = Some(File::create(&path).ok()?);
     let filter = Targets::new()
@@ -110,6 +131,26 @@ mod tests {
         add_secret("geheim123");
         add_secret("ab"); // zu kurz, bleibt
         assert_eq!(redact("pw=geheim123 x=ab"), "pw=*** x=ab");
+    }
+
+    #[test]
+    fn keeps_previous_logs() {
+        let dir = std::env::temp_dir().join(format!("sesam-log-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let read = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap_or_default();
+        for run in ["lauf1", "lauf2", "lauf3"] {
+            rotate(&dir);
+            std::fs::write(dir.join("sesam.log"), run).unwrap();
+        }
+        rotate(&dir);
+        assert_eq!((read("sesam.log"), read("sesam.1.log"), read("sesam.2.log")), (String::new(), "lauf3".into(), "lauf2".into()));
+        // Zu grosses Log: nur das Ende bleibt.
+        std::fs::write(dir.join("sesam.log"), vec![b'a'; (KEEP_MAX + 10) as usize]).unwrap();
+        rotate(&dir);
+        assert_eq!(std::fs::metadata(dir.join("sesam.1.log")).unwrap().len(), KEEP_MAX);
+        assert_eq!(read("sesam.2.log"), "lauf3");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
