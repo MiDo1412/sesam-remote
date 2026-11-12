@@ -38,5 +38,9 @@ Standardfarben dieser Programme wieder, damit sich die Shell vertraut anfühlt.
 | Dracula | Dracula Theme, github.com/dracula/dracula-theme | MIT |
 | Tokyo Night / Day | Folke Lemaitre, github.com/folke/tokyonight.nvim | Apache-2.0 |
 | Catppuccin Latte / Mocha | Catppuccin, github.com/catppuccin/catppuccin | MIT |
+| Rosé Pine / Dawn | Rosé Pine, github.com/rose-pine/rose-pine-theme | MIT |
+| Kanagawa / Lotus | Tommaso Laurenzi, github.com/rebelot/kanagawa.nvim | MIT |
 | GitHub (hell/dunkel) | GitHub Primer, github.com/primer/github-vscode-theme | MIT |
 | Tango | Tango Desktop Project | gemeinfrei |
+
+Die Designs «Sesam Tiefsee», «Sesam Graphit», «Sesam Wald» und «Sesam Abend» (je hell und dunkel) sind eigene Farbwerte von Sesam.

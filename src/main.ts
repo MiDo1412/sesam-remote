@@ -12,7 +12,7 @@ import { clipHistory, initClipHistory } from "./cliphistory";
 import { initTitlebar, isMac, isMobile, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
-import { applyAppearance, openSettings, settingsWindow } from "./settings";
+import { applyAppearance, openSettings, openWebsite, settingsWindow } from "./settings";
 import { openFirstAid, serviceOf, type Service } from "./firstaid";
 import { unlockDesktop } from "./unlock";
 import { openPermissions } from "./permissions";
@@ -1124,6 +1124,7 @@ const palette = initPalette(() => [
   { label: "Sitzung minimieren", keywords: "läuft weiter", run: () => runTool("Minimieren") },
   { label: "Sitzung trennen", keywords: "schliessen beenden", run: () => runTool("Trennen") },
   { label: "Über Sesam Remote", keywords: "version info", run: () => void openSettings("about") },
+  { label: "Website von Sesam Remote", keywords: "sesam-remote.app internet download neuigkeiten", run: () => void openWebsite() },
   {
     label: "Diagnose: Tastentest",
     keywords: "windows taste win alt tab hook",
@@ -1148,6 +1149,7 @@ initFieldHelp(document.getElementById("quick-form")!);
 const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
   else if (cmd === "about") openSettings("about");
+  else if (cmd === "website") void openWebsite();
   else if (cmd === "permissions") void openPermissions();
   else if (cmd === "credentials") openSettings("creds");
   else if (cmd === "palette") palette.open();

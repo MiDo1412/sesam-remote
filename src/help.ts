@@ -2,6 +2,7 @@ import { api } from "./api";
 import { marked } from "marked";
 import { downloadScript } from "./setup";
 import { isMobile } from "./titlebar";
+import { openWebsite } from "./settings";
 import vnc from "../docs/hilfe/vnc.md?raw";
 import wayvnc from "../docs/hilfe/wayvnc.md?raw";
 import macos from "../docs/hilfe/macos.md?raw";
@@ -90,6 +91,7 @@ export function openHelp(id: string) {
     if (q && first) show(first);
   };
   nav.prepend(search);
+  document.getElementById("help-website")!.onclick = () => void openWebsite();
   show(id);
   if (!dlg.open) {
     dlg.showModal();

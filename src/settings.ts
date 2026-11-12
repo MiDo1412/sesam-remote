@@ -3,6 +3,7 @@ import { isMac, isMobile } from "./titlebar";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { saveTermSettings, termSettings } from "./termthemes";
 import { schemeGallery } from "./schemegallery";
 import { ask } from "./ui";
@@ -124,6 +125,7 @@ export async function openSettings(tab = "general") {
   fam.onchange = () => saveTermSettings({ ...termSettings(), fontFamily: fam.value.trim() });
 
   // Über
+  $("settings-website").onclick = () => void openWebsite();
   $("settings-version").textContent = __VERSION_LABEL__ || (await getVersion().catch(() => ""));
   void renderUpdate();
   show(tab);
@@ -158,6 +160,10 @@ async function renderCerts() {
     }),
   );
 }
+
+/** Website von Sesam Remote im Standardbrowser (Über Sesam, Menü «Hilfe», Hilfe-Fenster, Befehlspalette). */
+export const WEBSITE = "https://sesam-remote.app";
+export const openWebsite = () => openUrl(WEBSITE).catch(() => {});
 
 // ---------- Automatische Updates (src-tauri/src/update.rs) ----------
 interface UpdateStatus {

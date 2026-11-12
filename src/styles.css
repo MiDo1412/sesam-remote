@@ -455,7 +455,8 @@ dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; overfl
 #help-body pre .copy { --h-ctl: var(--h-sm); position: absolute; top: var(--s-2); right: var(--s-2); padding: 0 10px; font-size: 12px; }
 #help-body table { border-collapse: collapse; }
 #help-body th, #help-body td { border-bottom: 1px solid var(--line); padding: 6px var(--s-3) 6px 0; text-align: left; }
-.help-close, .settings-close { grid-column: 2; display: flex; justify-content: flex-end; padding: var(--s-3) var(--s-4); }
+.help-close, .settings-close { grid-column: 2; display: flex; justify-content: flex-end; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
+#help-website { margin-right: auto; }
 .help-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: var(--s-3) 14px; border-radius: var(--r-card); background: var(--select); }
 .help-actions .note { margin: 0; }
 

@@ -2577,6 +2577,8 @@ pub fn run() {
                     .build()?;
                 // IDs wie in src/help.ts.
                 let help = SubmenuBuilder::new(app, "Hilfe")
+                    .text("cmd:website", "Sesam Remote-Website")
+                    .separator()
                     .text("help:zugangsdaten", "Welche Zugangsdaten?")
                     .separator()
                     .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")

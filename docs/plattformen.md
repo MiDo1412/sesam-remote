@@ -28,6 +28,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Dateien SFTP/FTP | ✓ | ✓ | ✓ | ✓ |
 | Lokale Seite im Dateifenster | ✓ ganzer Rechner | ✓ ganzer Rechner | ✓ ganzer Rechner | ✓ Sesam-Ordner plus gewählte Ordner aus «Dateien» (iCloud Drive, Auf meinem iPad, USB, Freigaben) als Orte; «Dateien wählen …» für einzelne Dateien |
 | Lokales Terminal | ✓ Terminal | ✓ Windows-Terminal-Profile | ✓ | ✗ iPadOS startet keine fremden Programme |
+| Erkennung der Shells (zsh, bash, fish, Nushell, PowerShell, xonsh, Elvish) und Interpreter | ✓ PATH, `/etc/shells`, `/etc/paths(.d)`, Homebrew, `/usr/local/microsoft/powershell/7` (auch aus dem Finder gestartet) | ✓ PATH, Programme, WinGet-Links, Scoop, WSL, Git Bash, Visual Studio | ✓ PATH, `/etc/shells`, `/opt/microsoft/powershell/7`, Snap, Linuxbrew, Nix, `~/.local/bin` | – |
 | Online-Status, Aufwecken (Wake-on-LAN) | ✓ | ✓ | ✓ | ✓ |
 | Erste Hilfe | ✓ | ✓ | ✓ | ✓ |
 | Desktop freischalten | ✓ | ✓ | ✓ | ✓ |
@@ -56,7 +57,8 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Menüleiste | ✓ native | ↻ Menü «☰» in der Titelleiste | ↻ Menü «☰» | ✗ gibt es nicht; ↻ Knöpfe und Kontextmenüs |
 | Befehlspalette | ✓ ⌘⇧P | ✓ Strg+Umschalt+P | ✓ | ✓ mit Tastatur |
 | Fenstermaterial (Design «Inhalt und Glas») | ✓ Vibrancy, Liquid Glass ab macOS 26 | ✓ Mica (Windows 11; Windows 10 deckend; ungeprüft) | – deckend | ↻ Glas in der App (CSS) |
-| Designs (Terminal) | ✓ | ✓ | ✓ | ✓ |
+| Designs (Terminal), darunter Sesam Tiefsee, Graphit, Wald, Abend (hell/dunkel, WCAG-Kontrast) | ✓ | ✓ | ✓ | ✓ |
+| Website sesam-remote.app | ✓ Menü «Hilfe» › «Sesam Remote-Website», «Über Sesam», Hilfe-Fenster, Befehlspalette | ✓ «Über Sesam», Hilfe-Fenster, Befehlspalette | ✓ wie Windows | ✓ «Über Sesam», Hilfe, Befehlspalette mit Tastatur |
 
 ## System
 

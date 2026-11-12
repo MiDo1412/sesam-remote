@@ -2,7 +2,9 @@
 //! (wie Windows Terminal). Nur lesen und Programme suchen, nichts verändern.
 
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(windows)]
+use std::path::Path;
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -15,16 +17,59 @@ pub struct Profile {
     pub icon: String,
 }
 
-#[cfg_attr(not(windows), allow(dead_code))] // nur Windows hat feste Profile (PowerShell, cmd, WSL)
 fn p(id: &str, name: &str, command: impl Into<String>, args: &[&str], icon: &str) -> Profile {
     Profile { id: id.into(), name: name.into(), command: command.into(), args: args.iter().map(|s| s.to_string()).collect(), icon: icon.into() }
 }
 
-/// Programm im PATH suchen (unter Windows mit .exe/.cmd/.bat).
+/// Ordner, in denen Programme liegen: PATH und dazu die üblichen Installationsorte. Aus dem Finder,
+/// dem Startmenü oder dem Dock gestartete Apps erben nicht den PATH der Login-Shell
+/// (unter macOS fehlen z. B. /opt/homebrew/bin und /usr/local/microsoft/powershell/7).
+pub fn search_dirs() -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+    if cfg!(windows) {
+        let env = |k: &str| std::env::var_os(k).map(PathBuf::from);
+        let pf = env("ProgramFiles").unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        dirs.extend([pf.join(r"PowerShell\7"), pf.join(r"nu\bin"), pf.join(r"Git\bin")]);
+        if let Some(l) = env("LOCALAPPDATA") {
+            dirs.extend([l.join(r"Microsoft\WinGet\Links"), l.join(r"Programs\nu\bin")]);
+        }
+        if let Some(h) = &home {
+            dirs.extend([h.join(r"scoop\shims"), h.join(r".cargo\bin")]);
+        }
+    } else {
+        // Was path_helper (macOS) der Login-Shell gibt: /etc/paths und /etc/paths.d/* (dort trägt sich z. B. PowerShell ein).
+        let mut files = vec![PathBuf::from("/etc/paths")];
+        if let Ok(rd) = std::fs::read_dir("/etc/paths.d") {
+            let mut more: Vec<_> = rd.flatten().map(|e| e.path()).collect();
+            more.sort();
+            files.extend(more);
+        }
+        for f in files {
+            if let Ok(t) = std::fs::read_to_string(f) {
+                dirs.extend(t.lines().map(str::trim).filter(|l| l.starts_with('/')).map(PathBuf::from));
+            }
+        }
+        for d in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/local/microsoft/powershell/7", "/opt/microsoft/powershell/7", "/snap/bin", "/home/linuxbrew/.linuxbrew/bin", "/run/current-system/sw/bin", "/opt/local/bin", "/usr/bin", "/bin"] {
+            dirs.push(PathBuf::from(d));
+        }
+        if let Some(h) = &home {
+            dirs.extend([h.join(".local/bin"), h.join(".cargo/bin"), h.join(".nix-profile/bin"), h.join("bin")]);
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    dirs.retain(|d| seen.insert(d.clone()));
+    dirs
+}
+
+/// Programm suchen (unter Windows mit .exe/.cmd/.bat), im PATH und an den üblichen Installationsorten.
 pub fn which(name: &str) -> Option<PathBuf> {
+    which_in(name, &search_dirs())
+}
+
+fn which_in(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
     let exts: &[&str] = if cfg!(windows) { &[".exe", ".cmd", ".bat"] } else { &[""] };
-    let path = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path) {
+    for dir in dirs {
         // Windows-Store-Platzhalter für python.exe öffnen nur den Store: überspringen.
         if dir.to_string_lossy().contains("WindowsApps") {
             continue;
@@ -77,6 +122,9 @@ fn windows_profiles(out: &mut Vec<Profile>) {
             }
         }
     }
+    if let Some(nu) = which("nu") {
+        out.push(p("nu", "Nushell", nu.to_string_lossy(), &[], "shell"));
+    }
     for git in [r"C:\Program Files\Git\bin\bash.exe", r"C:\Program Files (x86)\Git\bin\bash.exe"] {
         if Path::new(git).is_file() {
             out.push(p("git-bash", "Git Bash", git, &["--login", "-i"], "git"));
@@ -108,19 +156,35 @@ fn windows_profiles(out: &mut Vec<Profile>) {
 
 #[cfg(not(windows))]
 fn unix_profiles(out: &mut Vec<Profile>) {
-    let login = std::env::var("SHELL").ok();
-    let mut shells: Vec<String> = login.iter().cloned().collect();
+    let dirs = search_dirs();
+    // Login-Shell zuerst (Vorschlag für «Standard»), dann /etc/shells, dann bekannte Shells an den üblichen Orten.
+    let mut shells: Vec<PathBuf> = std::env::var("SHELL").ok().map(PathBuf::from).into_iter().collect();
     if let Ok(list) = std::fs::read_to_string("/etc/shells") {
-        shells.extend(list.lines().map(str::trim).filter(|l| l.starts_with('/')).map(String::from));
+        shells.extend(list.lines().map(str::trim).filter(|l| l.starts_with('/')).map(PathBuf::from));
     }
+    shells.extend(UNIX_SHELLS.iter().filter_map(|(bin, ..)| which_in(bin, &dirs)));
     for s in shells {
-        let name = Path::new(&s).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        if !["zsh", "bash", "fish", "sh"].contains(&name.as_str()) || !Path::new(&s).is_file() || out.iter().any(|x| x.id == name) {
+        let bin = s.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let Some(&(_, name, args, icon)) = UNIX_SHELLS.iter().find(|(b, ..)| *b == bin) else { continue };
+        if !s.is_file() || out.iter().any(|x| x.id == bin) {
             continue;
         }
-        out.push(Profile { id: name.clone(), name: name.clone(), command: s, args: vec!["-l".into()], icon: "shell".into() });
+        out.push(p(&bin, name, s.to_string_lossy(), args, icon));
     }
 }
+
+/// Bekannte Shells: Programmname, Anzeigename, Argumente (als Login-Shell, damit Profil und PATH stimmen), Symbol.
+#[cfg(not(windows))]
+const UNIX_SHELLS: &[(&str, &str, &[&str], &str)] = &[
+    ("zsh", "zsh", &["-l"], "shell"),
+    ("bash", "bash", &["-l"], "shell"),
+    ("fish", "fish", &["-l"], "shell"),
+    ("nu", "Nushell", &["-l"], "shell"),
+    ("pwsh", "PowerShell", &["-NoLogo", "-Login"], "powershell"),
+    ("xonsh", "xonsh", &["-l"], "shell"),
+    ("elvish", "Elvish", &[], "shell"),
+    ("sh", "sh", &["-l"], "shell"),
+];
 
 /// Alle erkannten Profile; die erste Shell ist der Vorschlag für «Standard».
 pub fn detect() -> Vec<Profile> {
@@ -159,6 +223,22 @@ mod tests {
         assert_eq!(parse_wsl_list(&b), vec!["Ubuntu", "Debian"]);
         assert_eq!(parse_wsl_list(b"Ubuntu-24.04\n\n"), vec!["Ubuntu-24.04"]);
         assert!(parse_wsl_list(b"").is_empty());
+    }
+
+    #[test]
+    fn finds_programs_outside_path() {
+        // Wie eine aus dem Finder gestartete App: PATH ohne Installationsorte.
+        let dir = std::env::temp_dir().join(format!("sesam-which-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join(if cfg!(windows) { "pwsh.exe" } else { "pwsh" });
+        std::fs::write(&exe, b"").unwrap();
+        assert_eq!(which_in("pwsh", &[PathBuf::from("/nirgends"), dir.clone()]), Some(exe));
+        assert_eq!(which_in("pwsh", &[PathBuf::from("/nirgends")]), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+        // Die üblichen Orte gehören immer dazu, auch ohne PATH.
+        let dirs = search_dirs();
+        let want = if cfg!(windows) { "PowerShell" } else { "/usr/local/microsoft/powershell/7" };
+        assert!(dirs.iter().any(|d| d.to_string_lossy().contains(want)), "{dirs:?}");
     }
 
     #[test]

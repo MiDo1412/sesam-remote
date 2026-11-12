@@ -81,11 +81,40 @@ export const TERM_THEMES: Record<string, { label: string; theme: ITheme; font?: 
     label: "GitHub Hell",
     theme: { background: "#ffffff", foreground: "#1f2328", cursor: "#0969da", selectionBackground: "#b6e3ff", ...pal(["#24292f", "#cf222e", "#116329", "#4d2d00", "#0969da", "#8250df", "#1b7c83", "#6e7781", "#57606a", "#a40e26", "#1a7f37", "#633c01", "#218bff", "#a475f9", "#3192aa", "#8c959f"]) },
   },
+  // Eigene moderne Designs von Sesam: Akzent als Cursor, alle Farben mit WCAG-Kontrast (Text ≥ 7:1, Farben ≥ 4,5:1, Grau ≥ 3:1).
+  "sesam-tiefsee-dark": { label: "Sesam Tiefsee Dunkel", theme: { background: "#0f1724", foreground: "#dce4f0", cursor: "#4cd08f", selectionBackground: "#26406a", ...pal(["#1e2a3b", "#ff7a85", "#4cd08f", "#f2c46d", "#6cb4ff", "#c79bff", "#5ad1d6", "#c8d2e0", "#5b6b82", "#ff9aa2", "#7ae0ac", "#ffd78f", "#93c7ff", "#d9b8ff", "#86e3e6", "#f4f7fb"]) } },
+  "sesam-tiefsee-light": { label: "Sesam Tiefsee Hell", theme: { background: "#f4f7fb", foreground: "#1b2738", cursor: "#157a5a", selectionBackground: "#c9dcf5", ...pal(["#1b2738", "#c4283a", "#157a5a", "#8a5a00", "#1d5fc2", "#7d3fc2", "#0e7480", "#5b6b82", "#4a5a70", "#a8202f", "#106349", "#704800", "#174f9f", "#6833a3", "#0b5f69", "#d5dde8"]) } },
+  "sesam-graphit-dark": { label: "Sesam Graphit Dunkel", theme: { background: "#1c1c1e", foreground: "#ececf0", cursor: "#4cd08f", selectionBackground: "#3a4a42", ...pal(["#2c2c2e", "#ff6b6b", "#4cd08f", "#ffcc66", "#64a8ff", "#d08bff", "#5ccfe6", "#c7c7cc", "#6e6e73", "#ff8f8f", "#7ae0ac", "#ffdc8a", "#8cbfff", "#e0afff", "#85dff0", "#ffffff"]) } },
+  "sesam-graphit-light": { label: "Sesam Graphit Hell", theme: { background: "#f5f5f7", foreground: "#1d1d1f", cursor: "#157a5a", selectionBackground: "#cfe8dc", ...pal(["#1d1d1f", "#c42b2b", "#157a5a", "#8f5d00", "#1f5fbf", "#8a3ab9", "#0b6f80", "#6e6e73", "#6e6e73", "#a61f1f", "#106349", "#744b00", "#184d9c", "#722f99", "#095b69", "#d2d2d7"]) } },
+  "sesam-wald-dark": { label: "Sesam Wald Dunkel", theme: { background: "#171f1b", foreground: "#dfe6df", cursor: "#4cd08f", selectionBackground: "#2f4a3c", ...pal(["#24302a", "#f2797b", "#4cd08f", "#e3c070", "#7fb4d8", "#d199c4", "#79c9b0", "#c9d1c9", "#5f6f66", "#f79a9b", "#7ae0ac", "#eed291", "#a0c9e6", "#e0b6d6", "#9ad9c5", "#f2f6f2"]) } },
+  "sesam-wald-light": { label: "Sesam Wald Hell", theme: { background: "#f3f6f2", foreground: "#1f2a24", cursor: "#157a5a", selectionBackground: "#cde3d5", ...pal(["#1f2a24", "#b8323a", "#157a5a", "#7d5c00", "#2a5f8f", "#8a3f78", "#1d6e66", "#5f6f66", "#58665e", "#9a2730", "#106349", "#654a00", "#214d75", "#713363", "#165a53", "#d6ddd6"]) } },
+  "sesam-abend-dark": { label: "Sesam Abend Dunkel", theme: { background: "#1f1a24", foreground: "#ece4f0", cursor: "#4cd08f", selectionBackground: "#463a52", ...pal(["#2c2533", "#f2789a", "#4cd08f", "#f3c37a", "#8fb8f0", "#c9a3f0", "#eeb3b0", "#d4c9da", "#6d6377", "#f798b2", "#7ae0ac", "#f7d59f", "#afcdf5", "#dbbff5", "#f4cbc9", "#faf5ff"]) } },
+  "sesam-abend-light": { label: "Sesam Abend Hell", theme: { background: "#faf5f0", foreground: "#3a3045", cursor: "#157a5a", selectionBackground: "#ead9d6", ...pal(["#3a3045", "#b3405f", "#157a5a", "#8a5a14", "#3a62a8", "#7c4fa8", "#9a4f4b", "#6d6377", "#6d6377", "#963350", "#106349", "#704810", "#2f5189", "#66408c", "#7f403d", "#e6ddd8"]) } },
+  "rose-pine": {
+    label: "Rosé Pine",
+    theme: { background: "#191724", foreground: "#e0def4", cursor: "#e0def4", selectionBackground: "#403d52", ...pal(["#26233a", "#eb6f92", "#31748f", "#f6c177", "#9ccfd8", "#c4a7e7", "#ebbcba", "#e0def4", "#6e6a86", "#eb6f92", "#31748f", "#f6c177", "#9ccfd8", "#c4a7e7", "#ebbcba", "#e0def4"]) },
+  },
+  "rose-pine-dawn": {
+    label: "Rosé Pine Dawn",
+    theme: { background: "#faf4ed", foreground: "#575279", cursor: "#575279", selectionBackground: "#dfdad9", ...pal(["#f2e9e1", "#b4637a", "#286983", "#ea9d34", "#56949f", "#907aa9", "#d7827e", "#575279", "#9893a5", "#b4637a", "#286983", "#ea9d34", "#56949f", "#907aa9", "#d7827e", "#575279"]) },
+  },
+  kanagawa: {
+    label: "Kanagawa",
+    theme: { background: "#1f1f28", foreground: "#dcd7ba", cursor: "#c8c093", selectionBackground: "#2d4f67", ...pal(["#090618", "#c34043", "#76946a", "#c0a36e", "#7e9cd8", "#957fb8", "#6a9589", "#c8c093", "#727169", "#e82424", "#98bb6c", "#e6c384", "#7fb4ca", "#938aa9", "#7aa89f", "#dcd7ba"]) },
+  },
+  "kanagawa-lotus": {
+    label: "Kanagawa Lotus",
+    theme: { background: "#f2ecbc", foreground: "#545464", cursor: "#43436c", selectionBackground: "#c9cbd1", ...pal(["#1f1f28", "#c84053", "#6f894e", "#77713f", "#4d699b", "#b35b79", "#597b75", "#545464", "#8a8980", "#d7474b", "#6e915f", "#836f4a", "#6693bf", "#624c83", "#5e857a", "#43436c"]) },
+  },
 };
 
 /** «Automatisch»-Designs: je ein helles und ein dunkles, das dem Erscheinungsbild folgt. */
 export const AUTO_PAIRS: Record<string, { label: string; light: string; dark: string }> = {
   auto: { label: "Sesam (automatisch)", light: "sesam-light", dark: "sesam-dark" },
+  "auto:sesam-tiefsee": { label: "Sesam Tiefsee (automatisch)", light: "sesam-tiefsee-light", dark: "sesam-tiefsee-dark" },
+  "auto:sesam-graphit": { label: "Sesam Graphit (automatisch)", light: "sesam-graphit-light", dark: "sesam-graphit-dark" },
+  "auto:sesam-wald": { label: "Sesam Wald (automatisch)", light: "sesam-wald-light", dark: "sesam-wald-dark" },
+  "auto:sesam-abend": { label: "Sesam Abend (automatisch)", light: "sesam-abend-light", dark: "sesam-abend-dark" },
   "auto:mac": { label: "macOS Terminal (automatisch)", light: "mac-basic", dark: "mac-pro" },
   "auto:solarized": { label: "Solarized (automatisch)", light: "solarized-light", dark: "solarized-dark" },
   "auto:one": { label: "One (automatisch)", light: "one-light", dark: "one-dark" },
@@ -93,6 +122,8 @@ export const AUTO_PAIRS: Record<string, { label: string; light: string; dark: st
   "auto:tokyo": { label: "Tokyo Night (automatisch)", light: "tokyo-night-day", dark: "tokyo-night" },
   "auto:catppuccin": { label: "Catppuccin (automatisch)", light: "catppuccin-latte", dark: "catppuccin-mocha" },
   "auto:github": { label: "GitHub (automatisch)", light: "github-light", dark: "github-dark" },
+  "auto:rose-pine": { label: "Rosé Pine (automatisch)", light: "rose-pine-dawn", dark: "rose-pine" },
+  "auto:kanagawa": { label: "Kanagawa (automatisch)", light: "kanagawa-lotus", dark: "kanagawa" },
 };
 
 /** Ist ein Hintergrund dunkel? (relative Helligkeit nach WCAG) */

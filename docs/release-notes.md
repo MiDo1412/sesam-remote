@@ -18,6 +18,15 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Neu
+
+- **Neue Shell-Designs:** Vier eigene Designs von Sesam, je hell und dunkel und als «automatisch» passend zum Erscheinungsbild: Tiefsee, Graphit, Wald und Abend. Der Cursor trägt die Sesam-Farbe; Text und alle Farben erfüllen den WCAG-Kontrast (Text mindestens 7:1, Farben 4,5:1). Dazu Rosé Pine und Kanagawa (je hell und dunkel). Auswahl mit Vorschau unter Einstellungen › Shell und je Profil unter Einstellungen › Terminal.
+- **Website im Programm:** sesam-remote.app öffnet sich aus «Über Sesam», aus dem Hilfe-Fenster, aus der Befehlspalette und auf dem Mac aus dem Menü «Hilfe» › «Sesam Remote-Website».
+
+### Behoben
+
+- **PowerShell und weitere Shells werden erkannt:** Auf dem Mac fehlte PowerShell bei den Terminal-Typen, weil eine aus dem Finder gestartete App die Programmordner der Login-Shell (Homebrew, `/usr/local/microsoft/powershell/7`) nicht kennt. Sesam sucht jetzt zusätzlich an den üblichen Installationsorten und in `/etc/paths.d`, unter Linux auch Snap, Linuxbrew, Nix und `~/.local/bin`, unter Windows WinGet und Scoop. Neu erkannt werden auch Nushell, xonsh und Elvish.
+
 ### Verbessert
 
 - **Updates und Downloads direkt von GitHub:** Die App holt Updates zuerst aus dem GitHub-Release, die Website ist nur noch Rückfall. Die Download-Knöpfe auf sesam-remote.app laden die Datei direkt (fester Name, immer die neueste Version), mit portabler Fassung daneben; die Website wählt das System des Besuchers vor. Die Website sagt jetzt richtig, dass die Mac-App noch nicht notarisiert ist (Rechtsklick › Öffnen), und Windows als «folgt».
