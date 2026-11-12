@@ -15,7 +15,8 @@ Entscheidung von Mike braucht, ist als **Blocker** markiert.
   (`vite.config.ts`). Die Nummern `JJ.M.N` steigen
   immer, taugen also auch als Build-Nummer für App Store Connect und Partner Center.
 - **Kategorie und Texte:** `bundle.category = Utility` (Mac: «Dienstprogramme»), Kurz- und Langbeschreibung
-  in `tauri.conf.json`. Store-Texte, Screenshots, Datenschutz-URL und Support-URL fehlen noch (iPad, Windows).
+  in `tauri.conf.json`. iPad: Store-Texte, App-Datenschutz, Altersfreigabe, Exportkontrolle, Prüfhinweise und
+  Checkliste in `docs/app-store/` (Screenshots in `test-build/appstore/screenshots`, nicht im Git). Windows: fehlt noch.
 - **Symbole:** alle Grössen in `src-tauri/icons` (macOS `.icns`, Windows `.ico` und Store-Logos, iOS-Satz,
   im Xcode-Projekt eingetragen).
 - **Lizenz:** Sesam steht seit dem 11.11.2026 unter der Mozilla Public License 2.0 (vorher GPL-3.0; Mike ist
@@ -27,7 +28,8 @@ Entscheidung von Mike braucht, ist als **Blocker** markiert.
 - **Exportkontrolle (Entscheidung):** Sesam verschlüsselt selbst (SSH, TLS über ring/rustls). Für Apple
   heisst das `ITSAppUsesNonExemptEncryption`; ob die Ausnahme für Standardverfahren greift und ob eine
   jährliche Selbstauskunft (US BIS) nötig ist, entscheidet Mike bzw. die Beratung. Darum ist der Schlüssel
-  noch **nicht** gesetzt; App Store Connect fragt beim Hochladen danach.
+  noch **nicht** gesetzt; App Store Connect fragt beim Hochladen danach. Einordnung und Empfehlung:
+  `docs/app-store/export-compliance.md`.
 
 ## Mac: Download von der Website
 
