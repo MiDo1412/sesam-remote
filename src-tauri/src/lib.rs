@@ -1704,7 +1704,8 @@ async fn drop_files(path: State<'_, LibraryPath>, id: String, files: Vec<String>
         });
     }
     let dir = c.shared_folder.trim();
-    if c.rdp_port.is_some() && !dir.is_empty() {
+    // iPadOS: kein freier Dateizugriff, Ordnerfreigabe gibt es dort nicht (docs/plattformen.md)
+    if cfg!(desktop) && c.rdp_port.is_some() && !dir.is_empty() {
         let dir = PathBuf::from(dir);
         for f in &files {
             let name = f.file_name().ok_or("Ungültige Datei")?;
@@ -2090,7 +2091,7 @@ async fn vnc_open(
     let stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((via_host.as_str(), via_port)))
         .await
         .map_err(|_| "Zeitüberschreitung beim Verbinden".to_string())?
-        .map_err(|e| format!("Verbindung fehlgeschlagen: {e}"))?;
+        .map_err(|e| firstaid::net_error(&via_host, via_port, &e))?;
     let _ = stream.set_nodelay(true);
     let (stream, init) = tokio::time::timeout(timeout, vnc::handshake(stream, &login))
         .await
@@ -2384,7 +2385,7 @@ async fn rdp_open(
         scale: scale.unwrap_or(100).clamp(100, 500),
         clipboard: None,
         audio: c.play_audio,
-        share: (!c.shared_folder.trim().is_empty()).then(|| PathBuf::from(c.shared_folder.trim())),
+        share: (cfg!(desktop) && !c.shared_folder.trim().is_empty()).then(|| PathBuf::from(c.shared_folder.trim())),
         kdc: kdc::kdc_url(&c.rdp_kdc)?,
         no_ntlm: c.rdp_no_ntlm,
         gateway,

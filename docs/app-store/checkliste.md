@@ -61,14 +61,9 @@ oder die App «Transporter» bzw. Xcode › Organizer › Distribute App. Vor je
 Hinweis aus dem Bauen am 12.11.2026: `tauri ios build` schreibt die Team-ID als `DEVELOPMENT_TEAM` in
 `sesam-remote.xcodeproj/project.pbxproj`; diese Änderung nicht committen (`git checkout` der Datei).
 
-## Gefunden beim Vorbereiten (nicht behoben)
+## Gefunden beim Vorbereiten
 
-- Die Fehlermeldung bei unbekanntem Host enthält englischen Systemtext («failed to lookup address
-  information: nodename nor servname provided, or not known»).
-- Im Dialog «Verbindung bearbeiten» heisst es auf dem iPad «Bei Doppelklick öffnen» (auf Touch:
-  Doppeltippen).
-- «Ordner als Laufwerk freigeben» (RDP) erscheint im Dialog auch auf dem iPad, obwohl
-  `docs/plattformen.md` die RDP-Ordnerfreigabe dort als nicht möglich führt. Klären, sonst rügt App Review
-  eine Funktion, die nicht geht.
-- Ohne bestehende Verbindungen gibt es keinen Desktop-Screenshot; dafür braucht es einen Demo-Desktop
-  (siehe `review-notes.md`, Test-Server).
+- Behoben: Netzwerkfehler beim Verbinden (unbekannter Name, Port zu, Zeitüberschreitung, nicht erreichbar)
+  sind jetzt deutsche Sätze, der Systemtext steht im Protokoll (`firstaid::net_error`, RDP/VNC/SSH/FTP);
+  iPad: «Bei Doppeltippen öffnen»; RDP-Ordnerfreigabe auf dem iPad ausgeblendet und im Backend aus.
+- Offen: Ohne Demo-Desktop gibt es keinen Desktop-Screenshot (siehe `review-notes.md`, Test-Server).

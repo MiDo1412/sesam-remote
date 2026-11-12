@@ -86,7 +86,10 @@ async fn connect(t: &Target) -> Result<(Stream, Option<String>), String> {
         let mut s = match t.security {
             Security::Implicit => Stream::connect_secure_implicit(addr, tls()?, &t.host).await.map_err(|e| tls_err(&pin, t.skip_cert_check, e))?,
             sec => {
-                let s = Stream::connect(addr).await.map_err(|e| format!("Verbindung fehlgeschlagen: {}", err(e)))?;
+                let s = Stream::connect(addr).await.map_err(|e| match e {
+                    FtpError::ConnectionError(io) => crate::firstaid::net_error(&t.host, t.port, &io),
+                    e => format!("Verbindung fehlgeschlagen: {}", err(e)),
+                })?;
                 if sec == Security::Plain {
                     s
                 } else {

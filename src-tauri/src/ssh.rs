@@ -420,7 +420,12 @@ pub async fn connect(t: &Target) -> Result<Handle<Client>, String> {
         jump: None,
     };
     let config = Arc::new(config(t.opts));
-    let fail = |e: russh::Error| rejected.lock().unwrap().take().unwrap_or_else(|| format!("Verbindung fehlgeschlagen: {e}"));
+    let fail = |e: russh::Error| {
+        rejected.lock().unwrap().take().unwrap_or_else(|| match &e {
+            russh::Error::IO(io) => crate::firstaid::net_error(&t.host, t.port, io),
+            e => format!("Verbindung fehlgeschlagen: {e}"),
+        })
+    };
     let mut handle = match &t.jump {
         None => client::connect(config, (t.host.as_str(), t.port), client).await.map_err(fail)?,
         Some(j) => {

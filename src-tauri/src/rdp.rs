@@ -467,7 +467,7 @@ async fn transport(t: &Target, host: &str) -> Result<(Stream, std::net::SocketAd
     let tcp = tokio::time::timeout(std::time::Duration::from_secs(15), TcpStream::connect((host, t.port)))
         .await
         .map_err(|_| "TCP: Zeitüberschreitung beim Verbinden".to_string())?
-        .map_err(|e| format!("TCP: Verbindung fehlgeschlagen: {e}"))?;
+        .map_err(|e| crate::firstaid::net_error(host, t.port, &e))?;
     let _ = tcp.set_nodelay(true);
     let addr = tcp.local_addr().map_err(|e| e.to_string())?;
     Ok((Stream::Tcp(tcp), addr))

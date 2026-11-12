@@ -121,6 +121,26 @@ pub async fn network(host: &str, port: u16, service: &str, send: &impl Fn(Step))
     }
 }
 
+/// Netzwerkfehler beim Verbinden als kurzer deutscher Satz; der Originaltext des Systems (oft englisch) nur ins Protokoll.
+pub fn net_error(host: &str, port: u16, e: &std::io::Error) -> String {
+    use std::io::ErrorKind as K;
+    tracing::warn!(%host, port, error = %e, "Verbinden fehlgeschlagen");
+    let msg = e.to_string();
+    // getaddrinfo: Unix «failed to lookup address information», Windows WSAHOST_NOT_FOUND/WSANO_DATA
+    if msg.contains("failed to lookup address") || matches!(e.raw_os_error(), Some(11001 | 11004)) {
+        return format!("Der Name «{host}» ist unbekannt. Tippfehler? Im Heimnetz hilft oft die IP-Adresse statt des Namens.");
+    }
+    match e.kind() {
+        K::ConnectionRefused => format!("Port {port} auf {host} ist geschlossen: dort läuft kein Dienst, oder eine Firewall weist ab."),
+        K::TimedOut => format!("{host} antwortet nicht (Zeitüberschreitung)."),
+        K::HostUnreachable | K::NetworkUnreachable | K::NetworkDown => {
+            format!("{host} ist nicht erreichbar: ausgeschaltet, in einem anderen Netz oder ohne Freigabe «Lokales Netzwerk».")
+        }
+        K::ConnectionReset | K::ConnectionAborted => format!("{host} hat die Verbindung abgebrochen."),
+        _ => format!("Verbindung zu {host} (Port {port}) fehlgeschlagen. Einzelheiten stehen im Protokoll."),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +166,18 @@ mod tests {
         steps.lock().unwrap().clear();
         assert!(!network("gibt-es-nicht.invalid", 22, "ssh", &|s| steps.lock().unwrap().push(s)).await);
         assert_eq!(steps.lock().unwrap()[0].ok, Some(false));
+    }
+
+    #[tokio::test]
+    async fn netzfehler_auf_deutsch() {
+        let e = tokio::net::TcpStream::connect(("gibt-es-nicht.invalid", 22)).await.unwrap_err();
+        assert!(net_error("gibt-es-nicht.invalid", 22, &e).starts_with("Der Name «gibt-es-nicht.invalid» ist unbekannt"), "{e}");
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = l.local_addr().unwrap().port();
+        drop(l);
+        let e = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap_err();
+        assert!(net_error("127.0.0.1", port, &e).starts_with(&format!("Port {port} auf 127.0.0.1 ist geschlossen")));
+        let e = std::io::Error::other("irgendwas");
+        assert!(!net_error("h", 1, &e).contains("irgendwas"));
     }
 }

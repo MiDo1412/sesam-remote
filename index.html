@@ -105,8 +105,8 @@
           <span class="pick"><span id="thumb-preview" class="thumb-mini" aria-hidden="true"></span><span id="thumb-name" class="pick-name"></span><button type="button" id="thumb-menu">Ändern</button></span>
         </label>
 
-        <div class="row span"><span>Bei Doppelklick öffnen</span>
-          <div class="segmented" role="radiogroup" aria-label="Bei Doppelklick öffnen">
+        <div class="row span"><span id="open-on-label">Bei Doppelklick öffnen</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="open-on-label">
             <label><input type="radio" name="defaultView" value="desktop" />Desktop</label>
             <label><input type="radio" name="defaultView" value="shell" />Shell</label>
             <label><input type="radio" name="defaultView" value="files" />Dateien</label>
@@ -168,7 +168,7 @@
               </div>
               <datalist id="rdp-users"></datalist>
             </details>
-            <label class="span" data-tip="Optional. Dieser Ordner erscheint auf dem entfernten Rechner als Laufwerk. Standardmässig aus.">Ordner als Laufwerk freigeben
+            <label id="share-row" class="span" data-tip="Optional. Dieser Ordner erscheint auf dem entfernten Rechner als Laufwerk. Standardmässig aus.">Ordner als Laufwerk freigeben
               <span class="pick">
                 <input name="sharedFolder" class="mono" placeholder="aus" readonly />
                 <button type="button" id="share-pick">Wählen …</button>

@@ -375,7 +375,7 @@ function render() {
       )
         .filter(([, , , on]) => on)
         .map(([view, icon, label]) => {
-          const b = el("button", { type: "button", class: `door${view === c.defaultView ? " default" : ""}`, title: `${label} öffnen${view === c.defaultView ? " (Doppelklick)" : ""}`, "aria-label": `${label} von ${c.name} öffnen` });
+          const b = el("button", { type: "button", class: `door${view === c.defaultView ? " default" : ""}`, title: `${label} öffnen${view === c.defaultView ? ` (${isMobile ? "Doppeltippen" : "Doppelklick"})` : ""}`, "aria-label": `${label} von ${c.name} öffnen` });
           b.innerHTML = icon;
           b.onclick = () => open(c, view);
           return b;
@@ -986,6 +986,11 @@ $("share-pick").onclick = async () => {
   if (typeof dir === "string") sharedFolder.value = dir;
 };
 $("share-clear").onclick = () => (sharedFolder.value = "");
+// iPad: keine RDP-Ordnerfreigabe (kein freier Dateizugriff), Karten öffnen per Doppeltippen
+if (isMobile) {
+  $("share-row").hidden = true;
+  $("open-on-label").textContent = "Bei Doppeltippen öffnen";
+}
 
 const keyMode = form.elements.namedItem("keyMode") as HTMLSelectElement;
 keyMode.addEventListener("change", () => ($("key-row").hidden = keyMode.value !== "import"));
