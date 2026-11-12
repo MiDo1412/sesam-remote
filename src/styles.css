@@ -616,7 +616,7 @@ body.mobile .pane-tools { gap: 10px; overflow: hidden; }
 .icon.zip { background: var(--kind-zip); }
 .icon.pdf { background: var(--kind-pdf); }
 .icon.txt { background: var(--kind-txt); }
-.col-grip { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; cursor: col-resize; }
+.col-grip { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
 .col-grip::after { content: ""; position: absolute; left: 3px; top: 25%; bottom: 25%; border-left: 1px solid var(--line-strong); }
 .rubber-band { position: absolute; z-index: 3; pointer-events: none; border: 1px solid var(--accent); background: var(--select); border-radius: 2px; }
 .pane.select-mode td.name::before { content: ""; flex-shrink: 0; width: 20px; height: 20px; border: 1.5px solid var(--muted); border-radius: 50%; }

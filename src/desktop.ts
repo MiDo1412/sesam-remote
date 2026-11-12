@@ -145,6 +145,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   };
   canvas.addEventListener("pointerdown", (e) => (canvas.focus(), canvas.setPointerCapture(e.pointerId), onPointer(e)));
   canvas.addEventListener("pointerup", onPointer);
+  canvas.addEventListener("pointercancel", onPointer); // buttons = 0: Taste auf dem Server nicht gedrückt lassen
   canvas.addEventListener("pointermove", onPointer);
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener(

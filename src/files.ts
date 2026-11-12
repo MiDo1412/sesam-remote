@@ -281,9 +281,9 @@ const openPlaces = () =>
           ev.stopPropagation();
           const [x0, w0] = [ev.clientX, h.getBoundingClientRect().width];
           const move = (m: PointerEvent) => root.style.setProperty(`--w-${key}`, `${Math.max(60, Math.min(320, w0 - (m.clientX - x0)))}px`);
-          const up = () => (removeEventListener("pointermove", move), removeEventListener("pointerup", up));
-          addEventListener("pointermove", move);
-          addEventListener("pointerup", up);
+          const ac = new AbortController();
+          addEventListener("pointermove", move, { signal: ac.signal });
+          for (const t of ["pointerup", "pointercancel"] as const) addEventListener(t, () => ac.abort(), { signal: ac.signal });
         };
         h.prepend(grip);
       }
@@ -352,16 +352,16 @@ const openPlaces = () =>
         }
         setSelection(pane, hit);
       };
+      const ac = new AbortController();
       const up = () => {
-        scroller.removeEventListener("pointermove", move);
-        scroller.removeEventListener("pointerup", up);
+        ac.abort();
         band?.remove();
       };
       try {
         scroller.setPointerCapture(ev.pointerId);
       } catch {}
-      scroller.addEventListener("pointermove", move);
-      scroller.addEventListener("pointerup", up);
+      scroller.addEventListener("pointermove", move, { signal: ac.signal });
+      for (const t of ["pointerup", "pointercancel", "lostpointercapture"] as const) scroller.addEventListener(t, up, { signal: ac.signal });
     });
     const redraw = () => (comparing ? renderAll() : render(pane));
     filter.oninput = () => ((pane.filter = filter.value.toLowerCase()), pane.deepOn ? deepSearch(pane) : redraw());
@@ -1803,17 +1803,18 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       const over = paneAt(m.clientX, m.clientY);
       for (const q of Object.values(panes)) q.root.classList.toggle("drop", q === over && q !== p);
     };
-    const up = (u: PointerEvent) => {
-      target.removeEventListener("pointermove", move);
-      target.removeEventListener("pointerup", up);
+    const ac = new AbortController();
+    // iPad bricht Berührungen mit pointercancel ab (Geste, Scrollen): aufräumen, nichts übertragen.
+    const end = (u: PointerEvent) => {
+      ac.abort();
       if (!ghost) return;
       ghost.remove();
       ghost = null;
       for (const q of Object.values(panes)) q.root.classList.remove("drop");
-      if (paneAt(u.clientX, u.clientY) === other(p)) transfer(p, [...p.selected]);
+      if (u.type === "pointerup" && paneAt(u.clientX, u.clientY) === other(p)) transfer(p, [...p.selected]);
     };
-    target.addEventListener("pointermove", move);
-    target.addEventListener("pointerup", up);
+    target.addEventListener("pointermove", move, { signal: ac.signal });
+    for (const t of ["pointerup", "pointercancel", "lostpointercapture"] as const) target.addEventListener(t, end, { signal: ac.signal });
   }
 
   // iPad: aus «Dateien» auf die Server-Seite ziehen

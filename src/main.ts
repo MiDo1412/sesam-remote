@@ -608,18 +608,20 @@ function pointerDrag(
       hit?.el.classList.add(hit.cls);
     }
   };
-  const up = () => {
-    src.removeEventListener("pointermove", move);
-    src.removeEventListener("pointerup", up);
+  const ac = new AbortController();
+  // iPad bricht Berührungen mit pointercancel ab (Geste, Scrollen): aufräumen, nicht ablegen.
+  const up = (u: PointerEvent) => {
+    ac.abort();
     if (!ghost) return;
     ghost.remove();
     hit?.el.classList.remove(hit.cls);
+    if (u.type !== "pointerup") return;
     // Nach dem Ziehen keinen Klick auslösen
     src.addEventListener("click", (ev) => ev.stopImmediatePropagation(), { capture: true, once: true });
     drop(hit);
   };
-  src.addEventListener("pointermove", move);
-  src.addEventListener("pointerup", up);
+  src.addEventListener("pointermove", move, { signal: ac.signal });
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"] as const) src.addEventListener(t, up, { signal: ac.signal });
 }
 
 /** Kontextmenü einer Verbindung in der Bibliothek. */
