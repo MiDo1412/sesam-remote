@@ -12,7 +12,7 @@ Das MSI baut der Tauri-Bundler mit WiX (`npx tauri build --bundles msi`, nur unt
 | Programm | `C:\Program Files\Sesam Remote\sesam-remote.exe` |
 | Verknüpfungen | Desktop (öffentlicher Desktop) und Startmenü, ohne Bedingung (Tauri-Standardvorlage) |
 | UpgradeCode | `26F306D2-BA30-5F9C-B735-610DBA9E864E`, bleibt für alle Versionen gleich: eine neue Version ersetzt die alte (Major Upgrade), nichts doppelt |
-| ProductCode | neu je Build; steht nach der Installation unter `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{…}` (DisplayName «Sesam Remote») |
+| ProductCode | neu je Build; 26.11.2: `{B4C3DB4D-4026-484C-8691-ACD7055E4DD4}`. Steht nach der Installation unter `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{ProductCode}` (DisplayName «Sesam Remote», DisplayVersion `26.11.2`, 64-Bit-Zweig, nicht `WOW6432Node`) |
 | Neustart | keiner; kein Dialog bei `/qn` |
 | WebView2 | auf Windows 10/11 vorhanden; fehlt sie, lädt das MSI den Bootstrapper still nach (braucht Internet) |
 | Signatur | noch keine (SmartScreen warnt beim Download, Intune installiert trotzdem) |
@@ -22,7 +22,7 @@ Das MSI baut der Tauri-Bundler mit WiX (`npx tauri build --bundles msi`, nur unt
 Installieren, still:
 
 ```bat
-msiexec /i "Sesam Remote_26.11.1_x64_de-DE.msi" /qn /norestart /l*v "%TEMP%\sesam-install.log"
+msiexec /i "Sesam Remote_26.11.2_x64_de-DE.msi" /qn /norestart /l*v "%TEMP%\sesam-install.log"
 ```
 
 Deinstallieren, still (Produktcode aus dem Uninstall-Schlüssel oder aus der Intune-Erkennung):
@@ -34,7 +34,7 @@ msiexec /x {PRODUCT-CODE} /qn /norestart
 oder mit dem MSI selbst:
 
 ```bat
-msiexec /x "Sesam Remote_26.11.1_x64_de-DE.msi" /qn /norestart
+msiexec /x "Sesam Remote_26.11.2_x64_de-DE.msi" /qn /norestart
 ```
 
 ## Automatische Updates
@@ -44,7 +44,7 @@ Administratorrechte; ohne Richtlinie zeigt Sesam dann nur «Update … ist verf�
 Klick auf «Jetzt installieren». Soll Intune die Versionen bestimmen, automatische Updates ausschalten:
 
 ```bat
-msiexec /i "Sesam Remote_26.11.1_x64_de-DE.msi" AUTOUPDATE=0 /qn /norestart
+msiexec /i "Sesam Remote_26.11.2_x64_de-DE.msi" AUTOUPDATE=0 /qn /norestart
 ```
 
 Das schreibt `HKLM\Software\Policies\Sesam Remote` › `AutoUpdate` (REG_DWORD) = `0`; Sesam zeigt dann
@@ -59,13 +59,18 @@ installiert im Gerätekontext mit `/qn`. Einfach, aber jede Version ist eine neu
 **Variante B – Win32-App (.intunewin, empfohlen):**
 
 - Paket mit dem *Microsoft Win32 Content Prep Tool* aus dem Ordner mit dem MSI erstellen.
-- Installationsbefehl: `msiexec /i "Sesam Remote_26.11.1_x64_de-DE.msi" AUTOUPDATE=0 /qn /norestart`
+- Installationsbefehl: `msiexec /i "Sesam Remote_26.11.2_x64_de-DE.msi" AUTOUPDATE=0 /qn /norestart`
 - Deinstallationsbefehl: `msiexec /x {PRODUCT-CODE} /qn /norestart`
 - Installationsverhalten: **System**; Neustart: **Keine bestimmte Aktion**.
 - Erkennungsregel (eine davon):
   - **MSI:** Produktcode des MSI (Intune füllt ihn beim Hochladen aus), optional Versionsprüfung.
-  - **Datei:** `C:\Program Files\Sesam Remote\sesam-remote.exe`, Dateiversion grösser oder gleich `26.11.1`.
+  - **Datei:** `C:\Program Files\Sesam Remote\sesam-remote.exe`, Dateiversion grösser oder gleich `26.11.2`.
     Diese Regel bleibt über Updates gleich.
+- Erkennung 26.11.2 genau:
+  - MSI: Produktcode `{B4C3DB4D-4026-484C-8691-ACD7055E4DD4}`, Produktversion `26.11.2`
+  - oder Registry: `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{B4C3DB4D-4026-484C-8691-ACD7055E4DD4}`,
+    Wert `DisplayVersion` gleich `26.11.2` (Zeichenfolge); «32-Bit-App auf 64-Bit-Clients»: Nein
+  - oder Datei: `sesam-remote.exe`, Dateiversion `26.11.2`
 - Rückgabecodes: Standard (0, 1707, 3010, 1641, 1618).
 
 Updates: neue Version als neue Win32-App mit «Ersetzung» der alten oder einfach neues MSI in derselben App; dank

@@ -48,10 +48,13 @@ pub fn data_dir() -> Option<PathBuf> {
 /// lässt sich nicht verlegen, die Einstellungen der Oberfläche bleiben dort im Benutzerprofil.
 pub fn prepare_webview() {
     let Some(d) = data_dir() else { return };
+    // SAFETY: läuft als Erstes in `run()`, bevor weitere Threads entstehen (set_var ist nur dann sicher).
     #[cfg(windows)]
-    std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", d.join("webview"));
+    unsafe {
+        std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", d.join("webview"));
+    }
     #[cfg(target_os = "linux")]
-    {
+    unsafe {
         std::env::set_var("XDG_DATA_HOME", d.join("xdg-data"));
         std::env::set_var("XDG_CACHE_HOME", d.join("xdg-cache"));
     }
