@@ -7,7 +7,7 @@ export function githubNames(file, version) {
   if (file.endsWith(".dmg")) return [`Sesam-Remote_${version}_macOS_aarch64.dmg`, "Sesam-Remote_macOS.dmg"];
   if (file.endsWith(".msi")) return [`Sesam-Remote_${version}_Windows_x64.msi`, "Sesam-Remote_Windows.msi"];
   if (file.endsWith(".AppImage")) return [`Sesam-Remote_${version}_Linux_x64.AppImage`, "Sesam-Remote_Linux.AppImage"];
-  if (file.endsWith(".deb")) return [`Sesam-Remote_${version}_Linux_amd64.deb`, null];
+  if (file.endsWith(".deb")) return [`Sesam-Remote_${version}_Linux_amd64.deb`, "Sesam-Remote_Linux.deb"];
   const portable = /_(macOS|Windows_x64|Linux_x64)_portabel\.zip$/.exec(file);
   if (portable) return [file, `Sesam-Remote_${portable[1]}_portabel.zip`];
   return [file.replaceAll(" ", "-"), null];

@@ -36,8 +36,8 @@ Windows (`docs/build-windows.md`): ohne Schlüssel bauen, dann die Dateien zum M
 signieren:
 
 ```bash
-npx tauri signer sign -f ~/.sesam/updater.key "Sesam Remote_<Version>_x64_de-DE.msi"
-npx tauri signer sign -f ~/.sesam/updater.key sesam-remote.exe
+npx tauri signer sign -f ~/.sesam/updater.key --app-version <Version> "Sesam Remote_<Version>_x64_de-DE.msi"
+npx tauri signer sign -f ~/.sesam/updater.key --app-version <Version> sesam-remote.exe
 node scripts/updates.mjs windows-x86_64 "Sesam Remote_<Version>_x64_de-DE.msi"
 node scripts/updates.mjs windows-x86_64-portable sesam-remote.exe
 ```

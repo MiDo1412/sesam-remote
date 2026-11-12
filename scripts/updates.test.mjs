@@ -32,5 +32,6 @@ test("Namen fürs GitHub-Release: mit Version und fest", () => {
   assert.deepEqual(githubNames("Sesam Remote_26.11.2_x64_de-DE.msi", "26.11.2"), ["Sesam-Remote_26.11.2_Windows_x64.msi", "Sesam-Remote_Windows.msi"]);
   assert.deepEqual(githubNames("Sesam-Remote_26.11.2_Windows_x64_portabel.zip", "26.11.2"), ["Sesam-Remote_26.11.2_Windows_x64_portabel.zip", "Sesam-Remote_Windows_x64_portabel.zip"]);
   assert.deepEqual(githubNames("Sesam Remote.app.tar.gz", "26.11.2"), ["Sesam-Remote.app.tar.gz", null]);
+  assert.deepEqual(githubNames("sesam-remote_26.11.2_amd64.deb", "26.11.2"), ["Sesam-Remote_26.11.2_Linux_amd64.deb", "Sesam-Remote_Linux.deb"]);
   assert.equal(githubUrl("26.11.2", "Sesam-Remote.app.tar.gz"), "https://github.com/MiDo1412/sesam-remote/releases/download/v26.11.2/Sesam-Remote.app.tar.gz");
 });
