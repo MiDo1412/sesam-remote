@@ -18,6 +18,8 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.3 — 2026-11-12
+
 ### Neu
 
 - **Neue Shell-Designs:** Vier eigene Designs von Sesam, je hell und dunkel und als «automatisch» passend zum Erscheinungsbild: Tiefsee, Graphit, Wald und Abend. Der Cursor trägt die Sesam-Farbe; Text und alle Farben erfüllen den WCAG-Kontrast (Text mindestens 7:1, Farben 4,5:1). Dazu Rosé Pine und Kanagawa (je hell und dunkel). Auswahl mit Vorschau unter Einstellungen › Shell und je Profil unter Einstellungen › Terminal.
@@ -29,7 +31,7 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ### Verbessert
 
-- **Updates und Downloads direkt von GitHub:** Die App holt Updates zuerst aus dem GitHub-Release, die Website ist nur noch Rückfall. Die Download-Knöpfe auf sesam-remote.app laden die Datei direkt (fester Name, immer die neueste Version), mit portabler Fassung daneben; die Website wählt das System des Besuchers vor. Die Website sagt jetzt richtig, dass die Mac-App noch nicht notarisiert ist (Rechtsklick › Öffnen), und Windows als «folgt».
+- **Updates und Downloads direkt von GitHub:** Die App holt Updates zuerst aus dem GitHub-Release, die Website ist nur noch Rückfall. Die Download-Knöpfe auf sesam-remote.app laden die Datei direkt (fester Name, immer die neueste Version), mit portabler Fassung daneben; die Website wählt das System des Besuchers vor. Die Website sagt jetzt richtig, dass die Mac-App noch nicht notarisiert ist (Rechtsklick › Öffnen), und bietet Windows (MSI, portabel) und Linux (AppImage, .deb, portabel) mit festen Namen an.
 
 ## 26.11.2 — 2026-11-11
 
