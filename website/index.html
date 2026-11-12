@@ -298,14 +298,15 @@
   <section class="close" aria-labelledby="schluss-titel">
     <div class="wrap">
       <h2 id="schluss-titel" class="sr">Sesam laden</h2>
-      <form class="blank rise" action="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS.dmg" method="get" id="get">
-        Öffne Sesam auf <label class="sr" for="os">Plattform</label><select id="os" aria-label="Plattform">
-          <option value="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS.dmg">dem Mac</option>
-          <option value="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Windows.msi">Windows</option>
-          <option value="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Linux.AppImage">Linux</option>
-          <option value="#fragen">dem iPad</option>
-        </select> <button type="submit">jetzt.</button>
-      </form>
+      <div class="blank rise" id="get">
+        <p class="ask" aria-hidden="true">Öffne Sesam auf</p>
+        <nav class="pick" aria-label="Sesam laden für">
+          <a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS.dmg" data-os="Mac" download>Mac</a>
+          <a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Windows.msi" data-os="Windows" download>Windows</a>
+          <a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Linux.AppImage" data-os="Linux" download>Linux</a>
+          <a href="#laden" data-os="iPad">iPad</a>
+        </nav>
+      </div>
       <p class="note rise" style="--i:1">Mac: Apple-Chip, noch nicht notarisiert (Rechtsklick › Öffnen). Windows: 10 und 11, noch ohne Signatur (SmartScreen › Weitere Informationen › Trotzdem ausführen). iPad: bald im App Store.</p>
     </div>
   </section>

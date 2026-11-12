@@ -72,16 +72,8 @@ const seen = new IntersectionObserver(list => list.forEach(x => {
 }), { rootMargin: '0px 0px -8% 0px' });
 document.querySelectorAll('.rise').forEach(el => seen.observe(el));
 
-// "Öffne Sesam auf … jetzt."
-const form = document.getElementById('get');
-// Passendes System vorwählen (das iPad meldet sich wie ein Mac, hat aber Touch).
-if (form) {
-  const ua = navigator.userAgent, touch = navigator.maxTouchPoints > 1;
-  const want = /Windows/.test(ua) ? 'Windows' : /iPad|iPhone/.test(ua) || (/Macintosh/.test(ua) && touch) ? 'iPad' : /Macintosh/.test(ua) ? 'Mac' : null;
-  const opt = want && [...form.querySelectorAll('option')].find(o => o.textContent.includes(want) && !o.disabled);
-  if (opt) opt.selected = true;
-}
-if (form) form.addEventListener('submit', ev => {
-  ev.preventDefault();
-  location.href = form.querySelector('select').value;
-});
+// "Öffne Sesam auf …": das eigene System hervorheben (das iPad meldet sich wie ein Mac, hat aber Touch).
+const ua = navigator.userAgent, touch = navigator.maxTouchPoints > 1;
+const mine = /Windows/.test(ua) ? 'Windows' : /iPad|iPhone/.test(ua) || (/Macintosh/.test(ua) && touch) ? 'iPad' : /Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) && !/Android/.test(ua) ? 'Linux' : 'Mac';
+const pick = document.querySelector(`.pick a[data-os="${mine}"]`);
+if (pick) pick.classList.add('on');
