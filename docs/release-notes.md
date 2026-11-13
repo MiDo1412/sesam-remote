@@ -18,6 +18,8 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.4 — 2026-11-14
+
 ### Neu
 
 - **Hilfe, die weiss, wo du bist:** «Hilfe zu dieser Ansicht» (Mac: Menü «Hilfe», Windows: ☰ › Hilfe, überall in der Befehlspalette) öffnet die Anleitung zur offenen Sitzung: RDP zu Windows, GNOME oder xrdp je nach System, VNC zum Mac, SSH oder FTP. Das Hilfe-Fenster und das Mac-Menü sind in «Zielrechner einrichten», «Verbinden» und «Sesam kennenlernen» gegliedert; die passende Anleitung trägt den Namen der Verbindung.

@@ -5950,7 +5950,7 @@ dependencies = [
 
 [[package]]
 name = "sesam-remote"
-version = "26.11.3"
+version = "26.11.4"
 dependencies = [
  "aes",
  "aes-gcm",
