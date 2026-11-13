@@ -10,6 +10,7 @@ import { handoffDone, sameHost, toolButton, toolSep, type TabCtx, type TabHandle
 import { saveDesktopThumb } from "./thumbs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { desktopTouch } from "./touch";
+import { isTouch } from "./osk";
 import { remoteSize } from "./desksize";
 import { explainRdpError, localNetworkHint, rejectedHint, vncAuthHint, type Hint } from "./ubuntu";
 import { openHelp } from "./help";
@@ -263,7 +264,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   canvas.addEventListener("keydown", onKey);
   canvas.addEventListener("keyup", onKey);
   canvas.addEventListener("blur", releaseAll);
-  const touch = desktopTouch({ pane: ctx.pane, wrap, canvas, pointer, send });
+  const touch = desktopTouch({ pane: ctx.pane, wrap, canvas, pointer, send, mode: c.touchMode });
 
   // ---------- Vollbild und Zwischenablage ----------
   const win = getCurrentWindow();
@@ -345,10 +346,12 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     ]);
     if (v) (sendKeys.value = v), sendKeys.dispatchEvent(new Event("change"));
   });
+  const touchBtn = barBtn(ICON.handTap, "Touch-Bedienung", () => void touch.pickMode(touchBtn));
   bar.append(
     pinBtn,
     keysBtn,
     barBtn(ICON.typeClipboard, "Zwischenablage abtippen", () => void typeClipboard()),
+    ...(isTouch() ? [touchBtn] : []),
     barName,
     ...(isMobile ? [] : [barBtn(ICON.minimize, "Minimieren", () => void win.minimize())]),
     barBtn(ICON.windowed, isMobile ? "Vollbild beenden" : "Fenstermodus (F11)", () => void toggleFullscreen()),

@@ -18,9 +18,22 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Neu
+
+- **Touch-Bedienung je Verbindung:** Im Editor unter «Desktop» wählst du für Geräte mit Touch, ob du den Zeiger wie auf einem Touchpad schiebst oder direkt tippst; die Sitzung startet so. Im Vollbild schaltest du über die Verbindungsleiste oben um (Handsymbol).
+
+### Behoben
+
+- **Windows-PC per RDP vom iPad:** Die Verbindung brach mit «the platform certificate store contains no usable roots» ab, bevor Sesam nach dem Zertifikat fragen konnte. Jetzt prüft Sesam das Zertifikat selbst: bekannt, vom System vertraut (Schlüsselbund, Zertifikatspeicher) oder es fragt beim ersten Mal nach, wie bei selbst signierten Windows-Zertifikaten üblich. Gilt auf allen Systemen.
+- **«Anfragen» bei den Berechtigungen (Mac):** macOS zeigt seinen Dialog nur einmal; danach tat der Knopf nichts. Bleibt die Freigabe aus, öffnet Sesam jetzt gleich die richtige Stelle in den Systemeinstellungen, auch bei «Alle einrichten».
+
 ### Verbessert
 
 - **Protokoll der letzten Läufe bleibt:** Beim Start legt Sesam `sesam.log` nicht mehr über das alte; die zwei vorigen Läufe bleiben als `sesam.1.log` und `sesam.2.log` (je höchstens 5 MB, bei mehr das Ende). So lässt sich z. B. nachlesen, was ein Update vor dem Neustart heruntergeladen und installiert hat.
+
+### Betrieb
+
+- **RDP-Zertifikat:** Handshake mit `DangerouslyAcceptInvalidCertificate`, danach Prüfung vor CredSSP: Pin, sonst `rustls-platform-verifier` (Security.framework, CryptoAPI), sonst `CERT_UNKNOWN`. Neue direkte Abhängigkeit `rustls-platform-verifier` (war über den Updater schon dabei). RD-Gateway und KDC-Proxy prüfen weiter mit `rustls-native-certs` und gehen auf dem iPad deshalb noch nicht.
 
 ## 26.11.3 — 2026-11-12
 

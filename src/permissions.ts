@@ -35,7 +35,12 @@ export async function openPermissions() {
         text.append(Object.assign(document.createElement("b"), { textContent: p.label }), Object.assign(document.createElement("small"), { textContent: p.purpose }));
         const st = Object.assign(document.createElement("span"), { className: "perm-state", textContent: STATE[p.state] });
         const ask = Object.assign(document.createElement("button"), { type: "button", textContent: "Anfragen", hidden: p.state === "ok" });
-        ask.onclick = async () => render(await invoke<Perm[]>("perm_request", { id: p.id }));
+        // macOS zeigt seinen Dialog nur beim ersten Mal; danach bleibt die Anfrage stumm, darum dann die Einstellung öffnen.
+        ask.onclick = async () => {
+          const next = await invoke<Perm[]>("perm_request", { id: p.id });
+          render(next);
+          if (next.find((n) => n.id === p.id)?.state !== "ok") void invoke("perm_open", { id: p.id }).catch(() => {});
+        };
         const open = Object.assign(document.createElement("button"), { type: "button", textContent: "Einstellungen" });
         open.onclick = () => void invoke("perm_open", { id: p.id }).catch(() => {});
         li.append(text, st, ask, open);
@@ -45,7 +50,10 @@ export async function openPermissions() {
   };
   all.onclick = async () => {
     for (const p of await invoke<Perm[]>("perm_list")) if (p.state !== "ok") await invoke("perm_request", { id: p.id });
-    render(await invoke<Perm[]>("perm_list"));
+    const now = await invoke<Perm[]>("perm_list");
+    render(now);
+    const open = now.find((p) => p.state === "missing");
+    if (open) void invoke("perm_open", { id: open.id }).catch(() => {});
   };
   render(await invoke<Perm[]>("perm_list"));
   // Nach dem Umschalten in den Systemeinstellungen: beim Zurückkommen neu lesen.

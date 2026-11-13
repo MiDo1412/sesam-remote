@@ -48,7 +48,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 |---|---|---|---|---|
 | Tastenkürzel an den Remotecomputer | ✓ «Mac-Tastenkürzel» (Bedienungshilfen) | ✓ «Windows-Tastenkombinationen» | … noch nicht | ✗ ⌘Tab, ⌘Leertaste, Globus, ⌘H bleiben bei iPadOS; ↻ Zusatzleiste und «Tasten senden» |
 | Bildschirmtastatur mit Zusatzleiste | – (nicht nötig) | ✓ Touch-Geräte | ✓ Touch-Geräte | ✓ |
-| Touch im Remote-Bild (Touchpad/Direkt, Zoom) | – | ✓ Touch-Geräte | ✓ Touch-Geräte | ✓ |
+| Touch im Remote-Bild (Touchpad/Direkt je Verbindung, auch im Vollbild umschaltbar, Zoom) | – | ✓ Touch-Geräte | ✓ Touch-Geräte | ✓ |
 | Grössere Touch-Ziele | – | – | – | ✓ (44 pt) |
 | Vollbild | ✓ F11 | ✓ F11 | ✓ F11 | ✓ ohne Leisten, Statusleiste und Home-Leiste; Griff oben in der Mitte holt die Verbindungsleiste |
 | Seitenleiste und Details ein-/ausblenden | ✓ | ✓ | ✓ | ✓ Details als Blatt, Seitenleiste im Hochformat eingeklappt |

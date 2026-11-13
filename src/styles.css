@@ -524,6 +524,8 @@ body.compact.one-bar .tab { flex: 0 0 auto; min-width: 140px; max-width: 260px; 
 .tab-pane.tab-desktop .status { position: absolute; left: 50%; bottom: var(--s-3); transform: translateX(-50%); max-width: calc(100% - 48px); padding: 6px var(--s-3); border-radius: var(--r-ctl); text-align: center; pointer-events: none; z-index: 5; }
 .reconnect-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: var(--s-3); padding: 6px 6px 6px 14px; border-radius: var(--r-ctl); font-size: 13px; white-space: nowrap; }
 .reconnect-bar button { --h-ctl: 28px; }
+/* Im Vollbild rutscht die Leiste «Getrennt» unter die eingeblendete Verbindungsleiste statt dahinter. */
+.tab-pane:has(> .fs-bar.show) > .reconnect-bar { top: calc(var(--h-ctl) + 28px); transition: top var(--dur-m) var(--ease); }
 .quality-btn { color: var(--muted) !important; }
 .quality-pop { position: fixed; z-index: 40; width: 220px; padding: 10px var(--s-3); border-radius: var(--r-menu); font-size: 12px; animation: status-in 140ms ease-out; }
 .quality-pop h4 { margin: 0 0 6px; font-size: 12px; }

@@ -31,6 +31,8 @@ pub struct Connection {
     pub default_view: String,
     /// "landscape" | "portrait"
     pub orientation: String,
+    /// Touch-Bedienung des Desktops: "touchpad" (Zeiger schieben) | "direct" (direkt tippen); leer = Touchpad.
+    pub touch_mode: String,
     pub shared_clipboard: bool,
     /// Ton des entfernten Rechners abspielen (RDP).
     pub play_audio: bool,
@@ -113,6 +115,7 @@ impl Default for Connection {
             user: String::new(),
             default_view: "desktop".into(),
             orientation: "landscape".into(),
+            touch_mode: String::new(),
             shared_clipboard: true,
             play_audio: true,
             shared_folder: String::new(),

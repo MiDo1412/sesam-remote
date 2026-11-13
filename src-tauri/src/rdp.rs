@@ -432,6 +432,15 @@ impl tokio::io::AsyncWrite for Stream {
         by_stream!(self, s => s.poll_shutdown(cx))
     }
 }
+/// Kette gegen die Vertrauensstellen des Systems (macOS und iPad: Schlüsselbund, Windows: Zertifikatspeicher).
+fn system_trusts(chain: &[rustls::pki_types::CertificateDer<'_>], host: &str) -> bool {
+    use rustls::client::danger::ServerCertVerifier;
+    let Some((leaf, rest)) = chain.split_first() else { return false };
+    let Ok(name) = rustls::pki_types::ServerName::try_from(host.to_string()) else { return false };
+    let Ok(v) = rustls_platform_verifier::Verifier::new(Arc::new(rustls::crypto::ring::default_provider())) else { return false };
+    v.verify_server_cert(leaf, rest, &name, &[], rustls::pki_types::UnixTime::now()).is_ok()
+}
+
 type Framed = TokioFramed<ironrdp_tls::TlsStream<Stream>>;
 
 /// Transport zum RDP-Server: direkt per TCP oder durch das RD-Gateway.
@@ -604,29 +613,30 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     };
     let (tcp, leftover) = framed.into_inner();
 
-    // Zertifikate mit gültiger Kette akzeptiert rustls selbst; sonst entscheidet das Pinning.
-    let expected = t.expected_cert.clone();
-    let seen2 = seen.clone();
-    let skip = t.skip_cert_check;
-    if skip {
+    // Handshake ohne Prüfung, dann selbst prüfen, bevor ein Byte Anmeldung fliesst (CredSSP kommt erst danach):
+    // gespeicherter Fingerabdruck, sonst die Vertrauensstellen des Systems, sonst fragen (TOFU). Die Stammzertifikate
+    // von ironrdp (rustls-native-certs) sind auf dem iPad leer; dann scheiterte jede Verbindung vor dem Pinning.
+    if t.skip_cert_check {
         tracing::warn!("RDP: Zertifikatsprüfung ist für diese Verbindung ausgeschaltet");
     }
-    let callback: ironrdp_tls::CertificateValidationCallback = Arc::new(move |der: &[u8], _: &str, _: &str| {
-        let fp = fingerprint(der);
-        let ok = skip || expected.as_deref() == Some(fp.as_str());
-        *seen2.lock().unwrap() = Some(fp);
-        ok
-    });
     tracing::info!(ms = ms(), "RDP: TLS");
-    let (tls, cert) = ironrdp_tls::upgrade_with_certificate_validation_callback(tcp, &t.host, callback).await.map_err(|e| {
-        let seen = seen.lock().unwrap().clone();
-        tracing::warn!(error = %e, seen = ?seen, expected = ?t.expected_cert, "RDP: TLS gescheitert");
-        match (seen, &t.expected_cert) {
-            (Some(fp), None) => format!("{CERT_UNKNOWN}{fp}"),
-            (Some(fp), Some(want)) if &fp != want => format!("{CERT_CHANGED}{fp}"),
-            _ => format!("TLS: Verbindung fehlgeschlagen: {e}"),
-        }
-    })?;
+    let (tls, cert) = ironrdp_tls::upgrade_with_certificate_validation(tcp, &t.host, ironrdp_tls::CertificateValidation::DangerouslyAcceptInvalidCertificate)
+        .await
+        .map_err(|e| {
+            tracing::warn!(error = %e, "RDP: TLS gescheitert");
+            format!("TLS: Verbindung fehlgeschlagen: {e}")
+        })?;
+    let chain = tls.get_ref().1.peer_certificates().unwrap_or_default();
+    let fp = chain.first().map(|c| fingerprint(c)).ok_or("TLS: Der Server zeigt kein Zertifikat")?;
+    *seen.lock().unwrap() = Some(fp.clone());
+    let pinned = t.expected_cert.as_deref() == Some(fp.as_str());
+    if !(t.skip_cert_check || pinned || system_trusts(chain, &t.host)) {
+        tracing::warn!(seen = %fp, expected = ?t.expected_cert, "RDP: Zertifikat nicht bestätigt");
+        return Err(match &t.expected_cert {
+            None => format!("{CERT_UNKNOWN}{fp}"),
+            Some(_) => format!("{CERT_CHANGED}{fp}"),
+        });
+    }
     let mut tls = tls;
     tracing::info!(ms = ms(), "RDP: TLS fertig");
     if let Some(creds) = &hop.rdstls {
@@ -1379,6 +1389,13 @@ async fn write_all<W: FramedWrite>(w: &mut W, outs: &[ActiveStageOutput]) -> Res
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn selbst_signiertes_zertifikat_braucht_bestaetigung() {
+        let der = rustls::pki_types::CertificateDer::from(include_bytes!("testdata/selfsigned-rdp.der").to_vec());
+        assert!(!super::system_trusts(&[der], "demo-pc"));
+        assert!(!super::system_trusts(&[], "demo-pc"));
+    }
+
     #[test]
     fn einfarbig_erkennen() {
         let grau = [128u8, 128, 128, 255].repeat(5000);

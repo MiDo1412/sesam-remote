@@ -18,6 +18,8 @@ export interface Connection {
   user: string;
   defaultView: "desktop" | "shell" | "files";
   orientation: "landscape" | "portrait";
+  /** Touch-Bedienung: Zeiger schieben wie auf einem Touchpad oder direkt tippen; fehlt = Touchpad. */
+  touchMode?: "touchpad" | "direct";
   sharedClipboard: boolean;
   playAudio: boolean;
   /** Zertifikat nicht prüfen (unsicher, nur für Tests). */

@@ -22,10 +22,12 @@ export function desktopTouch(o: {
   /** Entfernte Koordinaten, Browser-Tastenmaske (1 links, 2 rechts). */
   pointer: (x: number, y: number, buttons: number) => void;
   send: (isDown: boolean, k: Key) => void;
+  /** Gespeichert bei der Verbindung. */
+  mode?: Mode;
 }) {
   const { wrap, canvas } = o;
   wrap.classList.add("touch");
-  let mode: Mode = "touchpad";
+  let mode: Mode = o.mode ?? "touchpad";
   let lupeOn = false;
   let cx = 0, cy = 0, buttons = 0; // entfernter Zeiger
   let touched = false; // Overlay erst nach Touch, Maus blendet es wieder aus
@@ -268,9 +270,10 @@ export function desktopTouch(o: {
 
   // ---------- Werkzeugleiste ----------
   const modeLabel = { touchpad: "Touchpad", direct: "Direkt tippen" };
-  const modeBtn: HTMLButtonElement = toolButton(ICON.handTap, "Touch-Bedienung", async () => {
+  /** Menü Touchpad / Direkt tippen / Zoom, an `anchor` (Werkzeugleiste oder Vollbild-Leiste). */
+  const pickMode = async (anchor: HTMLElement) => {
     const v = await openMenu(
-      modeBtn,
+      anchor,
       [
         { value: "touchpad", label: "Touchpad", section: "Touch-Bedienung" },
         { value: "direct", label: "Direkt tippen" },
@@ -284,7 +287,8 @@ export function desktopTouch(o: {
       modeBtn.title = `Touch-Bedienung: ${modeLabel[mode]}`;
       drawOverlay();
     }
-  }, { compact: true });
+  };
+  const modeBtn: HTMLButtonElement = toolButton(ICON.handTap, "Touch-Bedienung", () => void pickMode(modeBtn), { compact: true });
   modeBtn.title = `Touch-Bedienung: ${modeLabel[mode]}`;
   const lupeBtn = toolButton(ICON.magnify, "Zeiger-Lupe", () => {
     lupeOn = !lupeOn;
@@ -296,6 +300,7 @@ export function desktopTouch(o: {
   return {
     /** Nur auf Geräten mit Touch, sonst leer. */
     buttons: isTouch() ? [modeBtn, lupeBtn, kb.button, toolSep()] : [],
+    pickMode,
     hide: () => kb.hide(),
     dispose: () => kb.dispose(),
   };

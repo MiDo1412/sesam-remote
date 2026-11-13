@@ -16,6 +16,7 @@ import { applyAppearance, openSettings, openWebsite, settingsWindow } from "./se
 import { openFirstAid, serviceOf, type Service } from "./firstaid";
 import { unlockDesktop } from "./unlock";
 import { openPermissions } from "./permissions";
+import { isTouch } from "./osk";
 import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
 import { initFieldHelp } from "./fieldhelp";
@@ -928,6 +929,8 @@ function edit(c: Connection | null, asNew = false) {
   jumpHostMenu.sync();
   f.fitToWindow.checked = editing.fitToWindow;
   form.querySelector<HTMLInputElement>(`[name=orientation][value=${editing.orientation}]`)!.checked = true;
+  form.querySelector<HTMLElement>(".touch-only")!.hidden = !isTouch();
+  form.querySelector<HTMLInputElement>(`[name=touchMode][value=${editing.touchMode || "touchpad"}]`)!.checked = true;
   form.querySelector<HTMLInputElement>(`[name=defaultView][value=${editing.defaultView}]`)!.checked = true;
   $("key-row").hidden = true;
   $("editor-delete").hidden = isNew;
@@ -1064,6 +1067,7 @@ form.onsubmit = async (ev) => {
     agentForward: fd.get("agentForward") !== null,
     fitToWindow: fd.get("fitToWindow") !== null,
     orientation: s("orientation") as Connection["orientation"],
+    touchMode: s("touchMode") as Connection["touchMode"],
     defaultView: s("defaultView") as Connection["defaultView"],
   };
   const keyMode = s("keyMode");
