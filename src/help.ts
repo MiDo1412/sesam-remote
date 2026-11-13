@@ -2,7 +2,9 @@ import { api } from "./api";
 import { marked } from "marked";
 import { downloadScript } from "./setup";
 import { isMobile } from "./titlebar";
-import { openWebsite } from "./settings";
+import { LINKS, openLink } from "./settings";
+import { visibleSession } from "./tabs";
+import { desktopProtocol, filesProtocol, type Connection } from "./api";
 import vnc from "../docs/hilfe/vnc.md?raw";
 import wayvnc from "../docs/hilfe/wayvnc.md?raw";
 import macos from "../docs/hilfe/macos.md?raw";
@@ -30,7 +32,26 @@ export const topics = [
 
 export type TopicId = (typeof topics)[number]["id"];
 
+/** Gruppen im Hilfe-Fenster und im Menü «Hilfe» (lib.rs). */
+const GROUPS: { title: string; ids: TopicId[] }[] = [
+  { title: "Zielrechner einrichten", ids: ["rdp-windows", "rdp-gnome", "rdp-xrdp", "macos", "wayvnc"] },
+  { title: "Verbinden", ids: ["zugangsdaten", "vnc", "ssh", "ftp"] },
+  { title: "Sesam kennenlernen", ids: ["komfort"] },
+];
+
+/** Anleitung, die zur offenen Sitzung passt (Protokoll und System), sonst zum Einstieg. */
+export function topicFor(c: Connection | null, kind?: string): TopicId {
+  if (!c) return "zugangsdaten";
+  if (kind === "shell") return "ssh";
+  if (kind === "files") return filesProtocol(c) === "ftp" ? "ftp" : "ssh";
+  if (desktopProtocol(c) === "rdp") return c.rdpTarget || c.os === "ubuntu" ? "rdp-gnome" : c.os === "linux" || c.os === "raspberry" ? "rdp-xrdp" : "rdp-windows";
+  return c.os === "macos" ? "macos" : "vnc";
+}
+
+/** `id` leer: die Anleitung zur Lage (Menü «Hilfe zu dieser Ansicht», ☰ › Hilfe). */
 export function openHelp(id: string) {
+  const here = visibleSession();
+  if (!id) id = topicFor(here?.conn ?? null, here?.kind);
   const dlg = document.getElementById("help") as HTMLDialogElement;
   const nav = document.getElementById("help-nav")!;
   const body = document.getElementById("help-body")!;
@@ -66,16 +87,23 @@ export function openHelp(id: string) {
     }
     body.scrollTop = 0;
   };
+  const hereId = here ? topicFor(here.conn, here.kind) : null;
   nav.replaceChildren(
-    ...topics.map((t) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "nav-item";
-      b.dataset.id = t.id;
-      b.textContent = t.title;
-      b.onclick = () => (show(t.id), b.focus({ preventScroll: true }));
-      return b;
-    }),
+    ...GROUPS.flatMap((g) => [
+      Object.assign(document.createElement("h3"), { className: "nav-header nav-head", textContent: g.title }),
+      ...g.ids.map((tid) => {
+        const t = topics.find((x) => x.id === tid)!;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "nav-item";
+        b.dataset.id = t.id;
+        b.textContent = t.title;
+        // Kleiner Hinweis, welche Anleitung zur offenen Sitzung gehört.
+        if (t.id === hereId) b.append(Object.assign(document.createElement("small"), { className: "nav-here", textContent: here!.conn.name }));
+        b.onclick = () => (show(t.id), b.focus({ preventScroll: true }));
+        return b;
+      }),
+    ]),
   );
   // Suche: Themen ausblenden, deren Titel und Text das Gesuchte nicht enthalten.
   const search = Object.assign(document.createElement("input"), { type: "search", placeholder: "Hilfe durchsuchen", className: "help-search" });
@@ -88,10 +116,18 @@ export function openHelp(id: string) {
       b.hidden = !!q && !`${t.title}\n${t.md}`.toLowerCase().includes(q);
       if (!b.hidden) first ??= t.id;
     }
+    // Gruppentitel ohne sichtbare Anleitung ausblenden.
+    for (const h of nav.querySelectorAll<HTMLElement>(".nav-head")) {
+      let n = h.nextElementSibling;
+      let any = false;
+      while (n && !n.classList.contains("nav-head")) (any ||= !(n as HTMLElement).hidden), (n = n.nextElementSibling);
+      h.hidden = !any;
+    }
     if (q && first) show(first);
   };
   nav.prepend(search);
-  document.getElementById("help-website")!.onclick = () => void openWebsite();
+  document.getElementById("help-faq")!.onclick = () => openLink(LINKS.faq);
+  document.getElementById("help-issue")!.onclick = () => openLink(LINKS.issue(`Hilfe: ${body.querySelector("h1")?.textContent ?? ""}`));
   show(id);
   if (!dlg.open) {
     dlg.showModal();

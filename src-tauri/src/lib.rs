@@ -2576,21 +2576,29 @@ pub fn run() {
                     .item(&P::minimize(app, Some("Im Dock ablegen"))?)
                     .item(&P::maximize(app, Some("Zoomen"))?)
                     .build()?;
-                // IDs wie in src/help.ts.
-                let help = SubmenuBuilder::new(app, "Hilfe")
-                    .text("cmd:website", "Sesam Remote-Website")
-                    .separator()
+                // IDs und Gruppen wie in src/help.ts. «help:» ohne Thema = Anleitung zur offenen Sitzung.
+                let setup = SubmenuBuilder::new(app, "Zielrechner einrichten")
+                    .text("help:rdp-windows", "Windows (RDP)")
+                    .text("help:rdp-gnome", "Ubuntu mit GNOME (RDP)")
+                    .text("help:rdp-xrdp", "Linux mit xrdp (RDP)")
+                    .text("help:macos", "Mac mit Bildschirmfreigabe")
+                    .text("help:wayvnc", "Linux mit wayvnc (wlroots)")
+                    .build()?;
+                let connect = SubmenuBuilder::new(app, "Verbinden")
                     .text("help:zugangsdaten", "Welche Zugangsdaten?")
-                    .separator()
-                    .text("help:rdp-gnome", "RDP mit GNOME (Ubuntu)")
-                    .text("help:rdp-windows", "RDP mit Windows")
-                    .text("help:rdp-xrdp", "RDP mit xrdp (Linux)")
-                    .text("help:komfort", "Komfortfunktionen")
                     .text("help:vnc", "VNC allgemein")
-                    .text("help:wayvnc", "wayvnc (wlroots)")
-                    .text("help:macos", "macOS-Bildschirmfreigabe")
                     .text("help:ssh", "SSH und SFTP")
                     .text("help:ftp", "FTP und FTPS")
+                    .build()?;
+                let help = SubmenuBuilder::new(app, "Hilfe")
+                    .text("help:", "Hilfe zu dieser Ansicht")
+                    .separator()
+                    .item(&setup)
+                    .item(&connect)
+                    .text("help:komfort", "Komfortfunktionen")
+                    .separator()
+                    .text("cmd:news", "Was ist neu in dieser Version")
+                    .text("cmd:issue", "Fehler melden oder Idee teilen …")
                     .build()?;
                 app.set_menu(MenuBuilder::new(app).items(&[&app_menu, &file, &edit, &view, &session, &window, &help]).build()?)?;
             } else if let Some(w) = app.get_webview_window("main") {

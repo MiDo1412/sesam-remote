@@ -6,13 +6,13 @@ import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
 import { detachedWindow, detachToken, initTabs, jumpCommands, openTab, runTool, setLibrary, takeOver } from "./tabs";
 import { ask, choose, tell } from "./ui";
-import { openHelp, topics } from "./help";
+import { openHelp, topicFor, topics } from "./help";
 import { connectionCommands, initPalette } from "./palette";
 import { clipHistory, initClipHistory } from "./cliphistory";
 import { initTitlebar, isMac, isMobile, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
-import { applyAppearance, openSettings, openWebsite, settingsWindow } from "./settings";
+import { applyAppearance, LINKS, openLink, openSettings, openWebsite, settingsWindow } from "./settings";
 import { openFirstAid, serviceOf, type Service } from "./firstaid";
 import { unlockDesktop } from "./unlock";
 import { openPermissions } from "./permissions";
@@ -385,6 +385,8 @@ function render() {
     }),
   );
   $("empty").hidden = items.length > 0;
+  // Leer: nur ein Hauptknopf (im Leerzustand), nicht derselbe zweimal.
+  $("new").hidden = items.length === 0;
   if (refocus) $(list ? "conn-rows" : "grid").querySelector<HTMLElement>(list ? "tr[tabindex='0']" : ".card[aria-pressed=true]")?.focus();
   renderDetails();
 }
@@ -1107,7 +1109,15 @@ document.querySelector<HTMLElement>("main > section.list")!.addEventListener("co
 if (!detachedWindow && !settingsWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 // Dock-Menü (macOS): Klick kommt als Link direkt von der App, ohne Umweg über das System.
 if (!detachedWindow && !settingsWindow) listen<string>("link", (e) => handleLink(e.payload));
-for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) b.onclick = () => openHelp(b.dataset.help!);
+for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) {
+  // Gleiches Fragezeichen wie bei den Feldern; beim RDP-Block die Anleitung zum gewählten Betriebssystem.
+  if (b.classList.contains("help-btn")) b.innerHTML = ICON.question;
+  b.onclick = () => {
+    const f = b.closest("form");
+    const v = (n: string) => (f?.elements.namedItem(n) as HTMLSelectElement | null)?.value ?? "";
+    openHelp(b.dataset.help === "rdp-gnome" && f ? topicFor({ ...blank(), rdpPort: 3389, vncPort: null, os: v("os"), rdpTarget: v("rdpTarget") } as Connection, "desktop") : b.dataset.help!);
+  };
+}
 listen<string>("help", (e) => openHelp(e.payload));
 initTitlebar({ command: (c) => (!detachedWindow || c === "settings") && command(c), tool: runTool, help: openHelp });
 applyAppearance();
@@ -1136,6 +1146,9 @@ const palette = initPalette(() => [
   { label: "Sitzung trennen", keywords: "schliessen beenden", run: () => runTool("Trennen") },
   { label: "Über Sesam Remote", keywords: "version info", run: () => void openSettings("about") },
   { label: "Website von Sesam Remote", keywords: "sesam-remote.app internet download neuigkeiten", run: () => void openWebsite() },
+  { label: "Was ist neu in dieser Version", keywords: "versionshinweise neuigkeiten changelog", run: () => openLink(LINKS.news()) },
+  { label: "Fehler melden oder Idee teilen", keywords: "github issue feedback rückmeldung", run: () => openLink(LINKS.issue("")) },
+  { label: "Hilfe zu dieser Ansicht", keywords: "anleitung hilfe", run: () => openHelp("") },
   {
     label: "Diagnose: Tastentest",
     keywords: "windows taste win alt tab hook",
@@ -1161,6 +1174,8 @@ const command = (cmd: string) => {
   if (cmd === "settings") openSettings();
   else if (cmd === "about") openSettings("about");
   else if (cmd === "website") void openWebsite();
+  else if (cmd === "news") openLink(LINKS.news());
+  else if (cmd === "issue") openLink(LINKS.issue(""));
   else if (cmd === "permissions") void openPermissions();
   else if (cmd === "credentials") openSettings("creds");
   else if (cmd === "palette") palette.open();

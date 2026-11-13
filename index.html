@@ -54,7 +54,8 @@
             <p id="no-match" class="empty no-match" hidden>Keine Verbindungen gefunden.</p>
             <div id="empty" class="empty" hidden>
               <img class="empty-logo" src="/sesam-icon.svg" alt="" width="64" height="64" />
-              <p>Noch keine Verbindungen.</p>
+              <h2 class="empty-title">Hier wohnen deine Rechner.</h2>
+              <p>Lege einen Rechner einmal an und öffne danach Desktop, Shell oder Dateien mit einem Tipp. Oder verbinde dich schnell mit einer Adresse, ohne sie zu speichern.</p>
               <div class="empty-actions">
                 <button type="button" class="primary" id="empty-new">Neue Verbindung</button>
                 <button type="button" id="empty-quick">Schnelle Verbindung</button>
@@ -431,7 +432,7 @@
           <img src="/sesam-icon.svg" alt="" width="72" height="72" />
           <h2>Sesam Remote</h2>
           <p>Version <span id="settings-version"></span></p>
-          <p><button type="button" class="link" id="settings-website">sesam-remote.app</button></p>
+          <p class="about-links"><button type="button" class="link" id="about-news">Was ist neu in dieser Version</button><button type="button" class="link" id="about-download">Sesam auf deinen anderen Geräten</button><button type="button" class="link" id="about-issue">Fehler melden oder Idee teilen</button></p>
           <div class="update-box" id="update-box" hidden>
             <p class="note" id="update-line" aria-live="polite"></p>
             <label class="check"><input type="checkbox" id="update-auto" /> <span>Automatisch aktualisieren</span></label>
@@ -447,7 +448,7 @@
       <div class="help">
         <nav id="help-nav" aria-label="Anleitungen"></nav>
         <article id="help-body"></article>
-        <form method="dialog" class="help-close"><button type="button" class="plain" id="help-website">Website sesam-remote.app</button><button aria-label="Hilfe schliessen">Schliessen</button></form>
+        <form method="dialog" class="help-close"><span class="help-links"><button type="button" class="link" id="help-faq">Häufige Fragen</button><button type="button" class="link" id="help-issue">Anleitung verbessern</button></span><button aria-label="Hilfe schliessen">Schliessen</button></form>
       </div>
     </dialog>
 

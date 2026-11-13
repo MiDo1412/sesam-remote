@@ -20,6 +20,8 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ### Neu
 
+- **Hilfe, die weiss, wo du bist:** «Hilfe zu dieser Ansicht» (Mac: Menü «Hilfe», Windows: ☰ › Hilfe, überall in der Befehlspalette) öffnet die Anleitung zur offenen Sitzung: RDP zu Windows, GNOME oder xrdp je nach System, VNC zum Mac, SSH oder FTP. Das Hilfe-Fenster und das Mac-Menü sind in «Zielrechner einrichten», «Verbinden» und «Sesam kennenlernen» gegliedert; die passende Anleitung trägt den Namen der Verbindung.
+- **Links an die richtige Stelle:** Statt überall auf die Startseite zu zeigen, führen die Links jetzt dorthin, wo es weitergeht: «Was ist neu in dieser Version» zu den Versionshinweisen genau dieser Version, «Sesam auf deinen anderen Geräten» zum Download, «Fehler melden oder Idee teilen» zu GitHub. Im Hilfe-Fenster: «Häufige Fragen» und «Anleitung verbessern» mit dem Titel der offenen Anleitung.
 - **Touch-Bedienung je Verbindung:** Im Editor unter «Desktop» wählst du für Geräte mit Touch, ob du den Zeiger wie auf einem Touchpad schiebst oder direkt tippst; die Sitzung startet so. Im Vollbild schaltest du über die Verbindungsleiste oben um (Handsymbol).
 
 ### Behoben
@@ -29,6 +31,7 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ### Verbessert
 
+- **Feinschliff:** Leere Bibliothek mit einer Erklärung und nur einem Hauptknopf statt zwei gleichen. Die «Zuletzt»-Einträge der schnellen Verbindung sind rund wie alle anderen. Die Fragezeichen bei den Diensten sehen aus wie die bei den Feldern; das beim Remotedesktop öffnet die Anleitung zum gewählten Betriebssystem.
 - **Protokoll der letzten Läufe bleibt:** Beim Start legt Sesam `sesam.log` nicht mehr über das alte; die zwei vorigen Läufe bleiben als `sesam.1.log` und `sesam.2.log` (je höchstens 5 MB, bei mehr das Ende). So lässt sich z. B. nachlesen, was ein Update vor dem Neustart heruntergeladen und installiert hat.
 
 ### Betrieb

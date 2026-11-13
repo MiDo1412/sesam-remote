@@ -181,6 +181,8 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
 }
 
 export const hasTabs = () => tabs.length > 0;
+/** Sitzung, die gerade zu sehen ist (nicht die Bibliothek), z. B. für die Hilfe zur Lage. */
+export const visibleSession = () => (active && !$("session").hidden ? { conn: active.ctx.conn, kind: active.kind } : null);
 
 /** Tab öffnen oder vorhandenen gleicher Art zeigen (`fresh` erzwingt einen neuen, z. B. weitere Shell). */
 // ---------- Statusmeldungen ----------

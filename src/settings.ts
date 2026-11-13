@@ -125,7 +125,9 @@ export async function openSettings(tab = "general") {
   fam.onchange = () => saveTermSettings({ ...termSettings(), fontFamily: fam.value.trim() });
 
   // Über
-  $("settings-website").onclick = () => void openWebsite();
+  $("about-news").onclick = () => openLink(LINKS.news());
+  $("about-download").onclick = () => openLink(LINKS.download);
+  $("about-issue").onclick = () => openLink(LINKS.issue(""));
   $("settings-version").textContent = __VERSION_LABEL__ || (await getVersion().catch(() => ""));
   void renderUpdate();
   show(tab);
@@ -161,9 +163,23 @@ async function renderCerts() {
   );
 }
 
-/** Website von Sesam Remote im Standardbrowser (Über Sesam, Menü «Hilfe», Hilfe-Fenster, Befehlspalette). */
+/** Links nach draussen, jeweils an die Stelle, die gerade passt (statt immer auf die Startseite). */
 export const WEBSITE = "https://sesam-remote.app";
-export const openWebsite = () => openUrl(WEBSITE).catch(() => {});
+const REPO = "https://github.com/MiDo1412/sesam-remote";
+export const LINKS = {
+  /** Versionshinweise genau dieser Version. */
+  news: async () => {
+    const v = await getVersion().catch(() => "");
+    return v ? `${REPO}/releases/tag/v${v}` : `${REPO}/releases`;
+  },
+  /** Download-Abschnitt: Sesam für die anderen Geräte. */
+  download: `${WEBSITE}/#laden`,
+  faq: `${WEBSITE}/#fragen`,
+  /** Neues Issue mit vorbereitetem Titel, z. B. zur gerade gelesenen Anleitung. */
+  issue: (title: string) => `${REPO}/issues/new?title=${encodeURIComponent(title)}`,
+};
+export const openLink = (url: string | Promise<string>) => void Promise.resolve(url).then((u) => openUrl(u)).catch(() => {});
+export const openWebsite = () => openLink(WEBSITE);
 
 // ---------- Automatische Updates (src-tauri/src/update.rs) ----------
 interface UpdateStatus {

@@ -248,7 +248,12 @@ body.no-sidebar main { margin-left: var(--s-2); }
 .empty { color: var(--muted); }
 .no-match { margin: var(--s-6) 0; text-align: center; }
 .empty-actions { display: flex; gap: var(--s-2); }
-.empty-logo { display: block; margin-bottom: var(--s-3); }
+.empty-logo { display: block; margin: 0 auto var(--s-3); }
+#empty { max-width: 420px; margin: var(--s-6) auto; text-align: center; }
+#empty .empty-title { margin: 0 0 var(--s-1); color: var(--text); font-size: 17px; font-weight: 600; }
+#empty p { margin: 0 0 var(--s-4); line-height: 1.5; }
+#empty .empty-actions { justify-content: center; flex-wrap: wrap; }
+.recent .chip { display: inline-flex; align-items: center; border-radius: var(--r-ctl); }
 /* Karten (Inhalt): Vorschaubild konzentrisch (Radius − Innenabstand 6 px) */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: var(--s-4); }
 .card-wrap { position: relative; }
@@ -367,7 +372,7 @@ fieldset.adv .adv-fields > :is(label.span, .span, label.option, .pair) { grid-co
 .label-line { display: inline-flex; align-items: center; gap: var(--s-1); }
 .tip-btn, .help-btn { --h-ctl: 18px; width: 18px; padding: 0; background: transparent; color: var(--muted); }
 .tip-btn:hover:not(:disabled), .tip-btn:focus-visible, .help-btn:hover:not(:disabled) { background: transparent; color: var(--accent); }
-.help-btn { margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--accent); vertical-align: 1px; }
+.help-btn { margin-left: 6px; vertical-align: -3px; }
 .sheet label[data-tip] { flex-direction: column; }
 .popover { position: fixed; z-index: 120; max-width: 300px; padding: 10px var(--s-3); border-radius: var(--r-menu); font-size: 12px; line-height: 1.45; animation: menu-in var(--dur-s) var(--ease); }
 .probe-note { display: block; min-height: 1em; margin-top: var(--s-1); color: var(--muted); font-size: 11px; }
@@ -447,6 +452,9 @@ dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; overfl
 .help { width: min(880px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
 #help-nav { grid-row: span 2; padding: var(--s-4) var(--s-2); background: var(--surface); box-shadow: 1px 0 0 var(--line); }
 .help-search { width: 100%; margin-bottom: var(--s-2); }
+#help-nav h3.nav-head { margin: 0; }
+#help-nav .nav-head:first-of-type { padding-top: var(--s-2); }
+.nav-here { margin-left: auto; padding-left: var(--s-2); color: var(--accent); font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
 #help-body { overflow: auto; padding: var(--s-2) 28px var(--s-5); font-size: 13px; line-height: 1.55; }
 #help-body h1 { font-size: 22px; }
 #help-body h2 { font-size: 15px; margin-top: var(--s-5); }
@@ -456,6 +464,7 @@ dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; overfl
 #help-body table { border-collapse: collapse; }
 #help-body th, #help-body td { border-bottom: 1px solid var(--line); padding: 6px var(--s-3) 6px 0; text-align: left; }
 .help-close, .settings-close { grid-column: 2; display: flex; justify-content: flex-end; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
+.help-links { display: flex; gap: var(--s-3); align-items: center; margin-right: auto; }
 #help-website { margin-right: auto; }
 .help-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: var(--s-3) 14px; border-radius: var(--r-card); background: var(--select); }
 .help-actions .note { margin: 0; }
@@ -717,6 +726,7 @@ dialog.preview h2 { margin: 0; text-align: center; overflow: hidden; text-overfl
 .settings-pane h2 { font-size: 15px; margin: var(--s-2) 0 var(--s-1); }
 .settings-pane h3 { font-size: 13px; margin: var(--s-2) 0 0; }
 .settings-pane.about { align-items: center; justify-content: center; text-align: center; }
+.about-links { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1) var(--s-3); }
 .update-box { display: grid; justify-items: center; gap: var(--s-2); margin-top: var(--s-3); }
 .update-box .row { display: flex; gap: var(--s-2); }
 .list-head .plain { font-size: 13px; }
