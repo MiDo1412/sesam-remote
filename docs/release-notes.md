@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.5 — 2026-11-14
+
+Remotedesktop zu Windows mit PIN-Anmeldung erklärt, Bildschirmtastatur im Vollbild auf dem iPad und ein sauberer Statuspunkt.
+
 ### Neu
 
 - **Windows mit PIN oder kennwortlosem Microsoft-Konto:** Windows lässt Remotedesktop nur mit Kennwort zu, nicht mit PIN. Die Hilfe «RDP mit Windows» zeigt jetzt beide Wege (Kennwort zurück ans Microsoft-Konto oder ein lokales Konto nur für den Fernzugriff, mit fertigem PowerShell-Befehl), und die Fehlermeldung bei abgelehnter Anmeldung weist darauf hin.
