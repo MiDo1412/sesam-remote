@@ -18,6 +18,14 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Neu
+
+- **Datenschutz:** «Über Sesam», das Hilfe-Fenster und die Befehlssuche öffnen die Datenschutzerklärung auf sesam-remote.app.
+
+### Behoben
+
+- **Schmale Fenster auf dem iPad:** Im Hilfe-Fenster brechen die Links unten um, statt in die Themenliste zu ragen; in den Einstellungen steht «Erscheinungsbild» unter der Beschriftung, statt abgeschnitten zu werden (iPad 11" hochkant).
+
 ## 26.11.5 — 2026-11-14
 
 Remotedesktop zu Windows mit PIN-Anmeldung erklärt, Bildschirmtastatur im Vollbild auf dem iPad und ein sauberer Statuspunkt.
