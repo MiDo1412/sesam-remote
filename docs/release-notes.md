@@ -18,6 +18,14 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Behoben
+
+- **Versionsanzeige auf dem iPad:** Ein Release-Build zeigt unter «Über Sesam» wieder seine Nummer statt der nächsten als «Entwicklungsstand» (26.11.6 aus TestFlight zeigte «26.11.7 Entwicklungsstand»).
+
+### Betrieb
+
+- **Exportkontrolle:** Die iPad-App meldet `ITSAppUsesNonExemptEncryption = NO`, wie Apple die Antwort zu 26.11.6 eingestuft hat; App Store Connect fragt bei neuen Builds nicht mehr nach.
+
 ## 26.11.6 — 2026-11-14
 
 Die Datenschutzerklärung ist aus der App erreichbar, und auf dem kleineren iPad im Hochformat ist nichts mehr abgeschnitten.

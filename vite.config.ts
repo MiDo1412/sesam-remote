@@ -18,10 +18,11 @@ const git = (...args: string[]) => {
 };
 
 /** Angezeigte Version: ein geschnittenes Release (HEAD ist der Commit, der VERSION gesetzt hat) zeigt nur die
- *  Nummer; jeder andere Build die kommende Nummer als Entwicklungsstand mit Commit und Baudatum. */
+ *  Nummer; jeder andere Build die kommende Nummer als Entwicklungsstand mit Commit und Baudatum.
+ *  src-tauri/gen/apple zählt nicht: `tauri ios build` schreibt Team-ID und Version dort hinein, bevor es die Oberfläche baut. */
 function versionLabel(commitId: string) {
   const version = readFileSync("VERSION", "utf8").trim();
-  const released = commitId && git("log", "-1", "--format=%h", "--", "VERSION") === commitId && !git("status", "--porcelain", "--untracked-files=no");
+  const released = commitId && git("log", "-1", "--format=%h", "--", "VERSION") === commitId && !git("status", "--porcelain", "--untracked-files=no", "--", ".", ":!src-tauri/gen/apple");
   if (released) return version;
   const [y, m, d] = today().split("-");
   return [`${next(version, today())} Entwicklungsstand`, commitId, `${Number(d)}.${Number(m)}.${y}`].filter(Boolean).join(" · ");
