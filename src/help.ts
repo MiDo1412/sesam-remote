@@ -127,6 +127,7 @@ export function openHelp(id: string) {
   };
   nav.prepend(search);
   document.getElementById("help-faq")!.onclick = () => openLink(LINKS.faq);
+  document.getElementById("help-privacy")!.onclick = () => openLink(LINKS.privacy);
   document.getElementById("help-issue")!.onclick = () => openLink(LINKS.issue(`Hilfe: ${body.querySelector("h1")?.textContent ?? ""}`));
   show(id);
   if (!dlg.open) {

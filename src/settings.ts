@@ -128,6 +128,7 @@ export async function openSettings(tab = "general") {
   $("about-news").onclick = () => openLink(LINKS.news());
   $("about-download").onclick = () => openLink(LINKS.download);
   $("about-issue").onclick = () => openLink(LINKS.issue(""));
+  $("about-privacy").onclick = () => openLink(LINKS.privacy);
   $("settings-version").textContent = __VERSION_LABEL__ || (await getVersion().catch(() => ""));
   void renderUpdate();
   show(tab);
@@ -175,6 +176,8 @@ export const LINKS = {
   /** Download-Abschnitt: Sesam für die anderen Geräte. */
   download: `${WEBSITE}/#laden`,
   faq: `${WEBSITE}/#fragen`,
+  /** Datenschutzerklärung, muss laut App Review (5.1.1) auch in der App erreichbar sein. */
+  privacy: `${WEBSITE}/datenschutz.html`,
   /** Neues Issue mit vorbereitetem Titel, z. B. zur gerade gelesenen Anleitung. */
   issue: (title: string) => `${REPO}/issues/new?title=${encodeURIComponent(title)}`,
 };

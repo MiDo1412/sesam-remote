@@ -1148,6 +1148,7 @@ const palette = initPalette(() => [
   { label: "Website von Sesam Remote", keywords: "sesam-remote.app internet download neuigkeiten", run: () => void openWebsite() },
   { label: "Was ist neu in dieser Version", keywords: "versionshinweise neuigkeiten changelog", run: () => openLink(LINKS.news()) },
   { label: "Fehler melden oder Idee teilen", keywords: "github issue feedback rückmeldung", run: () => openLink(LINKS.issue("")) },
+  { label: "Datenschutzerklärung", keywords: "datenschutz privacy daten", run: () => openLink(LINKS.privacy) },
   { label: "Hilfe zu dieser Ansicht", keywords: "anleitung hilfe", run: () => openHelp("") },
   {
     label: "Diagnose: Tastentest",
