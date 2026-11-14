@@ -722,7 +722,9 @@ dialog.preview h2 { margin: 0; text-align: center; overflow: hidden; text-overfl
 .settings-nav button:active:not(:disabled), #help-nav button:active:not(:disabled) { transform: none; }
 .settings-nav button:hover:not(:disabled):not([aria-selected=true]), #help-nav button:hover:not(:disabled):not([aria-current=true]) { background: var(--fill); }
 .settings-nav button[aria-selected=true], #help-nav button[aria-current=true] { background: var(--fill-strong); font-weight: 600; }
-.settings-pane { overflow: auto; padding: var(--s-4) var(--s-5); display: flex; flex-direction: column; gap: var(--s-3); font-size: 13px; }
+.settings-pane { overflow: auto; padding: var(--s-4) var(--s-5); display: flex; flex-direction: column; gap: var(--s-3); font-size: 13px; container-type: inline-size; }
+/* Schmales Fenster (iPad 11" hochkant): Segmente unter die Beschriftung, sonst werden sie abgeschnitten */
+@container (max-width: 440px) { .row:has(> .segmented) { grid-template-columns: minmax(0, 1fr); gap: var(--s-2); } }
 .settings-pane h2 { font-size: 15px; margin: var(--s-2) 0 var(--s-1); }
 .settings-pane h3 { font-size: 13px; margin: var(--s-2) 0 0; }
 .settings-pane.about { align-items: center; justify-content: center; text-align: center; }
