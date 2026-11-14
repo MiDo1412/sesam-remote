@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.7 — 2026-11-14
+
+Das iPad zeigt seine Versionsnummer wieder richtig an, und der App Store fragt nicht mehr bei jedem Build nach der Verschlüsselung.
+
 ### Behoben
 
 - **Versionsanzeige auf dem iPad:** Ein Release-Build zeigt unter «Über Sesam» wieder seine Nummer statt der nächsten als «Entwicklungsstand» (26.11.6 aus TestFlight zeigte «26.11.7 Entwicklungsstand»).
