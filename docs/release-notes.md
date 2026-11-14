@@ -26,6 +26,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 - **Schmale Fenster auf dem iPad:** Im Hilfe-Fenster brechen die Links unten um, statt in die Themenliste zu ragen; in den Einstellungen steht «Erscheinungsbild» unter der Beschriftung, statt abgeschnitten zu werden (iPad 11" hochkant).
 
+### Betrieb
+
+- **Hochladen zu App Store Connect:** `scripts/asc-upload.sh` holt den API-Schlüssel aus dem Schlüsselbund und Key-ID und Issuer-ID aus `~/.sesam/asc.env`; im Repository liegen keine Geheimnisse.
+
 ## 26.11.5 — 2026-11-14
 
 Remotedesktop zu Windows mit PIN-Anmeldung erklärt, Bildschirmtastatur im Vollbild auf dem iPad und ein sauberer Statuspunkt.
