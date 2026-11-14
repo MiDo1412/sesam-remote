@@ -301,6 +301,8 @@ export function desktopTouch(o: {
     /** Nur auf Geräten mit Touch, sonst leer. */
     buttons: isTouch() ? [modeBtn, lupeBtn, kb.button, toolSep()] : [],
     pickMode,
+    /** Bildschirmtastatur ein/aus (für die Vollbild-Leiste). */
+    keyboard: () => kb.button.click(),
     hide: () => kb.hide(),
     dispose: () => kb.dispose(),
   };

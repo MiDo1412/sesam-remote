@@ -50,7 +50,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
       <option value="print">Druck</option>
     </select>`;
   enhanceSelect($<HTMLSelectElement>(".send-keys"), {
-    pulldown: { label: "Tasten", icon: ICON.keyboard },
+    pulldown: { label: "Tasten", icon: ICON.key },
     shortcuts: { cad: "Strg+Alt+Entf", cse: "Strg+Umschalt+Esc", alttab: "Alt+Tab", altf4: "Alt+F4" },
   });
 
@@ -335,7 +335,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   const barName = document.createElement("span");
   barName.className = "fs-name";
   barName.textContent = c.name;
-  const keysBtn = barBtn(ICON.keyboard, "Tasten senden", async () => {
+  const keysBtn = barBtn(ICON.key, "Tasten senden", async () => {
     const v = await openMenu(keysBtn, [
       { value: "cad", label: "Strg+Alt+Entf" },
       { value: "cse", label: "Strg+Umschalt+Esc" },
@@ -347,11 +347,13 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     if (v) (sendKeys.value = v), sendKeys.dispatchEvent(new Event("change"));
   });
   const touchBtn = barBtn(ICON.handTap, "Touch-Bedienung", () => void touch.pickMode(touchBtn));
+  // Im Vollbild ist die Werkzeugleiste weg: Bildschirmtastatur auch hier, sonst fehlt sie auf dem iPad ganz.
+  const oskBtn = barBtn(ICON.keyboard, "Bildschirmtastatur", () => touch.keyboard());
   bar.append(
     pinBtn,
     keysBtn,
     barBtn(ICON.typeClipboard, "Zwischenablage abtippen", () => void typeClipboard()),
-    ...(isTouch() ? [touchBtn] : []),
+    ...(isTouch() ? [oskBtn, touchBtn] : []),
     barName,
     ...(isMobile ? [] : [barBtn(ICON.minimize, "Minimieren", () => void win.minimize())]),
     barBtn(ICON.windowed, isMobile ? "Vollbild beenden" : "Fenstermodus (F11)", () => void toggleFullscreen()),

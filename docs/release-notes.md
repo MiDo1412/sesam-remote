@@ -18,6 +18,15 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Neu
+
+- **Windows mit PIN oder kennwortlosem Microsoft-Konto:** Windows lässt Remotedesktop nur mit Kennwort zu, nicht mit PIN. Die Hilfe «RDP mit Windows» zeigt jetzt beide Wege (Kennwort zurück ans Microsoft-Konto oder ein lokales Konto nur für den Fernzugriff, mit fertigem PowerShell-Befehl), und die Fehlermeldung bei abgelehnter Anmeldung weist darauf hin.
+
+### Behoben
+
+- **Bildschirmtastatur im Vollbild (iPad):** Im Vollbild fehlte die Tastatur, weil die Werkzeugleiste weg ist. Die Leiste oben hat jetzt einen Knopf dafür. «Tasten senden» trägt ein eigenes Symbol (Schlüssel), damit es nicht mit der Tastatur verwechselt wird.
+- **Punkt «erreichbar» auf den Karten:** Der grüne Punkt vor der Adresse war links leicht abgeschnitten.
+
 ## 26.11.4 — 2026-11-14
 
 RDP vom iPad zu Windows-PCs geht, die Hilfe kennt deine offene Sitzung, und der Touchmodus lässt sich je Verbindung und im Vollbild wählen.

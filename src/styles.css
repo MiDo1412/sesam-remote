@@ -270,7 +270,7 @@ body.no-sidebar main { margin-left: var(--s-2); }
 .card-sub, .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .card .card-sub { margin: 2px 6px 0; }
 .card-wrap .card-name, .card-wrap .card-sub { margin-right: 100px; }
-.card-wrap .card-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-wrap .card-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 3px; padding-left: 3px; } /* Platz für den Schein des Punkts «erreichbar», sonst links abgeschnitten */
 .thumb { position: relative; display: grid; place-items: center; background: #3d6a8c center / cover; color: rgba(255, 255, 255, 0.85); }
 .thumb.has-image .thumb-os { display: none; }
 .thumb-os { display: inline-flex; }

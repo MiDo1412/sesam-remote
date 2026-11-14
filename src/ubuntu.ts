@@ -96,7 +96,7 @@ export function explainRdpError(msg: string, c: Pick<Connection, "rdpTarget" | "
   if (!msg.includes("Anmeldung abgelehnt")) return msg;
   if (c.rdpTarget === "login") return "Der Anmeldebildschirm hat die Zugangsdaten abgelehnt. Gefragt sind die Zugangsdaten der Systemfreigabe von GNOME Remote Desktop (Sesam-Setup-Script oder «sudo grdctl --system»), nicht unbedingt die des Ubuntu-Kontos.";
   if (c.rdpTarget === "session") return `Die Freigabe von ${c.rdpSessionUser || "diesem Benutzer"} hat die Zugangsdaten abgelehnt (Ubuntu: Einstellungen › System › Remote-Desktop › Desktopfreigabe).`;
-  const win = "Bei Windows mit Microsoft-Konto: die E-Mail-Adresse und das Microsoft-Kennwort eingeben (nicht die Windows-Hello-PIN). Bei einem lokalen Konto: den Kontonamen, nicht den angezeigten vollen Namen.";
+  const win = "Bei Windows mit Microsoft-Konto: die E-Mail-Adresse und das Microsoft-Kennwort eingeben (nicht die Windows-Hello-PIN). Hat das Microsoft-Konto kein Kennwort mehr (kennwortlose Anmeldung, am PC nur PIN), geht RDP damit nicht: Hilfe «RDP mit Windows» › «Nur PIN». Bei einem lokalen Konto: den Kontonamen, nicht den angezeigten vollen Namen.";
   const linux = "Bei GNOME-Remote-Desktop (Ubuntu) gelten die Zugangsdaten aus Einstellungen › System › Remote-Desktop, nicht unbedingt das Konto-Passwort; bei xrdp das Passwort des Linux-Kontos.";
   if (c.os === "windows") return `Benutzer oder Passwort falsch. ${win}`;
   if (c.os === "ubuntu" || c.os === "linux" || c.os === "raspberry") return `Benutzer oder Passwort falsch. ${linux}`;
