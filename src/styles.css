@@ -464,8 +464,8 @@ dialog.palette { width: min(620px, calc(100vw - 48px)); margin-top: 12vh; overfl
 #help-body table { border-collapse: collapse; }
 #help-body th, #help-body td { border-bottom: 1px solid var(--line); padding: 6px var(--s-3) 6px 0; text-align: left; }
 .help-close, .settings-close { grid-column: 2; display: flex; justify-content: flex-end; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
-.help-links { display: flex; gap: var(--s-3); align-items: center; margin-right: auto; }
-#help-website { margin-right: auto; }
+.help-close { align-items: center; min-width: 0; }
+.help-links { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); align-items: center; min-width: 0; margin-right: auto; }
 .help-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: var(--s-3) 14px; border-radius: var(--r-card); background: var(--select); }
 .help-actions .note { margin: 0; }
 
