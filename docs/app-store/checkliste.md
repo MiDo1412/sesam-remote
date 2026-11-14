@@ -31,7 +31,7 @@ Stand 12.11.2026. Vorbereitet ohne Anmeldung bei Apple; nichts ist registriert, 
    Bundle-ID `ch.sesam.remote`, SKU z. B. `sesam-remote-ipad`, voller Zugriff.
    Dann Texte, URLs, Kategorie, Preis (gratis), Altersfreigabe, App-Datenschutz aus diesem Ordner eintragen,
    Screenshots hochladen, Verfügbarkeit (Frankreich vorerst ohne, siehe `export-compliance.md`).
-6. **Build bauen und hochladen** (siehe unten), Exportkontrolle beantworten, dann Code in die Info.plist.
+6. **Build bauen und hochladen** (siehe unten), Exportkontrolle beantworten (erledigt mit 26.11.6: als ausgenommen eingestuft, kein Code; `ITSAppUsesNonExemptEncryption = NO` in der Info.plist).
 7. **TestFlight** intern auf beiden iPads testen (ersetzt die 7-Tage-Installationen des kostenlosen Teams),
    dabei RDP und Hochladen aus «Dateien» prüfen.
 8. **Zur Prüfung einreichen** mit den Notizen aus `review-notes.md` (Test-Server vorher einschalten).

@@ -27,8 +27,8 @@ Entscheidung von Mike braucht, ist als **Blocker** markiert.
   Schriften: `docs/lizenzen/`. Nimmt Sesam Beiträge von anderen an, gelten sie unter derselben Lizenz.
 - **Exportkontrolle (Entscheidung):** Sesam verschlüsselt selbst (SSH, TLS über ring/rustls). Für Apple
   heisst das `ITSAppUsesNonExemptEncryption`; ob die Ausnahme für Standardverfahren greift und ob eine
-  jährliche Selbstauskunft (US BIS) nötig ist, entscheidet Mike bzw. die Beratung. Darum ist der Schlüssel
-  noch **nicht** gesetzt; App Store Connect fragt beim Hochladen danach. Einordnung und Empfehlung:
+  jährliche Selbstauskunft (US BIS) nötig ist, entscheidet Mike bzw. die Beratung. Apple hat die Antwort
+  beim ersten Build (26.11.6) als ausgenommen eingestuft; der Schlüssel steht darum auf `NO`. Einordnung:
   `docs/app-store/export-compliance.md`.
 
 ## Mac: Download von der Website

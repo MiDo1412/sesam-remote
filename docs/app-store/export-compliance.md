@@ -46,23 +46,23 @@ verkäufliche Massenware mit Standardverschlüsselung ebenfalls aus.
 
 ## Info.plist-Schlüssel
 
-`ITSAppUsesNonExemptEncryption` ist **noch nicht** gesetzt, mit Absicht:
+`ITSAppUsesNonExemptEncryption` ist auf `NO` gesetzt, in `src-tauri/gen/apple/sesam-remote_iOS/Info.plist`
+(die Datei ist im Git; `tauri ios build` ändert darin nur die Versionsnummern, der Schlüssel bleibt).
 
-- Der Wert wäre `YES` (Sesam fällt nicht unter die reinen Ausnahmen wie «nur Anmeldung» oder «nur HTTPS über
-  iPadOS»). `NO` wäre falsch.
-- Mit `YES`, aber ohne `ITSEncryptionExportComplianceCode` fragt App Store Connect bei jedem Build ohnehin
-  nach; ohne Schlüssel ebenso. Gesetzt bringt er erst etwas zusammen mit dem Code.
-- **Sobald** die Antwort oben in App Store Connect einmal gegeben ist, zeigt Apple einen Code zur
-  Exportkonformität. Dann beide Schlüssel in `src-tauri/gen/apple/sesam-remote_iOS/Info.plist` eintragen:
+- Mike hat die Frage beim ersten Build (26.11.6, 14.11.2026) in App Store Connect › TestFlight wie oben
+  beantwortet (Standardverfahren, nichts Proprietäres). Apple hat den Build daraufhin als **ausgenommene
+  Verschlüsselung** eingestuft (`usesNonExemptEncryption = false`) und **keinen** Code zur Exportkonformität
+  vergeben; es gibt keine Verschlüsselungserklärung in App Store Connect.
+- Passend dazu steht der Schlüssel auf `NO`. Damit fragt App Store Connect bei neuen Builds nicht mehr nach.
+  `ITSEncryptionExportComplianceCode` braucht es nicht.
 
   ```xml
   <key>ITSAppUsesNonExemptEncryption</key>
-  <true/>
-  <key>ITSEncryptionExportComplianceCode</key>
-  <string>(Code aus App Store Connect)</string>
+  <false/>
   ```
 
-  Danach fragt App Store Connect bei neuen Builds nicht mehr.
+- Ändert sich die Verschlüsselung grundlegend (eigenes, nicht standardisiertes Verfahren), den Schlüssel
+  entfernen und die Frage in App Store Connect neu beantworten.
 
 Quelle: [Apple, Export compliance documentation for encryption](https://developer.apple.com/help/app-store-connect/reference/app-information/export-compliance-documentation-for-encryption/)
 (Tabelle: Standardverfahren → nur französische Erklärung, und nur bei Verkauf in Frankreich).
