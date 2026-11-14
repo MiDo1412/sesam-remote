@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.6 — 2026-11-14
+
+Die Datenschutzerklärung ist aus der App erreichbar, und auf dem kleineren iPad im Hochformat ist nichts mehr abgeschnitten.
+
 ### Neu
 
 - **Datenschutz:** «Über Sesam», das Hilfe-Fenster und die Befehlssuche öffnen die Datenschutzerklärung auf sesam-remote.app.
