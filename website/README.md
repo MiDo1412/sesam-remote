@@ -9,8 +9,8 @@ Vor dem Hochladen:
 - **E-Mail:** `support@sesam-remote.app` (Support und Datenschutz) muss eingerichtet sein.
 - **Downloads:** die Knöpfe zeigen auf `download/Sesam-Remote.dmg` (Mac) und
   `download/Sesam-Remote-Setup.exe` (Windows). Dateien dort ablegen oder Links anpassen.
-- **iPad:** «Bald im App Store» durch den App-Store-Link ersetzen, sobald die App freigegeben ist
-  (dann das offizielle Badge von Apple verwenden).
+- **iPad:** im App Store unter https://apps.apple.com/ch/app/sesam-remote/id6834800137 (seit 15.11.2026,
+  vorerst nur Schweiz). Offen: das offizielle Abzeichen «Laden im App Store» von Apple statt des Knopfs.
 - **App Store Connect:** Support-URL `https://sesam-remote.app/support.html`, Datenschutz-URL `https://sesam-remote.app/datenschutz.html`, App-Datenschutz «Keine Daten erfasst».
 
 `.htaccess` gilt für Apache (Typen, Komprimierung, Cache, CSP). Screenshots neu erzeugen: `../website-tools/README.md`.
