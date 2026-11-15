@@ -281,3 +281,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 
 
 /* Zweitlink unter einem Download-Knopf (portable Fassung) */
 .get .alt { margin: .6rem 0 0; font-size: .9em; }
+
+/* Apples Abzeichen unverändert, mindestens 40 px hoch, Freiraum ringsum (App-Store-Richtlinien) */
+.store-badge { display: inline-block; padding: 6px 0; line-height: 0; }
+.store-badge img { height: 48px; width: auto; }

@@ -1,6 +1,15 @@
 # Checkliste: was noch das bezahlte Entwicklerprogramm braucht
 
-Stand 12.11.2026. Vorbereitet ohne Anmeldung bei Apple; nichts ist registriert, angelegt oder hochgeladen.
+**Stand 15.11.2026: alles erledigt.** Sesam Remote 26.11.7 ist im App Store (vorerst nur Schweiz, gratis):
+https://apps.apple.com/ch/app/sesam-remote/id6834800137. Freigegeben nach rund 3 Stunden Prüfung; über
+Apple Business Manager und Intune (VPP, gerätebasiert) den alldesk-iPads zugewiesen.
+
+Für Updates: `node scripts/release.mjs`, IPA mit `--export-method app-store-connect` bauen, Team-ID-Änderung in
+`project.pbxproj` zurücksetzen, `scripts/asc-upload.sh`, in App Store Connect eine neue Version mit dem Build
+anlegen und einreichen. Vor dem Einreichen den Test-Server für App Review einschalten (Zugang nur in App Store
+Connect und im Schlüsselbund, nicht im Repository).
+
+Ursprünglicher Stand 12.11.2026: vorbereitet ohne Anmeldung bei Apple.
 
 ## Erledigt (im Repository)
 
