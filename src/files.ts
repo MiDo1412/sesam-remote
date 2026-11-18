@@ -101,7 +101,7 @@ export function filesTab(ctx: TabCtx): TabHandle {
   ctx.pane.prepend(host);
   const isWin = navigator.userAgent.includes("Windows");
 // iPad: links nur der Ordner der App («Auf meinem iPad › Sesam Remote» in der Dateien-App).
-const onDevice = isPhone ? "Auf meinem iPhone" : "Auf meinem iPad";
+const onDevice = /iPhone/.test(navigator.userAgent) ? "Auf meinem iPhone" : "Auf meinem iPad"; // das Gerät, nicht die Fenstergrösse (iPhone Duo)
 const localName = isMobile ? onDevice : "Dieser Computer";
 /** Apple-Tastenkürzel (⌘) auf Mac und iPad mit Tastatur. */
 const isMacUi = navigator.userAgent.includes("Mac");
@@ -147,14 +147,18 @@ const openPlaces = () =>
   const transfers = el("section", "transfers");
   transfers.setAttribute("aria-label", "Übertragungen");
   const transferHead = el("div", "transfers-head");
-  transferHead.append(el("h2", "", "Übertragungen"), el("span", "sub", isPhone ? `Oben zwischen «iPhone» und «${c.name}» wechseln, auswählen, dann «Hochladen» oder «Herunterladen». Der Haus-Knopf öffnet die Orte aus «Dateien».` : isMobile ? "Links: Haus-Knopf öffnet die Orte, auch Ordner aus «Dateien» (iCloud Drive, Auf meinem iPad, USB, Server). Zwischen den Seiten ziehen oder doppeltippen." : "Zwischen den Seiten ziehen, Dateien aus dem Explorer/Finder rechts ablegen, oder doppelklicken."));
+  const transferHint = el("span", "sub", "");
+  const hint = () => (transferHint.textContent = isPhone ? `Oben zwischen «iPhone» und «${c.name}» wechseln, auswählen, dann «Hochladen» oder «Herunterladen». Der Haus-Knopf öffnet die Orte aus «Dateien».` : isMobile ? `Links: Haus-Knopf öffnet die Orte, auch Ordner aus «Dateien» (iCloud Drive, ${onDevice}, USB, Server). Zwischen den Seiten ziehen oder doppeltippen.` : "Zwischen den Seiten ziehen, Dateien aus dem Explorer/Finder rechts ablegen, oder doppelklicken.");
+  hint();
+  transferHead.append(el("h2", "", "Übertragungen"), transferHint);
   const transferList = el("div", "transfer-list");
   transfers.append(transferHead, transferList);
   const grid = el("div", "panes");
   grid.append(panes.local.root, panes.remote.root);
-  // iPhone: eine Seite auf einmal (zu schmal für zwei), Umschalter oben; anfangs der Server.
+  // iPhone: eine Seite auf einmal (zu schmal für zwei), Umschalter oben; anfangs der Server. Auf allen Mobilgeräten angelegt,
+  // breit nur ausgeblendet (phone.css), damit der Tab beim Auf- und Zuklappen des iPhone Duo bleibt, wie er ist.
   let sideSwitch: HTMLElement | null = null;
-  if (isPhone) {
+  if (isMobile) {
     grid.dataset.show = "remote";
     sideSwitch = el("div", "segmented side-switch");
     sideSwitch.setAttribute("role", "radiogroup");
@@ -1779,6 +1783,10 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   const renameBtn = toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2", compact: isPhone });
   const compareBtn = toolButton(ICON.compare, "Vergleichen", () => toggleCompare(), { text: true, shortcut: "linken und rechten Ordner", compact: isPhone });
   compareBtn.setAttribute("aria-pressed", "false");
+  const newFileBtn = toolButton(ICON.plus, "Neue Datei", () => newFile(), { compact: isPhone }); // iPhone: Seltenes im Menü «…»
+  const refreshBtn = toolButton(ICON.refresh, "Neu laden", () => {
+    for (const p of Object.values(panes)) if (p.listing) load(p, p.listing.path);
+  }, { compact: isPhone });
   const trashBtn = toolButton(ICON.trash, "Löschen", () => deleteRemote(), { shortcut: "Entf", danger: true });
   ctx.toolbar.append(
     toolButton(ICON.upload, "Hochladen", () => (isMobile && !panes.local.selected.size ? void pickAndUpload() : transfer(panes.local, [...panes.local.selected])), { text: true }),
@@ -1786,16 +1794,18 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     compareBtn,
     toolSep(),
     toolButton(ICON.newFolder, "Neuer Ordner", () => mkdir()),
-    toolButton(ICON.plus, "Neue Datei", () => newFile(), { compact: isPhone }), // iPhone: Seltenes im Menü «…»
+    newFileBtn,
     renameBtn,
     trashBtn,
-    toolButton(ICON.refresh, "Neu laden", () => {
-      for (const p of Object.values(panes)) if (p.listing) load(p, p.listing.path);
-    }, { compact: isPhone }),
+    refreshBtn,
     followBtn,
     toolSep(),
     toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
   );
+  // Seltenes nur auf dem iPhone ins Menü «…» (beim iPhone Duo je nach Zustand)
+  const phoneCompact = [renameBtn, compareBtn, newFileBtn, refreshBtn];
+  const onPhone = () => (hint(), phoneCompact.forEach((b) => b.classList.toggle("compactable", isPhone)));
+  addEventListener("sesam:phone", onPhone);
 
   // ---------- Ziehen zwischen den Seiten ----------
   // Eigene Zeiger-Logik: Tauri fängt HTML-Drag&Drop für Dateien aus dem System ab.
@@ -1848,6 +1858,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
 
   const close = () => {
     removeEventListener("sesam:shell-cwd", onShellCwd);
+    removeEventListener("sesam:phone", onPhone);
     unlistenDrop.then((u) => u());
     for (const t of running) api.transferCancel(t);
     running.clear();

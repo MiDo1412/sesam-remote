@@ -125,7 +125,7 @@ body.phone .settings-pane .row { grid-template-columns: minmax(0, 1fr); gap: var
 body.phone .settings-pane > h2:first-child { margin-top: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
 /* iPhone quer: eine Leiste (Tabs und Werkzeuge), möglichst viel Remote-Bild */
 body.phone.one-bar #tabs { flex: 1 1 0; min-width: 0; }
-body.phone.one-bar #tabs .tab[aria-selected=true] { min-width: 120px; }
+body.mobile.one-bar #tabs .tab[aria-selected=true] { min-width: 120px; } /* auch iPad und iPhone Duo aufgeklappt */
 body.phone.one-bar .session-bar #session-toolbar { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 @media (orientation: landscape) { body.phone .list-head h1 { font-size: 22px; } }
 
@@ -137,3 +137,8 @@ body.phone .status.sticky { min-height: 38px; display: flex; align-items: center
 body.phone .sheet fieldset.adv legend { display: contents; font-weight: 600; } /* als Inhalt statt als Rahmen-Legende: sonst liegt die zweite Zeile auf dem Rahmen */
 body.phone .sheet fieldset.adv { grid-template-columns: minmax(0, 1fr); row-gap: var(--s-1); }
 body.phone .tab-pane.tab-files > .reconnect-bar { top: auto; bottom: calc(var(--s-3) + 120px); } /* nicht über dem Umschalter iPhone/Server */
+/* Zweiter Knopfblock der Details: Breite nach Inhalt, kein Zeilenumbruch im Knopf (sonst wird die Pille zum Klumpen) */
+body.phone #details .pair { display: flex; flex-wrap: wrap; }
+body.phone #details .pair > button { flex: 1 1 auto; white-space: nowrap; }
+/* Nur auf dem iPhone sichtbar; angelegt werden sie auf allen Mobilgeräten (iPhone Duo wechselt live) */
+body:not(.phone) :is(.side-switch, .settings-back) { display: none; }

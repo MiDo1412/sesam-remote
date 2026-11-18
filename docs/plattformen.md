@@ -112,6 +112,26 @@ dieselben Grenzen wie oben, mit «iPhone» statt «iPad». Was anders aussieht, 
 
 Vorschau im Browser: `website-tools/phone.mjs` (wie `shot.mjs`, mit iPhone-Kennung und Touch).
 
+### iPhone Duo (faltbar) und schmale Fenster
+
+- **Zugeklappt** (Aussenbildschirm 466 × 678 pt) die iPhone-Oberfläche, **aufgeklappt** (Innenbildschirm 951 × 669 pt)
+  die iPad-Oberfläche mit Seitenleiste und Details. Massgebend ist die schmale Seite des Fensters (`< 600 pt` =
+  iPhone-Oberfläche), nicht das Gerät; dasselbe gilt für ein iPad in schmaler Split View.
+- **Wechsel ohne Neuladen:** `isPhone` (`src/titlebar.ts`) folgt der Fenstergrösse; bei einem Wechsel kommt das Ereignis
+  `sesam:phone`. Bibliothek, Einstellungen, Tab-Leiste und offene Dateien-Tabs schalten um; offene Sitzungen, Blätter
+  und Auswahl bleiben. Was beim Start nur für eine Oberfläche gebaut wurde (Umschalter «iPhone»/Server, Zurück in den
+  Einstellungen), wird auf allen Mobilgeräten angelegt und in der anderen per CSS ausgeblendet.
+- **Grösse aus `outerWidth`/`outerHeight`:** `screen` bleibt beim Aufklappen auf dem Wert des Aussenbildschirms stehen
+  (und zeigt in Split View den ganzen Bildschirm). Das Viewport-Meta-Tag rechnet die Breite daraus.
+- **Kamera seitlich:** Auf dem Duo liegen Kamera und Statusleiste rechts (zugeklappt `safe-area-inset-right` 84 pt,
+  aufgeklappt meldet WebKit sie gedreht als oben 82 pt; `fixSafeArea()` legt sie dann auf beide Seiten). Blätter
+  stehen in der Mitte des freien Bereichs (`translate` um die halbe Differenz der Ränder).
+- **Tab-Leiste:** Auf Touch-Geräten eine Leiste (Werkzeuge neben den Tabs) erst ab 600 px Viewport-Breite (iPhone
+  quer, iPad); darunter zwei Leisten (iPhone hochkant, Duo zu und quer, Duo offen und hochkant), sonst wird der
+  aktive Tab auf wenige Buchstaben gequetscht.
+- Testen: Simulator «iPhone Duo», Zustand zu / halb offen / offen; Gerätename in Texten aus der Kennung
+  («Auf meinem iPhone»), nicht aus der Oberfläche.
+
 ## Widget einschalten (iPad, bezahltes Entwicklerprogramm)
 
 Der Code liegt bereit: `src-tauri/gen/apple/SesamWidget/SesamWidget.swift` (Widget «Zuletzt verwendet», klein,

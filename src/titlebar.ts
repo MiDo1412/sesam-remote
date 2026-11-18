@@ -17,8 +17,13 @@ const glyph = (svg: string) => fl(svg, 14);
  *  Programme, keine Desktop-Verknüpfungen; die Oberfläche blendet diese Funktionen aus (Klasse «mobile»). */
 export const isMobile = /iPad|iPhone|Android/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1);
 export const isMac = navigator.userAgent.includes("Mac") && !isMobile;
-/** iPhone (schmaler als jedes iPad): Navigationsstapel statt Spalten, eigene Seiten für Gruppen und Details (Klasse «phone»). */
-export const isPhone = isMobile && Math.min(screen.width, screen.height) < 600;
+/** Grösse der Webansicht in Punkten. `screen` bleibt auf dem iPhone Duo beim Aufklappen auf dem Wert des Aussenbildschirms
+ *  stehen und zeigt auf dem iPad in Split View den ganzen Bildschirm; outerWidth/-Height folgen dem Fenster. */
+const viewPt = () => (outerWidth > 0 && outerHeight > 0 ? { w: outerWidth, h: outerHeight } : { w: screen.width, h: screen.height });
+const phoneNow = () => isMobile && Math.min(viewPt().w, viewPt().h) < 600;
+/** Schmales Fenster (iPhone, iPhone Duo zugeklappt, iPad in schmaler Split View): Navigationsstapel statt Spalten,
+ *  eigene Seiten für Gruppen und Details (Klasse «phone»). Wechselt live beim Auf- und Zuklappen; dann kommt «sesam:phone». */
+export let isPhone = phoneNow();
 // Fokusring nur nach Tastaturbedienung (styles.css: body.kbd); Klick oder Tippen blendet ihn wieder aus.
 addEventListener("keydown", (e) => (e.key === "Tab" || e.key.startsWith("Arrow")) && document.body.classList.add("kbd"), true);
 addEventListener("pointerdown", () => document.body.classList.remove("kbd"), true);
@@ -141,10 +146,10 @@ function longPressMenus() {
   addEventListener("pointercancel", cancel, true);
 }
 
-/** iPhone quer: WKWebView meldet in env(safe-area-inset-*) weiter die Werte vom Hochformat (oben die Insel, links/rechts 0),
+/** Quer (iPhone, iPhone Duo aufgeklappt): WKWebView meldet in env(safe-area-inset-*) weiter die Werte vom Hochformat (oben die Insel, links/rechts 0),
  *  auch nach einem Neustart im Querformat. Dann liegt die Insel seitlich über dem Inhalt: oben 0, links und rechts den
  *  Abstand der Insel. Meldet WebKit seitliche Werte, gelten sie unverändert. */
-function phoneSafeArea(landscape: boolean) {
+function fixSafeArea(landscape: boolean) {
   const root = document.documentElement.style;
   for (const k of ["t", "r", "l"]) root.removeProperty(`--sa-${k}`);
   if (!landscape) return;
@@ -154,7 +159,7 @@ function phoneSafeArea(landscape: boolean) {
   const s = getComputedStyle(probe);
   const [top, right, left] = [s.paddingTop, s.paddingRight, s.paddingLeft].map(parseFloat);
   probe.remove();
-  if (left || right || !top) return;
+  if (left || right || top < 40) return; // oben nur die Statusleiste (iPad): Werte stimmen
   root.setProperty("--sa-t", "0px");
   root.setProperty("--sa-l", `${top}px`);
   root.setProperty("--sa-r", `${top}px`);
@@ -163,16 +168,23 @@ function phoneSafeArea(landscape: boolean) {
 /** iPad: die ganze Oberfläche ist für die Maus gebaut (13 px Text, 32 px Knöpfe). Einheitlich vergrössert ergibt das
  *  rund 17 pt Text und mit den Mindesthöhen in styles.css 44-pt-Touchziele (Apple HIG); Koordinaten bleiben stimmig. */
 function touchScale() {
-  // iPad mini: etwas weniger, sonst wird es eng; iPhone: 1,15 (Schrift 13 px ≈ 15 pt, Knöpfe 38 px ≈ 44 pt)
-  const scale = isPhone ? 1.15 : Math.min(screen.width, screen.height) >= 800 ? 1.3 : 1.2;
   const meta = document.querySelector('meta[name="viewport"]');
-  // WKWebView rechnet «device-width» beim Vergrössern nicht neu: Breite selbst setzen, auch nach dem Drehen.
+  // WKWebView rechnet «device-width» beim Vergrössern nicht neu: Breite selbst setzen, auch nach Drehen, Auf-/Zuklappen
+  // und Split View. Ändert sich dabei schmal/breit (iPhone Duo), wechselt die Oberfläche ohne Neuladen.
   const apply = () => {
-    const landscape = matchMedia("(orientation: landscape)").matches;
-    const width = Math.round((landscape ? Math.max : Math.min)(screen.width, screen.height) / scale);
-    meta?.setAttribute("content", `width=${width}, initial-scale=${scale}, minimum-scale=${scale}, maximum-scale=${scale}, user-scalable=no, viewport-fit=cover`);
-    if (isPhone) requestAnimationFrame(() => phoneSafeArea(landscape));
+    const { w, h } = viewPt();
+    const phone = phoneNow();
+    if (phone !== isPhone) {
+      isPhone = phone;
+      document.body.classList.toggle("phone", phone);
+      dispatchEvent(new Event("sesam:phone"));
+    }
+    // iPad mini: etwas weniger, sonst wird es eng; iPhone: 1,15 (Schrift 13 px ≈ 15 pt, Knöpfe 38 px ≈ 44 pt)
+    const scale = isPhone ? 1.15 : Math.min(screen.width, screen.height) >= 800 ? 1.3 : 1.2;
+    const content = `width=${Math.round(w / scale)}, initial-scale=${scale}, minimum-scale=${scale}, maximum-scale=${scale}, user-scalable=no, viewport-fit=cover`;
+    if (meta?.getAttribute("content") !== content) meta?.setAttribute("content", content);
+    requestAnimationFrame(() => fixSafeArea(w > h));
   };
   apply();
-  matchMedia("(orientation: landscape)").addEventListener("change", apply);
+  addEventListener("resize", apply);
 }

@@ -480,19 +480,40 @@ function panels() {
   $("toggle-sidebar").setAttribute("aria-pressed", String(side));
   $("toggle-details").setAttribute("aria-pressed", String(det));
 }
-$("toggle-sidebar").innerHTML = isPhone ? `${ICON.navBack}<span>Gruppen</span>` : ICON.sidebar;
 $("toggle-details").innerHTML = ICON.info;
 $("toggle-sidebar").onclick = () => (isPhone ? (phone.side = true) : ((prefs[sideKey()] = document.body.classList.contains("no-sidebar")), savePrefs()), panels());
 const setDetails = (on: boolean) => (isPhone ? (phone.details = on) : ((prefs.details = on), savePrefs()), panels());
-if (isPhone) {
-  // Suche unter dem grossen Titel (wie iOS), «Neue Verbindung» als Symbol in der Leiste, Titel über den Gruppen.
-  $("title").closest(".list-head")!.after(document.querySelector(".search")!);
-  $("new").innerHTML = ICON.plus;
-  $("new").setAttribute("aria-label", "Neue Verbindung");
-  $("nav").before(el("h1", { class: "phone-title" }, "Gruppen"));
-  $("session-back").innerHTML = `${ICON.navBack}<span>Bibliothek</span>`;
-  $("session-back").setAttribute("aria-label", "Bibliothek");
+// iPhone: Suche unter dem grossen Titel (wie iOS), «Neue Verbindung» als Symbol in der Leiste, Titel über den Gruppen.
+// Umkehrbar, weil das iPhone Duo beim Aufklappen zur iPad-Oberfläche wechselt (titlebar.ts, «sesam:phone»).
+const search = document.querySelector<HTMLElement>(".search")!;
+const searchHome = { parent: search.parentElement!, next: search.nextSibling };
+const wide = { newHtml: $("new").innerHTML, newLabel: $("new").getAttribute("aria-label"), backHtml: $("session-back").innerHTML, backLabel: $("session-back").getAttribute("aria-label") };
+const phoneTitle = el("h1", { class: "phone-title" }, "Gruppen");
+const attr = (id: string, name: string, v: string | null) => (v === null ? $(id).removeAttribute(name) : $(id).setAttribute(name, v));
+function phoneChrome() {
+  if (isPhone) {
+    $("title").closest(".list-head")!.after(search);
+    $("nav").before(phoneTitle);
+  } else {
+    searchHome.parent.insertBefore(search, searchHome.next);
+    phoneTitle.remove();
+  }
+  $("toggle-sidebar").innerHTML = isPhone ? `${ICON.navBack}<span>Gruppen</span>` : ICON.sidebar;
+  $("new").innerHTML = isPhone ? ICON.plus : wide.newHtml;
+  attr("new", "aria-label", isPhone ? "Neue Verbindung" : wide.newLabel);
+  $("session-back").innerHTML = isPhone ? `${ICON.navBack}<span>Bibliothek</span>` : wide.backHtml;
+  attr("session-back", "aria-label", isPhone ? "Bibliothek" : wide.backLabel);
+  if (isMobile) $("open-on-label").textContent = isPhone ? "Standardansicht" : "Bei Doppeltippen öffnen";
 }
+phoneChrome();
+addEventListener("sesam:phone", () => {
+  // Zugeklappt: wieder bei der Liste der gewählten Gruppe beginnen; offene Sitzungen, Blätter und Auswahl bleiben.
+  phone.side = false;
+  phone.details = false;
+  phoneChrome();
+  panels();
+  render();
+});
 $("toggle-details").onclick = () => setDetails(document.body.classList.contains("no-details"));
 portrait.addEventListener("change", panels);
 panels();
@@ -1029,7 +1050,6 @@ $("share-clear").onclick = () => (sharedFolder.value = "");
 // iPad: keine RDP-Ordnerfreigabe (kein freier Dateizugriff), Karten öffnen per Doppeltippen
 if (isMobile) {
   $("share-row").hidden = true;
-  $("open-on-label").textContent = isPhone ? "Standardansicht" : "Bei Doppeltippen öffnen";
 }
 
 const keyMode = form.elements.namedItem("keyMode") as HTMLSelectElement;

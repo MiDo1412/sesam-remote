@@ -49,6 +49,7 @@ let trashMenu: ReturnType<typeof enhanceSelect> | undefined;
 let trashMaxMenu: ReturnType<typeof enhanceSelect> | undefined;
 let keysMenu: { sync(): void } | undefined;
 let sizeWatch: ResizeObserver | null = null;
+let onPhone: (() => void) | undefined;
 
 /** Dieses Fenster ist das eigene Einstellungsfenster (macOS, lib.rs open_settings_window). */
 export const settingsWindow: string = (window as unknown as { __SESAM_SETTINGS__?: string }).__SESAM_SETTINGS__ ?? "";
@@ -78,9 +79,10 @@ export async function openSettings(tab = "general") {
     if (t === "groups") renderGroupSettings();
     box.classList.add("pane-open");
   };
-  // iPhone: Bereiche als Liste (eigene Seite), ein Bereich als Seite mit Zurück-Taste.
-  if (isPhone) {
-    box.classList.remove("pane-open");
+  // iPhone: Bereiche als Liste (eigene Seite), ein Bereich als Seite mit Zurück-Taste. Die Taste gibt es auf allen
+  // Mobilgeräten (breit ausgeblendet), weil das iPhone Duo beim Zuklappen bei offenem Fenster zur iPhone-Oberfläche wechselt.
+  if (isPhone) box.classList.remove("pane-open");
+  if (isMobile) {
     let back = box.querySelector<HTMLButtonElement>(".settings-back");
     if (!back) {
       back = Object.assign(document.createElement("button"), { type: "button", className: "plain settings-back", innerHTML: `${ICON.navBack}<span>Einstellungen</span>` });
@@ -144,6 +146,13 @@ export async function openSettings(tab = "general") {
   $("settings-version").textContent = __VERSION_LABEL__ || (await getVersion().catch(() => ""));
   void renderUpdate();
   if (!isPhone || tab !== "general") show(tab);
+  // Auf-/Zuklappen bei offenen Einstellungen: breit braucht einen gewählten Bereich, schmal beginnt bei der Liste.
+  onPhone ??= () => {
+    if (!dlg.open) return;
+    if (isPhone) box.classList.remove("pane-open");
+    else if (!box.classList.contains("pane-open")) show(dlg.querySelector<HTMLButtonElement>("[data-pane][aria-selected=true]")?.dataset.pane ?? "general");
+  };
+  addEventListener("sesam:phone", onPhone);
   if (!dlg.open) dlg.showModal();
   // Fokus auf den gewählten Bereich (nicht immer «Allgemein»), damit Tastatur und Anzeige übereinstimmen.
   dlg.querySelector<HTMLButtonElement>(`[data-pane="${tab}"]`)?.focus({ preventScroll: true });

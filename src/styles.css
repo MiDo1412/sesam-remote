@@ -878,3 +878,8 @@ body.increase-contrast { --line: color-mix(in srgb, var(--text) 35%, transparent
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
   button:active:not(:disabled), .card:hover { transform: none; }
 }
+/* Mobil: Blätter innerhalb der sicheren Bereiche (iPhone Duo aufgeklappt: Kamera seitlich) */
+body.mobile:not(.phone) dialog { max-width: calc(100vw - 48px - var(--sa-l) - var(--sa-r)); }
+body.mobile:not(.phone) #editor-form { width: min(800px, calc(100vw - 48px - var(--sa-l) - var(--sa-r))); }
+/* Ungleiche Ränder (Kamera nur auf einer Seite): Blätter in der Mitte des freien Bereichs, nicht des Bildschirms */
+body.mobile dialog:not(#settings) { translate: calc((var(--sa-l) - var(--sa-r)) / 2) 0; }
