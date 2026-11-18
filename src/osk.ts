@@ -156,8 +156,10 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
   input.addEventListener("compositionend", onCompositionEnd);
   if (own) input.addEventListener("input", (e) => !(e as InputEvent).isComposing && (input.value = ""));
   // Antippen des Bildes nimmt dem Feld den Fokus: zurückholen; sonst (Tastatur-Taste «ausblenden», anderes Feld) aus.
+  let blurredAt = 0;
   const onBlur = (e: FocusEvent) => {
     if (!on) return;
+    blurredAt = performance.now();
     if (e.relatedTarget instanceof Node && o.pane.contains(e.relatedTarget)) return void requestAnimationFrame(() => input.focus({ preventScroll: true }));
     if (own) hide();
   };
@@ -185,7 +187,8 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
 
   let on = false;
   // Hat das Terminal schon die Tastatur (Fokus beim Verbinden), schliesst der Knopf sie, statt nur die Leiste zu zeigen.
-  const button = toolButton(ICON.keyboard, "Tastatur", () => (on || document.activeElement === input ? hide() : show()));
+  // Der Tipp auf den Knopf nimmt dem eigenen Feld (Desktop) zuerst den Fokus und blendet damit schon aus: dann nicht wieder öffnen.
+  const button = toolButton(ICON.keyboard, "Tastatur", () => (on || document.activeElement === input ? hide() : performance.now() - blurredAt > 500 && show()));
   button.setAttribute("aria-pressed", "false");
   const set = (v: boolean) => {
     on = v;

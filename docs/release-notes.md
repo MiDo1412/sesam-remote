@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Behoben
+
+- **Tastatur-Knopf im Desktop:** Ein zweiter Tipp auf den Tastatur-Knopf schliesst die Tastatur im entfernten Bildschirm wieder, statt sie gleich neu zu öffnen.
+
 ## 26.11.10 — 2026-11-18
 
 Die Tastatur lässt sich auf dem iPhone wieder ausblenden.
