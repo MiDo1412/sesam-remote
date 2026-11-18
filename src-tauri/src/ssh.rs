@@ -496,8 +496,8 @@ pub fn tmux_command(name: &str) -> Result<String, String> {
     Ok(format!(
         "if command -v tmux >/dev/null 2>&1; then \
 if tmux has-session -t ={name} 2>/dev/null; then exec tmux attach-session -t ={name}; fi; \
-exec tmux -L sesam -f /dev/null start-server \; set-option -g history-limit 50000 \; set-option -ga terminal-overrides ',*:smcup@:rmcup@' \; \
-new-session -A -s {name} \; set-option status off \; set-option -s escape-time 0 \; set-option -s set-clipboard on \; set-option prefix None; \
+exec tmux -L sesam -f /dev/null start-server \\; set-option -g history-limit 50000 \\; set-option -ga terminal-overrides ',*:smcup@:rmcup@' \\; \
+new-session -A -s {name} \\; set-option status off \\; set-option -s escape-time 0 \\; set-option -s set-clipboard on \\; set-option prefix None; \
 else printf '\\033[2m[Sesam] tmux fehlt auf diesem Server; die Shell läuft ohne Halten weiter.\\033[0m\\r\\n'; exec \"${{SHELL:-/bin/sh}}\" -l; fi"
     ))
 }
