@@ -92,13 +92,25 @@ export const profileTheme = (p: TermProfile, global: string) => {
 
 /** Neues lokales Terminal öffnen; ohne `id` mit dem Standardprofil. */
 export async function openTerminal(id?: string, cwd?: string) {
-  const all = await allProfiles();
+  // Bis das Terminal steht (Profile erkennen dauert beim ersten Mal), gingen Tasten ins Leere: «sudo» kam als «do» an.
+  // Was man solange tippt, sammeln und dem neuen Terminal mitgeben.
+  let typed = "";
+  const catcher = (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    const k = e.key === "Enter" ? "\r" : e.key === "Backspace" ? "\x7f" : e.key.length === 1 ? e.key : "";
+    if (!k) return;
+    typed += k;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  addEventListener("keydown", catcher, true);
+  const all = await allProfiles().finally(() => removeEventListener("keydown", catcher, true));
   const p = all.find((x) => x.id === (id || defaultProfileId())) ?? all[0];
   if (!p) return tell("Kein Terminal gefunden", "Auf diesem Computer wurde keine Shell erkannt. Unter Einstellungen › Terminal lässt sich ein eigenes Profil anlegen.");
   const connId = `local:${p.id}`;
   byConn.set(connId, cwd ? { ...p, cwd } : p);
   const conn = { id: connId, name: p.name, address: "Dieser Computer", user: "", group: "", sshPort: null, vncPort: null, rdpPort: null, profile: cwd ? { ...p, cwd } : p } as unknown as Connection;
-  openTab(conn, "shell", true);
+  openTab(conn, "shell", true, typed ? { typed } : undefined);
 }
 
 /** Symbol je Profil im Menü (16 px wie alle Menüsymbole). */
@@ -118,6 +130,7 @@ export async function profileMenu(anchor: HTMLElement) {
 
 export function initTerminal() {
   initProfileSettings();
+  if (!isMobile) void allProfiles(); // Profile schon beim Start erkennen, damit ⌘T/Strg+T sofort ein Terminal hat
   for (const id of ["term-new", "lib-term-new"]) {
     const b = document.getElementById(id);
     if (b) b.onclick = () => void openTerminal();

@@ -72,7 +72,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
   // Eingabe vor «verbunden» (Tippen während «Verbinde …», Antworten auf Terminal-Abfragen der ersten Ausgabe) nicht
   // wegwerfen, sondern wie ein echtes Terminal puffern und nach dem Verbinden senden: sonst fehlte oft der erste
   // Buchstabe («sudo» kam als «udo» an).
-  let early = "";
+  let early = ctx.extra?.typed ?? ""; // auch was vor dem Öffnen des Tabs getippt wurde (terminal.ts)
   const send = (text: string) => {
     if (!sid) return void (early = (early + text).slice(-4096));
     return api.shellWrite(sid, enc.encode(text)).catch((e) => (status.textContent = String(e)));

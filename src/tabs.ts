@@ -34,7 +34,7 @@ export interface TabCtx {
   slot(): number;
   /** Zusatzangaben beim Öffnen, z. B. ein Befehl, den die Shell nach dem Verbinden tippt,
    *  oder eine laufende Sitzung aus einem anderen Fenster (`attach`). */
-  extra?: { command?: string; attach?: Attach };
+  extra?: { command?: string; attach?: Attach; typed?: string };
   closeSelf(): void;
 }
 
