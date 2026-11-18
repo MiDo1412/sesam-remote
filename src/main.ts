@@ -309,6 +309,23 @@ async function reload() {
   }
 }
 
+// Doppelklick: Der erste Klick wählt aus, dabei erscheinen die Details rechts und die Karten rücken. Der zweite Klick
+// landet dann oft auf einer anderen Karte; er zählt noch zum ersten, geöffnet wird die zuerst angeklickte Verbindung.
+const DOUBLE_MS = 450;
+let lastPick = { id: "", t: 0 };
+function pick(c: Connection) {
+  const now = performance.now();
+  if (now - lastPick.t < DOUBLE_MS && lastPick.id !== c.id) return;
+  lastPick = { id: c.id, t: now };
+  selected = c.id;
+  render();
+}
+function openPicked(c: Connection) {
+  const first = performance.now() - lastPick.t < DOUBLE_MS * 2 ? items.find((x) => x.id === lastPick.id) : undefined;
+  const target = first ?? c;
+  open(target, target.defaultView);
+}
+
 function render() {
   const navItem = (label: string, count: number, on: boolean, click: () => void, group?: string, color = "") => {
     const a = el("button", { type: "button", class: "nav-item", "aria-current": on ? "page" : "false" }, el("span", {}, groupDot(color), label), el("span", { class: "count" }, String(count)));
@@ -362,9 +379,9 @@ function render() {
         el("div", { class: "card-name" }, c.name),
         el("div", { class: "card-sub" }, onlineDot(c), c.user ? `${c.user}@${c.address}` : c.address),
       );
-      card.onclick = () => ((selected = c.id), render());
+      card.onclick = () => pick(c);
       card.onpointerdown = (e) => dragCard(e, card, c);
-      card.ondblclick = () => open(c, c.defaultView);
+      card.ondblclick = () => openPicked(c);
       card.oncontextmenu = (e) => (e.preventDefault(), cardMenu(card, c));
       // Ein Gerät, drei Türen: Desktop, Shell, Dateien als eigene Knöpfe; der Standarddienst ist hervorgehoben.
       const doors = (
@@ -411,9 +428,9 @@ function renderTable(visible: Connection[]) {
       if (c.lastUsed) date.title = new Date(c.lastUsed).toLocaleString("de-CH");
       const tr = el("tr", { "aria-selected": String(c.id === selected) }, el("td", { class: "name" }, c.name), el("td", { class: "mono" }, c.address), svc, grp, date);
       tr.tabIndex = c.id === tabId ? 0 : -1;
-      tr.onclick = () => ((selected = c.id), render());
+      tr.onclick = () => pick(c);
       tr.onpointerdown = (e) => dragCard(e, tr, c);
-      tr.ondblclick = () => open(c, c.defaultView);
+      tr.ondblclick = () => openPicked(c);
       tr.oncontextmenu = (e) => (e.preventDefault(), cardMenu(tr, c));
       return tr;
     }),
@@ -1205,6 +1222,7 @@ addEventListener("keydown", (e) => {
 });
 $("search").addEventListener("input", render);
 addEventListener("sesam:library-changed", () => reload());
+addEventListener("sesam:creds-changed", () => reload()); // Benutzer aus dem Tresor in den Karten nachführen
 addEventListener("sesam:edit-connection", (e) => {
   const c = items.find((x) => x.id === (e as CustomEvent<string>).detail);
   if (c) edit(c);

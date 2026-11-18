@@ -25,6 +25,11 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 ### Behoben
 
 - **Erster Buchstabe in der Shell verschluckt:** Was man tippte, bevor die Shell ganz verbunden war (oft das «s» von «sudo»), warf Sesam weg. Jetzt hat das Terminal die Tastatur schon beim Verbinden, und die Eingabe wird wie in einem echten Terminal gepuffert und danach gesendet (SSH und lokale Terminals, alle Plattformen).
+- **Gehaltene Shell wie ein normales Terminal:** tmux hält die Shell nur noch im Hintergrund, auf einem eigenen tmux-Server ohne die tmux-Einstellungen des Benutzers. Ein Rechtsklick öffnete bisher das Menü von tmux («Horizontal Split», «Kill» …), und Markieren oder Scrollen schaltete den Kopiermodus von tmux ein, der danach den ersten Tastendruck schluckte. Jetzt markiert, scrollt und kopiert Sesam selbst, und die Ausgabe landet im Verlauf von Sesam. Schon laufende gehaltene Shells älterer Versionen hängt Sesam weiter an.
+- **Kontextmenü im Terminal:** Ein Rechtsklick zeigt Sesams Menü (Kopieren, Einfügen, Alles auswählen, Suchen, Verlauf leeren) statt des Menüs der Webansicht («Schreibrichtung», «Weitere Tools») oder eines Programms auf dem Server.
+- **Grösserer Verlauf:** Die Shell behält 10'000 Zeilen zum Zurückscrollen (bisher 1000), gehaltene Shells auf dem Server 50'000.
+- **Benutzer in der Bibliothek:** Mit gespeicherten Zugangsdaten zeigen Karte und Details den Benutzer dieser Zugangsdaten, auch gleich nach einer Änderung im Tresor.
+- **Doppelklick in der Bibliothek:** Beim ersten Klick erscheinen die Details und die Karten rücken. Der Doppelklick öffnet jetzt trotzdem die angeklickte Verbindung und nicht die, die danach unter dem Zeiger liegt.
 - **Geteilte Ansicht mit Remote-Bild:** Mit der Maus über das Remote-Bild im anderen Teil zu fahren, nahm der Shell nicht mehr die Tastatur weg.
 
 ## 26.11.7 — 2026-11-14

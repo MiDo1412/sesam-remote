@@ -17,6 +17,7 @@ import { resolveTheme, saveTermSettings, termSettings, themeFont } from "./termt
 import { schemeGallery } from "./schemegallery";
 import { localProfile, profileTheme, setProfileTheme } from "./terminal";
 import { localNetworkText } from "./ubuntu";
+import { keyLabel } from "./titlebar";
 
 const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
 
@@ -38,6 +39,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
   const s = termSettings();
   const term = new Terminal({
     cursorBlink: true,
+    // Verlauf zum Zurückscrollen (Standard wären 1000 Zeilen); gehaltene Shells schreiben dank tmux-Einstellung auch hierhin.
+    scrollback: 10000,
     fontFamily: s.fontFamily || FONT,
     fontSize: s.fontSize,
     theme: resolveTheme(s.theme),
@@ -328,6 +331,29 @@ export function shellTab(ctx: TabCtx): TabHandle {
     toolSep(),
     local ? toolButton(ICON.close, "Schliessen", () => ctx.closeSelf(), { text: true }) : toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
   );
+  // Rechtsklick: Sesams eigenes Menü statt des Menüs der Webansicht («Schreibrichtung», «Weitere Tools») und statt des
+  // Menüs von Programmen, die die Maus übernehmen (z. B. tmux mit «Split», «Kill»).
+  const stopRight = (e: MouseEvent) => e.button === 2 && e.stopPropagation();
+  host.addEventListener("mousedown", stopRight, true);
+  host.addEventListener("mouseup", stopRight, true);
+  host.addEventListener("contextmenu", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sel = term.hasSelection();
+    const v = await openMenu(host, [
+      { value: "copy", label: "Kopieren", icon: ICON.copy, shortcut: keyLabel("Strg+Umschalt+C"), disabled: !sel },
+      { value: "paste", label: "Einfügen", icon: ICON.typeClipboard, shortcut: keyLabel("Strg+Umschalt+V") },
+      { value: "all", label: "Alles auswählen" },
+      { value: "find", label: "Suchen …", icon: ICON.search, shortcut: keyLabel("Strg+Umschalt+F"), separator: true },
+      { value: "clear", label: "Verlauf leeren" },
+    ]);
+    if (v === "copy") copy();
+    else if (v === "paste") void paste();
+    else if (v === "all") term.selectAll();
+    else if (v === "find") void find();
+    else if (v === "clear") term.clear();
+    term.focus();
+  });
   // Tastenkürzel wie in Terminal-Apps (Strg+C ohne Umschalt bleibt beim Server).
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== "keydown" || !e.ctrlKey) return true;

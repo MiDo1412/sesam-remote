@@ -481,24 +481,30 @@ pub fn parse_ports(text: &str) -> Vec<(String, u16)> {
         .collect()
 }
 
-/// Befehl für eine gehaltene Shell: in der tmux-Sitzung `name` (anhängen oder neu), so eingestellt, dass sie sich
-/// wie ein normales Terminal anfühlt: keine Statuszeile, kein Esc-Verzug, Kopieren landet per OSC 52 in der
-/// Zwischenablage, Mausrad scrollt, kein Präfix-Kürzel. Reihenfolge mit Absicht: Schlägt bei altem tmux eine
-/// Option fehl (mouse ab 2.1, prefix None ab 2.2), bricht tmux nur die folgenden ab, die wichtigen stehen vorne.
+/// Befehl für eine gehaltene Shell: in der tmux-Sitzung `name` (anhängen oder neu). tmux soll nur halten, sonst
+/// unsichtbar sein: eigener tmux-Server (`-L sesam`, ohne ~/.tmux.conf, die tmux-Sitzungen des Benutzers bleiben
+/// unberührt), Maus aus (Markieren, Rechtsklick und Mausrad macht Sesam; kein tmux-Menü mit «Split», kein
+/// Kopiermodus, der die nächste Taste schluckt), kein Wechsel in den Alternativbildschirm (die Ausgabe landet im
+/// Verlauf von Sesam), keine Statuszeile, kein Esc-Verzug, OSC 52 für Programme wie vim, kein Präfix-Kürzel.
+/// Was vor `new-session` steht, kann tmux seit 1.x; was bei altem tmux scheitern kann, steht hinten (tmux bricht dann
+/// nur die folgenden Befehle ab). Sitzungen älterer Sesam-Versionen auf dem Standard-Server werden weiter angehängt.
 /// Fehlt tmux: Hinweis und eine normale Login-Shell.
 pub fn tmux_command(name: &str) -> Result<String, String> {
     if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err("Ungültiger Sitzungsname".into());
     }
     Ok(format!(
-        "if command -v tmux >/dev/null 2>&1; then exec tmux new-session -A -s {name} \\; set-option status off \\; set-option -s escape-time 0 \\; set-option -s set-clipboard on \\; set-option mouse on \\; set-option prefix None; \
+        "if command -v tmux >/dev/null 2>&1; then \
+if tmux has-session -t ={name} 2>/dev/null; then exec tmux attach-session -t ={name}; fi; \
+exec tmux -L sesam -f /dev/null start-server \; set-option -g history-limit 50000 \; set-option -ga terminal-overrides ',*:smcup@:rmcup@' \; \
+new-session -A -s {name} \; set-option status off \; set-option -s escape-time 0 \; set-option -s set-clipboard on \; set-option prefix None; \
 else printf '\\033[2m[Sesam] tmux fehlt auf diesem Server; die Shell läuft ohne Halten weiter.\\033[0m\\r\\n'; exec \"${{SHELL:-/bin/sh}}\" -l; fi"
     ))
 }
 
 /// Gehaltene Sesam-Sitzungen (tmux, Name beginnt mit «sesam-»): Name, angehängt ja/nein, gestartet (Unix-Zeit).
 pub async fn tmux_list(h: &Handle<Client>) -> Result<Vec<(String, bool, u64)>, String> {
-    let o = crate::scp::Remote::run(h, "tmux ls -F '#{session_name} #{session_attached} #{session_created}' 2>/dev/null".into()).await?;
+    let o = crate::scp::Remote::run(h, "{ tmux -L sesam ls -F '#{session_name} #{session_attached} #{session_created}'; tmux ls -F '#{session_name} #{session_attached} #{session_created}'; } 2>/dev/null".into()).await?;
     Ok(String::from_utf8_lossy(&o.out)
         .lines()
         .filter_map(|l| {
@@ -514,7 +520,7 @@ pub async fn tmux_kill(h: &Handle<Client>, name: &str) -> Result<(), String> {
     if !name.starts_with("sesam-") {
         return Err("Nur Sitzungen von Sesam".into());
     }
-    let o = crate::scp::Remote::run(h, format!("tmux kill-session -t {name}")).await?;
+    let o = crate::scp::Remote::run(h, format!("tmux -L sesam kill-session -t ={name} 2>/dev/null || tmux kill-session -t ={name}")).await?;
     if o.code == 0 { Ok(()) } else { Err(String::from_utf8_lossy(&o.err).trim().to_string()) }
 }
 
@@ -583,9 +589,13 @@ mod tests {
     #[test]
     fn tmux_befehl_und_namen() {
         let c = tmux_command("sesam-ab12-0").unwrap();
-        assert!(c.contains("new-session -A -s sesam-ab12-0") && c.contains("status off") && c.contains("prefix None") && c.contains("mouse on") && c.contains("set-clipboard on"));
-        // Was bei altem tmux scheitern kann, steht hinten.
-        assert!(c.find("status off").unwrap() < c.find("set-clipboard").unwrap() && c.find("set-clipboard").unwrap() < c.find("mouse on").unwrap() && c.find("mouse on").unwrap() < c.find("prefix None").unwrap());
+        assert!(c.contains("new-session -A -s sesam-ab12-0") && c.contains("status off") && c.contains("prefix None") && c.contains("set-clipboard on"));
+        // Eigener Server ohne Benutzer-Konfiguration, Maus bleibt bei Sesam, Ausgabe im Verlauf von Sesam.
+        assert!(c.contains("tmux -L sesam -f /dev/null") && !c.contains("mouse on") && c.contains("smcup@:rmcup@") && c.contains("history-limit"));
+        // Ältere gehaltene Sitzung auf dem Standard-Server wird angehängt.
+        assert!(c.find("has-session -t =sesam-ab12-0").unwrap() < c.find("-L sesam").unwrap());
+        // Was bei altem tmux scheitern kann, steht hinten; was vor new-session steht, darf nicht scheitern.
+        assert!(c.find("history-limit").unwrap() < c.find("new-session").unwrap() && c.find("status off").unwrap() < c.find("set-clipboard").unwrap() && c.find("set-clipboard").unwrap() < c.find("prefix None").unwrap());
         assert!(c.contains("tmux fehlt"));
         assert!(tmux_command("x; rm -rf ~").is_err() && tmux_command("").is_err());
     }

@@ -51,7 +51,16 @@ static LIBRARY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[tauri::command]
 fn library_list(path: State<LibraryPath>) -> Result<Vec<Connection>, String> {
-    library::load(&path.0)
+    let mut items = library::load(&path.0)?;
+    // Mit gespeicherten Zugangsdaten gilt deren Benutzer (wie in `find`): sonst zeigte die Bibliothek nach einer
+    // Änderung im Tresor noch den alten Namen.
+    let creds = creds::load(&creds_path(&path)).unwrap_or_default();
+    for c in &mut items {
+        if let Some(cred) = c.credential_id.as_ref().and_then(|cid| creds.iter().find(|x| &x.id == cid)) {
+            c.user = cred.user.clone();
+        }
+    }
+    Ok(items)
 }
 
 /// `password`/`vnc_password`/`ssh_key`: `None` = unverändert, `Some("")` = löschen, sonst neu setzen.
