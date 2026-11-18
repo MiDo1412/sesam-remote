@@ -544,7 +544,7 @@ const openPlaces = () =>
   function emptyRow(p: Pane, why: string) {
     const tr = el("tr");
     const td = el("td", "empty", why);
-    td.colSpan = 4;
+    td.colSpan = 3; // Name, Grösse, Geändert; mit 4 bekam die (meist ausgeblendete) Vergleichsspalte den freien Platz
     // iPad: leerer Sesam-Ordner → erklären, wie man an eigene Dateien kommt.
     if (isMobile && p.side === "local" && p.listing?.path === localRoot && !p.listing.entries.length) {
       td.textContent = `Hier liegt nur der Ordner von Sesam. Öffne einen Ordner aus «Dateien» (iCloud Drive, ${onDevice}, USB-Stick, Server) oder hole einzelne Dateien hierher.`;

@@ -538,6 +538,17 @@ function renderDetails() {
   if (isPhone) closeBtn.setAttribute("aria-label", "Zurück");
   closeBtn.innerHTML = isPhone ? `${ICON.navBack}<span>${filter.kind === "all" ? "Alle" : filter.name}</span>` : ICON.close;
   closeBtn.onclick = () => setDetails(false);
+  // Grosser Knopf = Standardansicht der Verbindung (sonst die erste, die es gibt); die anderen beiden darunter.
+  const wake = reachOf.get(c.id) === null && !!c.mac;
+  const has = { desktop: !!desktopProtocol(c), shell: !!c.sshPort, files: !!filesProtocol(c) };
+  const VIEWS = ["desktop", "shell", "files"] as const;
+  const main = has[c.defaultView] ? c.defaultView : VIEWS.find((v) => has[v]) ?? "desktop";
+  const door = (v: (typeof VIEWS)[number], big: boolean) => {
+    const cls = big && !wake ? "primary" : "";
+    if (v === "desktop" && !has.desktop && c.sshPort) return btn("Desktop freischalten …", cls, () => unlock(c));
+    const label = { desktop: "Desktop", shell: "Shell", files: "Dateien" }[v];
+    return btn(big ? `${label} öffnen` : label, cls, () => open(c, v), !has[v]);
+  };
   aside.replaceChildren(
     closeBtn,
     el("div", { class: "detail-title" }, c.name),
@@ -553,16 +564,9 @@ function renderDetails() {
       fact("Anmeldung", c.hasPassword || c.hasKey || c.hasVncPassword || c.hasRdpPassword || c.credentialId || c.rdpCredentialId || c.vncCredentialId ? "Im Tresor" : "Keine gespeichert"),
       fact("Schlüssel", c.hasKey ? "Im Tresor" : "–"),
     ),
-    ...(reachOf.get(c.id) === null && c.mac ? [btn("Aufwecken und verbinden", "primary", () => void wakeAndOpen(c))] : []),
-    c.sshPort && !desktopProtocol(c)
-      ? btn("Desktop freischalten …", "primary", () => unlock(c))
-      : btn("Desktop öffnen", reachOf.get(c.id) === null && c.mac ? "" : "primary", () => open(c, "desktop"), !desktopProtocol(c)),
-    el(
-      "div",
-      { class: "pair" },
-      btn("Shell", "", () => open(c, "shell"), !c.sshPort),
-      btn("Dateien", "", () => open(c, "files"), !filesProtocol(c)),
-    ),
+    ...(wake ? [btn("Aufwecken und verbinden", "primary", () => void wakeAndOpen(c))] : []),
+    door(main, true),
+    el("div", { class: "pair" }, ...VIEWS.filter((v) => v !== main).map((v) => door(v, false))),
     btn(isPhone ? "Bearbeiten" : "Bearbeiten …", "plain detail-edit", () => edit(c)),
     // Das Setup-Script richtet GNOME Remote Desktop ein: nur für Linux-Ziele oder unbekanntes System anbieten.
     ...(c.sshPort && desktopProtocol(c) && !["windows", "macos"].includes(c.os ?? "") ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),

@@ -136,3 +136,4 @@ body.phone .sidebar-settings::after { content: "›"; margin-left: auto; color: 
 body.phone .status.sticky { min-height: 38px; display: flex; align-items: center; } /* ganze Zeile schliesst, mind. 44 pt */
 body.phone .sheet fieldset.adv legend { display: contents; font-weight: 600; } /* als Inhalt statt als Rahmen-Legende: sonst liegt die zweite Zeile auf dem Rahmen */
 body.phone .sheet fieldset.adv { grid-template-columns: minmax(0, 1fr); row-gap: var(--s-1); }
+body.phone .tab-pane.tab-files > .reconnect-bar { top: auto; bottom: calc(var(--s-3) + 120px); } /* nicht über dem Umschalter iPhone/Server */
