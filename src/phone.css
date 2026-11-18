@@ -1,0 +1,121 @@
+/* iPhone (body.phone, titlebar.ts): Navigationsstapel statt Spalten. Seiten: Gruppen › Verbindungen › Details.
+   Skalierung 1,15: 38 px ≈ 44 pt Tippfläche, Schrift 13 px ≈ 15 pt. */
+body.phone { --h-sm: 32px; --h-md: 38px; --h-lg: 44px; --h-ctl: var(--h-md); --h-row: 40px; --phone-pad: 14px; }
+
+/* Bibliothek: keine Titelleiste (die Suche wandert unter den grossen Titel), kein Kachel/Liste-Schalter, keine Details-Taste */
+body.phone header.toolbar, body.phone .view-switch, body.phone #toggle-details { display: none; }
+body.phone :is(.sidebar, main) { margin: 0; border-radius: 0; box-shadow: none; }
+body.phone main { background: var(--bg); }
+body.phone .list { padding: var(--s-2) var(--phone-pad) calc(var(--s-5) + env(safe-area-inset-bottom)); gap: var(--s-3); }
+body.phone .list-head { flex-wrap: wrap; gap: var(--s-1) var(--s-2); }
+body.phone .list-head h1 { order: 10; flex: 1 0 100%; font-size: 28px; letter-spacing: -0.02em; margin-top: var(--s-1); }
+body.phone #toggle-sidebar { width: auto; margin-left: -8px; margin-right: auto; padding: 0 8px 0 2px; gap: 2px; color: var(--accent); font-weight: 400; }
+body.phone :is(#toggle-sidebar, .detail-close) svg { width: 20px; height: 20px; }
+body.phone .quick-btn { width: var(--h-ctl); padding: 0; background: transparent; }
+body.phone .quick-text { display: none; }
+body.phone #new { width: var(--h-ctl); padding: 0; }
+body.phone .search input { width: 100%; }
+
+/* Gruppen: eigene Seite über die ganze Breite */
+body.phone:not(.no-sidebar) main { display: none; }
+body.phone .sidebar { width: auto; flex: 1; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+body.phone .phone-title { margin: 0; padding: calc(var(--h-ctl) + var(--s-2)) var(--phone-pad) var(--s-2); font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+/* Gruppierte Liste wie in den iOS-Einstellungen: «Alle» für sich, darunter die Gruppen */
+body.phone .sidebar > nav { margin: 0 var(--phone-pad); padding: 0; gap: 0; flex: 0 1 auto; }
+body.phone .nav-item { height: 44px; padding: 0 var(--s-4); border-radius: 0; background: var(--card); }
+body.phone .nav-item:first-child { border-radius: var(--r-card); box-shadow: var(--elev-1); }
+body.phone .nav-header + .nav-item { border-top-left-radius: var(--r-card); border-top-right-radius: var(--r-card); }
+body.phone .nav-item:last-child { border-bottom-left-radius: var(--r-card); border-bottom-right-radius: var(--r-card); }
+body.phone .nav-item + .nav-item { box-shadow: inset 0 0.5px 0 var(--line); }
+body.phone .nav-item:hover:not(:disabled) { background: var(--card); }
+body.phone .nav-item:active:not(:disabled) { background: var(--fill-strong); }
+body.phone .nav-item[aria-current=page] { background: var(--card); font-weight: 400; }
+body.phone .nav-item::after { content: "›"; margin-left: var(--s-2); color: var(--muted); font-size: 18px; }
+body.phone .nav-header { padding: var(--s-5) var(--s-4) var(--s-2); }
+body.phone .sidebar-settings { margin: var(--s-4) var(--phone-pad) calc(var(--s-4) + env(safe-area-inset-bottom)); height: 44px; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); }
+
+/* Verbindungen als Zeilen: kleines Vorschaubild, Name, Adresse, rechts die Türen Desktop/Shell/Dateien */
+body.phone .grid { grid-template-columns: 1fr; gap: 0; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); overflow: hidden; }
+body.phone .grid:empty { display: none; }
+body.phone .card-wrap + .card-wrap::before { content: ""; position: absolute; top: 0; left: 76px; right: 0; height: 0.5px; background: var(--line-strong); z-index: 1; }
+body.phone .card { display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; column-gap: var(--s-3); min-height: 60px; padding: var(--s-2) var(--s-3); border-radius: 0; background: transparent; box-shadow: none; }
+body.phone .card:hover:not(:disabled), body.phone .card[aria-pressed=true] { transform: none; box-shadow: none; }
+body.phone .card:active:not(:disabled) { background: var(--fill); }
+body.phone .card .thumb { grid-row: 1 / 3; width: 52px; height: 36px; border-radius: 6px; }
+body.phone .card .thumb-os svg { width: 18px; height: 18px; }
+body.phone .card .badge { display: none; }
+body.phone .card-wrap .card-name { margin: 0; font-size: 14px; }
+body.phone .card-wrap .card-sub { margin: 1px 0 0; padding-left: 3px; }
+body.phone .card-wrap :is(.card-name, .card-sub) { margin-right: calc(var(--doors, 3) * 38px - 4px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.phone .card-wrap:has(.door:only-child) { --doors: 1; }
+body.phone .card-wrap:has(.door:nth-child(2):last-child) { --doors: 2; }
+body.phone .doors { top: 50%; bottom: auto; right: var(--s-1); transform: translateY(-50%); gap: 0; }
+body.phone .door { --h-ctl: 38px; width: 38px; }
+body.phone .door svg { width: 20px; height: 20px; }
+
+/* Details: eigene Seite mit Zurück-Taste oben links */
+body.phone #details { position: fixed; inset: 0; z-index: 20; width: auto; padding: calc(env(safe-area-inset-top) + var(--h-ctl) + var(--s-3)) var(--phone-pad) calc(var(--s-5) + env(safe-area-inset-bottom)); border-radius: 0; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; gap: var(--s-3); }
+body.phone .detail-close { top: calc(env(safe-area-inset-top) + var(--s-1)); left: 4px; right: auto; width: auto; padding: 0 8px 0 2px; gap: 2px; color: var(--accent); font-weight: 400; }
+body.phone #details .detail-close { min-height: var(--h-ctl); }
+body.phone .detail-title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+body.phone #details > .sub { margin-top: -8px; font-size: 14px; }
+body.phone #details dl { padding: var(--s-3) var(--s-4); border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); font-size: 13px; }
+body.phone #details dd { font-size: 14px; }
+body.phone #details button:not(.detail-close) { min-height: 44px; font-size: 15px; }
+body.phone #details .detail-edit { position: absolute; top: calc(env(safe-area-inset-top) + var(--s-1)); right: 4px; min-height: var(--h-ctl); padding: 0 var(--s-3); background: transparent; font-size: 14px; font-weight: 400; }
+body.phone #new { background: transparent; color: var(--accent); }
+body.phone #new svg { width: 22px; height: 22px; }
+
+/* Sitzung: oben Zurück, Tabs, Teilen; darunter die Werkzeuge über die ganze Breite (Titel steht im Tab) */
+body.phone .session-bar { gap: var(--s-1); padding: 0 var(--s-2); }
+body.phone #session-back { padding: 0 var(--s-2); }
+body.phone .tab { flex: 0 1 auto; min-width: 80px; max-width: 180px; }
+body.phone .session-head { min-height: var(--h-ctl); padding: 0 var(--s-1) var(--s-1); }
+body.phone .session-id { display: none; }
+body.phone #session-toolbar { justify-content: space-between; }
+body.phone #session-toolbar > .tab-tools { flex: 1; flex-wrap: nowrap; justify-content: space-between; overflow: hidden; }
+body.phone #session-panes { margin: 0 0 var(--s-1); border-radius: 0; }
+
+/* Dateien: eine Seite auf einmal, Umschalter oben */
+body.phone .side-switch { margin: var(--s-2) var(--s-3) 0; }
+body.phone .side-switch label { overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+body.phone .panes { grid-template-columns: minmax(0, 1fr); }
+body.phone .panes[data-show=remote] > .pane[data-side=local], body.phone .panes[data-show=local] > .pane[data-side=remote] { display: none; }
+body.phone .pane + .pane { box-shadow: none; }
+body.phone .pane-head h2 { display: none; }
+body.phone .pane .date { display: none; }
+body.phone .pane td { padding-top: 9px; padding-bottom: 9px; }
+body.phone .tab-min { display: none !important; } /* Minimieren steht im Menü «…» */
+
+/* Blätter: fast ganze Breite, eine Spalte, Zeilen mit Beschriftung über dem Bedienelement */
+body.phone dialog { max-width: calc(100vw - 16px); max-height: calc(100dvh - env(safe-area-inset-top) - 16px); }
+body.phone .sheet { width: calc(100vw - 16px); max-width: none; grid-template-columns: minmax(0, 1fr); padding: var(--s-4); }
+body.phone .sheet .row:not(.actions) { grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+body.phone .sheet .segmented { grid-auto-columns: minmax(0, 1fr); }
+body.phone .sheet .segmented label { padding: 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; }
+body.phone .sheet .segmented svg { display: none; }
+body.phone .sheet-tabs { justify-self: stretch; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+body.phone .sheet-tabs button { flex: 1 0 auto; padding: 0 var(--s-3); }
+body.phone #editor-form > .actions { margin-left: calc(-1 * var(--s-4)); margin-right: calc(-1 * var(--s-4)); padding-left: var(--s-4); padding-right: var(--s-4); }
+
+/* Einstellungen: ganzer Bildschirm; erst die Liste der Bereiche, dann ein Bereich als eigene Seite */
+body.phone dialog#settings { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border-radius: 0; box-shadow: none; background: var(--bg); padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+body.phone dialog#settings .settings { width: 100% !important; height: 100% !important; min-width: 0; min-height: 0; max-width: none; max-height: none; resize: none; display: flex; flex-direction: column; position: relative; }
+body.phone .settings-nav { flex: 0 0 auto; margin: calc(var(--h-ctl) + var(--s-2)) var(--phone-pad) 0; padding: 0; gap: 0; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); }
+body.phone .settings-nav::before { content: "Einstellungen"; position: absolute; top: var(--s-1); left: var(--phone-pad); font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: var(--h-ctl); }
+body.phone .settings-nav { margin-top: calc(var(--h-ctl) + 48px); }
+body.phone .settings-nav button { height: 44px; border-radius: 0; font-weight: 400 !important; background: transparent !important; }
+body.phone .settings-nav button + button { box-shadow: inset 0 0.5px 0 var(--line); }
+body.phone .settings-nav button::after { content: "›"; margin-left: auto; color: var(--muted); font-size: 18px; }
+body.phone .settings:not(.pane-open) .settings-pane, body.phone .settings:not(.pane-open) .settings-back, body.phone .settings.pane-open .settings-nav { display: none; }
+body.phone .settings-pane { flex: 1; padding: var(--s-2) var(--phone-pad) var(--s-5); }
+body.phone .settings-back { align-self: flex-start; margin: var(--s-1) 0 0 4px; padding: 0 8px 0 2px; gap: 2px; font-weight: 400; }
+body.phone .settings-back svg { width: 20px; height: 20px; }
+body.phone .settings-close { position: absolute; top: var(--s-1); right: 4px; padding: 0; background: transparent; }
+body.phone .settings-close button { background: transparent; color: var(--accent); font-weight: 600; }
+body.phone .settings-pane .row { grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+body.phone .settings-pane > h2:first-child { margin-top: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+/* iPhone quer: eine Leiste (Tabs und Werkzeuge), möglichst viel Remote-Bild */
+body.phone.one-bar #tabs { flex: 0 1 auto; }
+body.phone.one-bar .session-bar #session-toolbar { flex: 1 1 auto; justify-content: flex-end; }
+@media (orientation: landscape) { body.phone .list-head h1 { font-size: 22px; } }

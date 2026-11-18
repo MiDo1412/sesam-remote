@@ -9,7 +9,7 @@ import { ask, choose, tell } from "./ui";
 import { openHelp, topicFor, topics } from "./help";
 import { connectionCommands, initPalette } from "./palette";
 import { clipHistory, initClipHistory } from "./cliphistory";
-import { initTitlebar, isMac, isMobile, keyLabel } from "./titlebar";
+import { initTitlebar, isMac, isMobile, isPhone, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
 import { applyAppearance, LINKS, openLink, openSettings, openWebsite, settingsWindow } from "./settings";
@@ -313,7 +313,10 @@ async function reload() {
 // landet dann oft auf einer anderen Karte; er zählt noch zum ersten, geöffnet wird die zuerst angeklickte Verbindung.
 const DOUBLE_MS = 450;
 let lastPick = { id: "", t: 0 };
+// iPhone: Navigationsstapel Gruppen › Verbindungen › Details; Tippen öffnet die Details als eigene Seite. Nicht gemerkt.
+const phone = { side: false, details: false };
 function pick(c: Connection) {
+  if (isPhone) return void ((selected = c.id), (phone.details = true), panels(), render());
   const now = performance.now();
   if (now - lastPick.t < DOUBLE_MS && lastPick.id !== c.id) return;
   lastPick = { id: c.id, t: now };
@@ -321,6 +324,7 @@ function pick(c: Connection) {
   render();
 }
 function openPicked(c: Connection) {
+  if (isPhone) return;
   const first = performance.now() - lastPick.t < DOUBLE_MS * 2 ? items.find((x) => x.id === lastPick.id) : undefined;
   const target = first ?? c;
   open(target, target.defaultView);
@@ -329,7 +333,7 @@ function openPicked(c: Connection) {
 function render() {
   const navItem = (label: string, count: number, on: boolean, click: () => void, group?: string, color = "") => {
     const a = el("button", { type: "button", class: "nav-item", "aria-current": on ? "page" : "false" }, el("span", {}, groupDot(color), label), el("span", { class: "count" }, String(count)));
-    a.onclick = click;
+    a.onclick = () => (isPhone && ((phone.side = false), panels()), click());
     if (group !== undefined) a.dataset.group = group;
     return a;
   };
@@ -360,7 +364,7 @@ function render() {
   shown = visible;
   // Fokus nach dem Neuzeichnen auf der Auswahl halten (Pfeiltasten, Klick).
   const refocus = $("grid").contains(document.activeElement) || $("conn-rows").contains(document.activeElement);
-  const list = prefs.view === "list";
+  const list = prefs.view === "list" && !isPhone; // iPhone: immer Zeilen (Karten als Liste, phone.css)
   for (const r of document.querySelectorAll<HTMLInputElement>("[name=libView]")) r.checked = r.value === prefs.view;
   $("grid").hidden = list;
   $("no-match").hidden = list || !items.length || visible.length > 0;
@@ -468,18 +472,25 @@ for (const s of document.querySelectorAll<HTMLElement>(".view-switch .seg-icon, 
 // und als Blatt über den Karten, Seitenleiste im Hochformat anfangs aus (eigene Einstellung je Ausrichtung).
 const portrait = matchMedia("(orientation: portrait)");
 const sideKey = () => (isMobile && portrait.matches ? "sidebarPortrait" : "sidebar");
-const panels = () => {
-  const side = prefs[sideKey()] ?? !(isMobile && portrait.matches);
-  const det = prefs.details ?? !isMobile;
+function panels() {
+  const side = isPhone ? phone.side : (prefs[sideKey()] ?? !(isMobile && portrait.matches));
+  const det = isPhone ? phone.details : (prefs.details ?? !isMobile);
   document.body.classList.toggle("no-sidebar", !side);
   document.body.classList.toggle("no-details", !det);
   $("toggle-sidebar").setAttribute("aria-pressed", String(side));
   $("toggle-details").setAttribute("aria-pressed", String(det));
-};
-$("toggle-sidebar").innerHTML = ICON.sidebar;
+}
+$("toggle-sidebar").innerHTML = isPhone ? `${ICON.back}<span>Gruppen</span>` : ICON.sidebar;
 $("toggle-details").innerHTML = ICON.info;
-$("toggle-sidebar").onclick = () => ((prefs[sideKey()] = document.body.classList.contains("no-sidebar")), savePrefs(), panels());
-const setDetails = (on: boolean) => ((prefs.details = on), savePrefs(), panels());
+$("toggle-sidebar").onclick = () => (isPhone ? (phone.side = true) : ((prefs[sideKey()] = document.body.classList.contains("no-sidebar")), savePrefs()), panels());
+const setDetails = (on: boolean) => (isPhone ? (phone.details = on) : ((prefs.details = on), savePrefs()), panels());
+if (isPhone) {
+  // Suche unter dem grossen Titel (wie iOS), «Neue Verbindung» als Symbol in der Leiste, Titel über den Gruppen.
+  $("title").closest(".list-head")!.after(document.querySelector(".search")!);
+  $("new").innerHTML = ICON.plus;
+  $("new").setAttribute("aria-label", "Neue Verbindung");
+  $("nav").before(el("h1", { class: "phone-title" }, "Gruppen"));
+}
 $("toggle-details").onclick = () => setDetails(document.body.classList.contains("no-details"));
 portrait.addEventListener("change", panels);
 panels();
@@ -522,7 +533,8 @@ function renderDetails() {
     return b;
   };
   const closeBtn = el("button", { type: "button", class: "detail-close", "aria-label": "Details schliessen", title: "Details schliessen" }) as HTMLButtonElement;
-  closeBtn.innerHTML = ICON.close;
+  if (isPhone) closeBtn.setAttribute("aria-label", "Zurück");
+  closeBtn.innerHTML = isPhone ? `${ICON.back}<span>${filter.kind === "all" ? "Alle" : filter.name}</span>` : ICON.close;
   closeBtn.onclick = () => setDetails(false);
   aside.replaceChildren(
     closeBtn,
@@ -549,7 +561,7 @@ function renderDetails() {
       btn("Shell", "", () => open(c, "shell"), !c.sshPort),
       btn("Dateien", "", () => open(c, "files"), !filesProtocol(c)),
     ),
-    btn("Bearbeiten …", "plain", () => edit(c)),
+    btn(isPhone ? "Bearbeiten" : "Bearbeiten …", "plain detail-edit", () => edit(c)),
     // Das Setup-Script richtet GNOME Remote Desktop ein: nur für Linux-Ziele oder unbekanntes System anbieten.
     ...(c.sshPort && desktopProtocol(c) && !["windows", "macos"].includes(c.os ?? "") ? [btn("RDP auf Zielrechner einrichten …", "plain", () => runOnTarget(c))] : []),
   );
@@ -1011,7 +1023,7 @@ $("share-clear").onclick = () => (sharedFolder.value = "");
 // iPad: keine RDP-Ordnerfreigabe (kein freier Dateizugriff), Karten öffnen per Doppeltippen
 if (isMobile) {
   $("share-row").hidden = true;
-  $("open-on-label").textContent = "Bei Doppeltippen öffnen";
+  $("open-on-label").textContent = isPhone ? "Standardansicht" : "Bei Doppeltippen öffnen";
 }
 
 const keyMode = form.elements.namedItem("keyMode") as HTMLSelectElement;

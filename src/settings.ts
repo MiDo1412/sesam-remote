@@ -1,5 +1,6 @@
 /** App-Einstellungen: Erscheinungsbild, Shell, Sicherheit, Über. Gespeichert lokal (keine Geheimnisse). */
-import { isMac, isMobile } from "./titlebar";
+import { isMac, isMobile, isPhone } from "./titlebar";
+import { ICON } from "./icons";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
@@ -75,7 +76,18 @@ export async function openSettings(tab = "general") {
     if (t === "creds") renderCredList();
     if (t === "terminal") void renderProfiles();
     if (t === "groups") renderGroupSettings();
+    box.classList.add("pane-open");
   };
+  // iPhone: Bereiche als Liste (eigene Seite), ein Bereich als Seite mit Zurück-Taste.
+  if (isPhone) {
+    box.classList.remove("pane-open");
+    let back = box.querySelector<HTMLButtonElement>(".settings-back");
+    if (!back) {
+      back = Object.assign(document.createElement("button"), { type: "button", className: "plain settings-back", innerHTML: `${ICON.back}<span>Einstellungen</span>` });
+      back.onclick = () => box.classList.remove("pane-open");
+      box.prepend(back);
+    }
+  }
   // Fokus wandert mit der Auswahl (WebKit fokussiert Knöpfe beim Klick nicht), sonst stehen Ring und Auswahl auf zwei Zeilen.
   for (const b of dlg.querySelectorAll<HTMLButtonElement>("[data-pane]")) b.onclick = () => (show(b.dataset.pane!), b.focus({ preventScroll: true }));
 
@@ -131,7 +143,7 @@ export async function openSettings(tab = "general") {
   $("about-privacy").onclick = () => openLink(LINKS.privacy);
   $("settings-version").textContent = __VERSION_LABEL__ || (await getVersion().catch(() => ""));
   void renderUpdate();
-  show(tab);
+  if (!isPhone || tab !== "general") show(tab);
   if (!dlg.open) dlg.showModal();
   // Fokus auf den gewählten Bereich (nicht immer «Allgemein»), damit Tastatur und Anzeige übereinstimmen.
   dlg.querySelector<HTMLButtonElement>(`[data-pane="${tab}"]`)?.focus({ preventScroll: true });

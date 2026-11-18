@@ -7,7 +7,7 @@ import { ask, askHostKey, askPassword, askText, choose, tell } from "./ui";
 import { compareDirs, type Mark } from "./compare";
 import { openMenu, type MenuItem } from "./menu";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { isMobile } from "./titlebar";
+import { isMobile, isPhone } from "./titlebar";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { localNetworkText } from "./ubuntu";
@@ -101,7 +101,8 @@ export function filesTab(ctx: TabCtx): TabHandle {
   ctx.pane.prepend(host);
   const isWin = navigator.userAgent.includes("Windows");
 // iPad: links nur der Ordner der App («Auf meinem iPad › Sesam Remote» in der Dateien-App).
-const localName = isMobile ? "Auf meinem iPad" : "Dieser Computer";
+const onDevice = isPhone ? "Auf meinem iPhone" : "Auf meinem iPad";
+const localName = isMobile ? onDevice : "Dieser Computer";
 /** Apple-Tastenkürzel (⌘) auf Mac und iPad mit Tastatur. */
 const isMacUi = navigator.userAgent.includes("Mac");
 let localRoot = "";
@@ -146,11 +147,26 @@ const openPlaces = () =>
   const transfers = el("section", "transfers");
   transfers.setAttribute("aria-label", "Übertragungen");
   const transferHead = el("div", "transfers-head");
-  transferHead.append(el("h2", "", "Übertragungen"), el("span", "sub", isMobile ? "Links: Haus-Knopf öffnet die Orte, auch Ordner aus «Dateien» (iCloud Drive, Auf meinem iPad, USB, Server). Zwischen den Seiten ziehen oder doppeltippen." : "Zwischen den Seiten ziehen, Dateien aus dem Explorer/Finder rechts ablegen, oder doppelklicken."));
+  transferHead.append(el("h2", "", "Übertragungen"), el("span", "sub", isPhone ? `Oben zwischen «iPhone» und «${c.name}» wechseln, auswählen, dann «Hochladen» oder «Herunterladen». Der Haus-Knopf öffnet die Orte aus «Dateien».` : isMobile ? "Links: Haus-Knopf öffnet die Orte, auch Ordner aus «Dateien» (iCloud Drive, Auf meinem iPad, USB, Server). Zwischen den Seiten ziehen oder doppeltippen." : "Zwischen den Seiten ziehen, Dateien aus dem Explorer/Finder rechts ablegen, oder doppelklicken."));
   const transferList = el("div", "transfer-list");
   transfers.append(transferHead, transferList);
   const grid = el("div", "panes");
   grid.append(panes.local.root, panes.remote.root);
+  // iPhone: eine Seite auf einmal (zu schmal für zwei), Umschalter oben; anfangs der Server.
+  let sideSwitch: HTMLElement | null = null;
+  if (isPhone) {
+    grid.dataset.show = "remote";
+    sideSwitch = el("div", "segmented side-switch");
+    sideSwitch.setAttribute("role", "radiogroup");
+    sideSwitch.setAttribute("aria-label", "Seite");
+    for (const [side, label] of [["local", "iPhone"], ["remote", c.name]] as const) {
+      const l = el("label", "", "");
+      const i = Object.assign(document.createElement("input"), { type: "radio", name: `side-${c.id}-${Math.random()}`, checked: side === "remote" });
+      i.onchange = () => (grid.dataset.show = side);
+      l.append(i, label);
+      sideSwitch.append(l);
+    }
+  }
   // Beim Vergleich scrollen beide Listen gemeinsam.
   const lists = [panes.local.root, panes.remote.root].map((r) => r.querySelector<HTMLElement>(".pane-list")!);
   let syncing = false;
@@ -196,7 +212,7 @@ const openPlaces = () =>
   checkBtn.title = "Gleichnamige Dateien per SHA-256 vergleichen (auf dem Server mit sha256sum)";
   const syncBtn = barButton("Synchronisieren …", () => void syncDialog(), "primary");
   bar.append(summary, el("span", "grow"), diffLabel, checkBtn, syncBtn, barButton("Beenden", () => toggleCompare(), "plain"));
-  host.append(bar, grid, transfers);
+  host.append(bar, ...(sideSwitch ? [sideSwitch] : []), grid, transfers);
 
   let sid: string | null = null;
   let scp = false;
@@ -530,7 +546,7 @@ const openPlaces = () =>
     td.colSpan = 4;
     // iPad: leerer Sesam-Ordner → erklären, wie man an eigene Dateien kommt.
     if (isMobile && p.side === "local" && p.listing?.path === localRoot && !p.listing.entries.length) {
-      td.textContent = "Hier liegt nur der Ordner von Sesam. Öffne einen Ordner aus «Dateien» (iCloud Drive, Auf meinem iPad, USB-Stick, Server) oder hole einzelne Dateien hierher.";
+      td.textContent = `Hier liegt nur der Ordner von Sesam. Öffne einen Ordner aus «Dateien» (iCloud Drive, ${onDevice}, USB-Stick, Server) oder hole einzelne Dateien hierher.`;
       const row = el("div", "empty-actions");
       const open = el("button", "primary", "Ordner öffnen …") as HTMLButtonElement;
       const pick = el("button", "", "Dateien wählen …") as HTMLButtonElement;
@@ -577,7 +593,7 @@ const openPlaces = () =>
   async function placesMenu(p: Pane, anchor: HTMLElement) {
     await openPlaces();
     const items: MenuItem[] = [
-      { value: "home", label: "Sesam Remote (Auf meinem iPad)", icon: ICON.home, section: "Orte" },
+      { value: "home", label: `Sesam Remote (${onDevice})`, icon: ICON.home, section: "Orte" },
       ...places.map((pl, i) => ({ value: `place:${i}`, label: pl.gone ? `${pl.name} (nicht erreichbar)` : pl.name, icon: ICON.folder, disabled: pl.gone })),
       { value: "open", label: "Ordner öffnen …", icon: ICON.newFolder, separator: true },
       { value: "pick", label: "Dateien wählen …", icon: ICON.plus },
@@ -1759,8 +1775,8 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   };
   addEventListener("sesam:shell-cwd", onShellCwd);
 
-  const renameBtn = toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2" });
-  const compareBtn = toolButton(ICON.compare, "Vergleichen", () => toggleCompare(), { text: true, shortcut: "linken und rechten Ordner" });
+  const renameBtn = toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2", compact: isPhone });
+  const compareBtn = toolButton(ICON.compare, "Vergleichen", () => toggleCompare(), { text: true, shortcut: "linken und rechten Ordner", compact: isPhone });
   compareBtn.setAttribute("aria-pressed", "false");
   const trashBtn = toolButton(ICON.trash, "Löschen", () => deleteRemote(), { shortcut: "Entf", danger: true });
   ctx.toolbar.append(
@@ -1769,12 +1785,12 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     compareBtn,
     toolSep(),
     toolButton(ICON.newFolder, "Neuer Ordner", () => mkdir()),
-    toolButton(ICON.plus, "Neue Datei", () => newFile()),
+    toolButton(ICON.plus, "Neue Datei", () => newFile(), { compact: isPhone }), // iPhone: Seltenes im Menü «…»
     renameBtn,
     trashBtn,
     toolButton(ICON.refresh, "Neu laden", () => {
       for (const p of Object.values(panes)) if (p.listing) load(p, p.listing.path);
-    }),
+    }, { compact: isPhone }),
     followBtn,
     toolSep(),
     toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),

@@ -8,7 +8,7 @@ import { GROUP_COLORS, colorMenu, dotSvg, groupDot } from "./groups";
 import { emit, emitTo, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isMobile, keyLabel } from "./titlebar";
+import { isMobile, isPhone, keyLabel } from "./titlebar";
 
 /** Dieses Fenster zeigt abgekoppelte Sitzungen (ohne Bibliothek). */
 export const detachToken: string = (window as unknown as { __SESAM_DETACH__?: string }).__SESAM_DETACH__ ?? new URLSearchParams(location.search).get("detach") ?? "";
@@ -171,13 +171,15 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
   // Kompakt (iPad, schmales Fenster): nur die häufigen Knöpfe, der Rest im Menü «…».
   const wide = matchMedia("(min-width: 1000px)");
   const roomy = matchMedia("(min-width: 1280px)");
+  const tall = matchMedia("(orientation: portrait)");
   const place = () => {
-    const one = wide.matches || isMobile;
+    const one = (wide.matches || isMobile) && !(isPhone && tall.matches); // iPhone hochkant: Werkzeuge in eigener Zeile
     document.body.classList.toggle("one-bar", one);
     document.body.classList.toggle("compact", isMobile || !roomy.matches);
     if (one) document.querySelector(".session-bar")!.insertBefore($("session-toolbar"), $("split-btn"));
     else document.querySelector(".session-head")!.append($("session-toolbar"));
   };
+  tall.addEventListener("change", place);
   wide.addEventListener("change", place);
   roomy.addEventListener("change", place);
   place();
@@ -260,7 +262,7 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
   x.title = "Trennen";
   const min = document.createElement("button");
   min.type = "button";
-  min.className = "tab-close";
+  min.className = "tab-close tab-min";
   min.innerHTML = ICON.minimize;
   min.title = "Minimieren (läuft weiter)";
   tabEl.innerHTML = kindSvg(kind);

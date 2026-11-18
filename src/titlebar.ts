@@ -17,6 +17,8 @@ const glyph = (svg: string) => fl(svg, 14);
  *  Programme, keine Desktop-Verknüpfungen; die Oberfläche blendet diese Funktionen aus (Klasse «mobile»). */
 export const isMobile = /iPad|iPhone|Android/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1);
 export const isMac = navigator.userAgent.includes("Mac") && !isMobile;
+/** iPhone (schmaler als jedes iPad): Navigationsstapel statt Spalten, eigene Seiten für Gruppen und Details (Klasse «phone»). */
+export const isPhone = isMobile && Math.min(screen.width, screen.height) < 600;
 // Fokusring nur nach Tastaturbedienung (styles.css: body.kbd); Klick oder Tippen blendet ihn wieder aus.
 addEventListener("keydown", (e) => (e.key === "Tab" || e.key.startsWith("Arrow")) && document.body.classList.add("kbd"), true);
 addEventListener("pointerdown", () => document.body.classList.remove("kbd"), true);
@@ -42,7 +44,7 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
   // Containern; Knöpfe, Tabs und Eingabefelder bleiben bedienbar). Doppelklick: Zoomen bzw. Maximieren.
   const bars = document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar");
   for (const h of document.querySelectorAll<HTMLElement>("header.toolbar, header.session-bar, .session-head")) h.setAttribute("data-tauri-drag-region", "deep");
-  if (isMobile) return void (document.body.classList.add("mobile"), touchScale(), longPressMenus());
+  if (isMobile) return void (document.body.classList.add("mobile", ...(isPhone ? ["phone"] : [])), touchScale(), longPressMenus());
   if (isMac) return void document.body.classList.add("mac");
   document.body.classList.add("custom-titlebar");
   const win = getCurrentWindow();
@@ -142,7 +144,8 @@ function longPressMenus() {
 /** iPad: die ganze Oberfläche ist für die Maus gebaut (13 px Text, 32 px Knöpfe). Einheitlich vergrössert ergibt das
  *  rund 17 pt Text und mit den Mindesthöhen in styles.css 44-pt-Touchziele (Apple HIG); Koordinaten bleiben stimmig. */
 function touchScale() {
-  const scale = Math.min(screen.width, screen.height) >= 800 ? 1.3 : 1.2; // iPad mini: etwas weniger, sonst wird es eng
+  // iPad mini: etwas weniger, sonst wird es eng; iPhone: 1,15 (Schrift 13 px ≈ 15 pt, Knöpfe 38 px ≈ 44 pt)
+  const scale = isPhone ? 1.15 : Math.min(screen.width, screen.height) >= 800 ? 1.3 : 1.2;
   const meta = document.querySelector('meta[name="viewport"]');
   // WKWebView rechnet «device-width» beim Vergrössern nicht neu: Breite selbst setzen, auch nach dem Drehen.
   const apply = () => {

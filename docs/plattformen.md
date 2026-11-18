@@ -91,6 +91,27 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 - **Zwischenablage:** nur solange Sesam vorne ist; iOS kann beim Einfügen um Bestätigung bitten.
 - **Kein lokales Terminal, keine Verknüpfungen auf dem Schreibtisch**; ersetzt durch den Kurzbefehl «Verbindung öffnen».
 
+## iPhone: gleiche Funktionen wie auf dem iPad, eigene Oberfläche
+
+Gleicher Code und gleiche App wie auf dem iPad (`isPhone` in `src/titlebar.ts`, Stil in `src/phone.css`). Es gelten
+dieselben Grenzen wie oben, mit «iPhone» statt «iPad». Was anders aussieht, weil der Bildschirm schmal ist:
+
+- **Bibliothek als Navigationsstapel:** Gruppen › Verbindungen › Details, je als eigene Seite mit Zurück-Taste
+  oben links (wie Mail und Einstellungen). Verbindungen als Zeilen mit kleinem Vorschaubild; die Knöpfe Desktop,
+  Shell und Dateien rechts verbinden direkt, Tippen auf die Zeile öffnet die Details. Kein Wechsel Kacheln/Liste.
+- **Suche** unter dem grossen Titel, «Neue Verbindung» als «＋» oben rechts, Einstellungen auf der Seite «Gruppen».
+- **Sitzung hochkant:** oben Zurück, Tabs und Geteilte Ansicht, darunter die Werkzeuge; Seltenes im Menü «…».
+  Quer: eine Leiste wie auf dem iPad.
+- **Dateien:** eine Seite auf einmal, Umschalter «iPhone» / Server oben; übertragen mit «Hochladen» und
+  «Herunterladen» statt Ziehen. Ohne Auswahl öffnet «Hochladen» die Dateiauswahl von iOS.
+- **Einstellungen** über den ganzen Bildschirm: Liste der Bereiche, ein Bereich als eigene Seite.
+- **Blätter** (Verbindung bearbeiten, Schnelle Verbindung) in einer Spalte.
+- Im App Store erst mit Geräteauswahl «iPhone, iPad» (`TARGETED_DEVICE_FAMILY = "1,2"` in `src-tauri/gen/apple`);
+  bis zur Freigabe durch Mike bleibt es bei «2» (nur iPad), weil Apple eine einmal veröffentlichte Geräteart nicht
+  mehr entfernen lässt.
+
+Vorschau im Browser: `website-tools/phone.mjs` (wie `shot.mjs`, mit iPhone-Kennung und Touch).
+
 ## Widget einschalten (iPad, bezahltes Entwicklerprogramm)
 
 Der Code liegt bereit: `src-tauri/gen/apple/SesamWidget/SesamWidget.swift` (Widget «Zuletzt verwendet», klein,
