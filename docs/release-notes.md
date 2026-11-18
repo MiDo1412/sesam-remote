@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.8 — 2026-11-18
+
+Terminal ohne verschluckte Buchstaben, eine verständliche geteilte Ansicht und eine signierte, notarisierte Mac-Version.
+
 ### Verbessert
 
 - **Geteilte Ansicht verständlich:** Ein eigener Knopf in der Tab-Leiste teilt das Fenster (Menü: welche offene Sitzung daneben, oder neu eine Shell bzw. ein Terminal daneben) und heisst bei geteilter Ansicht «Teilung aufheben» (macOS/iPad «Geteilte Ansicht beenden»). Jeder Teil hat eine Kopfzeile mit Namen und den Knöpfen «Untereinander/Nebeneinander», «Seiten tauschen» und «Nur diesen Teil zeigen». Die Teile bleiben an ihrem Platz (ein Klick macht einen Teil nur aktiv, grün markiert), der Trenner lässt sich ziehen (Doppelklick: halbe-halbe), die Ausrichtung folgt der Fensterform, und ein Tab lässt sich direkt in die Fläche ziehen. Ein anderer Tab ersetzt den aktiven Teil, statt die Teilung still zu verlassen. Auch in der Befehlspalette.
@@ -25,8 +29,7 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 ### Behoben
 
 - **Schlüsselbund fragt auf dem Mac nicht mehr nach jedem Update:** Die Mac-Version ist jetzt mit einer Developer ID signiert und von Apple notarisiert. Nach dem Wechsel auf diese Version fragt macOS noch einmal nach dem Schlüsselbund («Immer erlauben»), danach nicht mehr, auch nicht nach Updates. Gatekeeper warnt beim ersten Öffnen nicht mehr.
-
-- **Erster Buchstabe in der Shell verschluckt:** Was man tippte, bevor die Shell ganz verbunden war (oft das «s» von «sudo»), warf Sesam weg. Jetzt hat das Terminal die Tastatur schon beim Verbinden, und die Eingabe wird wie in einem echten Terminal gepuffert und danach gesendet (SSH und lokale Terminals, alle Plattformen) Auch Tasten direkt nach ⌘T bzw. Strg+T, noch bevor das neue Terminal offen ist, kommen jetzt an.
+- **Erster Buchstabe in der Shell verschluckt:** Was man tippte, bevor die Shell ganz verbunden war (oft das «s» von «sudo»), warf Sesam weg. Jetzt hat das Terminal die Tastatur schon beim Verbinden, und die Eingabe wird wie in einem echten Terminal gepuffert und danach gesendet (SSH und lokale Terminals, alle Plattformen). Auch Tasten direkt nach ⌘T bzw. Strg+T, noch bevor das neue Terminal offen ist, kommen jetzt an.
 - **Gehaltene Shell wie ein normales Terminal:** tmux hält die Shell nur noch im Hintergrund, auf einem eigenen tmux-Server ohne die tmux-Einstellungen des Benutzers. Ein Rechtsklick öffnete bisher das Menü von tmux («Horizontal Split», «Kill» …), und Markieren oder Scrollen schaltete den Kopiermodus von tmux ein, der danach den ersten Tastendruck schluckte. Jetzt markiert, scrollt und kopiert Sesam selbst, und die Ausgabe landet im Verlauf von Sesam. Schon laufende gehaltene Shells älterer Versionen hängt Sesam weiter an.
 - **Kontextmenü im Terminal:** Ein Rechtsklick zeigt Sesams Menü (Kopieren, Einfügen, Alles auswählen, Suchen, Verlauf leeren) statt des Menüs der Webansicht («Schreibrichtung», «Weitere Tools») oder eines Programms auf dem Server.
 - **Grösserer Verlauf:** Die Shell behält 10'000 Zeilen zum Zurückscrollen (bisher 1000), gehaltene Shells auf dem Server 50'000.
