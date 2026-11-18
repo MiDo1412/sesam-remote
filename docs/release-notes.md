@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Behoben
+
+- **Tastatur ausblenden auf dem iPhone:** In Formularfeldern ist die iOS-Leiste mit «Fertig» (∧ ∨ ✓) zurück; sie fehlt nur noch, solange Shell oder Desktop die Tasten abfangen. Dort bringt das Antippen des Terminals die Zusatztasten mit, ganz rechts steht fest die Taste «Tastatur ausblenden», und der Tastatur-Knopf in der Werkzeugleiste schliesst die Tastatur zuverlässig. Antippen einer leeren Stelle schliesst die Tastatur eines Formularfelds.
+
 ## 26.11.9 — 2026-11-18
 
 Sesam auf dem iPhone, auch auf dem faltbaren iPhone Duo, und eine Tastatur ohne Formularleiste.

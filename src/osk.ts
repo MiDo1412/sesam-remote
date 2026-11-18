@@ -2,6 +2,7 @@
 import "./touch.css";
 import { ICON } from "./icons";
 import { toolButton } from "./tabs";
+import { isPhone } from "./titlebar";
 
 export type Key = Pick<KeyboardEvent, "code" | "key">;
 /** Taste mit gehaltenen Modifikatoren drücken und loslassen. */
@@ -116,7 +117,7 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
   for (let i = 1; i <= 12; i++) fns.push(Object.assign(keyBtn(`F${i}`, `F${i}`, () => press({ code: `F${i}`, key: `F${i}` }), "fn"), { hidden: true }));
   if (o.desktop) keyBtn("Strg+Alt+Entf", "Strg+Alt+Entf", () => o.press({ code: "Delete", key: "Delete" }, [MODS[0][0], MODS[1][0]]), "wide");
   const closeBtn = keyBtn("", "Tastatur ausblenden", () => hide(), "close");
-  closeBtn.innerHTML = ICON.close;
+  closeBtn.innerHTML = ICON.keyboardHide;
   o.pane.append(bar);
 
   // ---------- Eingabe ----------
@@ -161,6 +162,10 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
     if (own) hide();
   };
   input.addEventListener("blur", onBlur);
+  // iPhone: Bekommt das Terminal die Tastatur (Antippen, Verbinden), kommt die Leiste mit «Tastatur ausblenden» mit;
+  // die iPhone-Tastatur selbst hat keine Taste dafür.
+  const onFocus = () => isPhone && !on && set(true);
+  input.addEventListener("focus", onFocus);
 
   // ---------- Platz für die Tastatur ----------
   const vv = window.visualViewport;
@@ -179,7 +184,8 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
   vk?.addEventListener("geometrychange", place);
 
   let on = false;
-  const button = toolButton(ICON.keyboard, "Tastatur", () => (on ? hide() : show()));
+  // Hat das Terminal schon die Tastatur (Fokus beim Verbinden), schliesst der Knopf sie, statt nur die Leiste zu zeigen.
+  const button = toolButton(ICON.keyboard, "Tastatur", () => (on || document.activeElement === input ? hide() : show()));
   button.setAttribute("aria-pressed", "false");
   const set = (v: boolean) => {
     on = v;
@@ -194,10 +200,9 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
     input.focus({ preventScroll: true });
   };
   const hide = () => {
-    if (!on) return;
-    set(false);
+    if (on) set(false);
     for (const s of state.values()) (s.n = 0), renderMod(s);
-    if (own) input.blur();
+    input.blur(); // auch das Terminal-Feld: sonst bliebe die Tastatur des iPhone stehen (sie hat keine eigene Taste)
   };
 
   return {
@@ -214,6 +219,7 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
       input.removeEventListener("keydown", onKeyDown, true);
       input.removeEventListener("beforeinput", onBeforeInput, true);
       input.removeEventListener("blur", onBlur);
+      input.removeEventListener("focus", onFocus);
       bar.remove();
       if (own) input.remove();
     },

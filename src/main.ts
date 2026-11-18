@@ -1175,6 +1175,24 @@ for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) {
 }
 listen<string>("help", (e) => openHelp(e.payload));
 initTitlebar({ command: (c) => (!detachedWindow || c === "settings") && command(c), tool: runTool, help: openHelp });
+
+// iPhone/iPad: Die Formularleiste (∧ ∨ Fertig) nur in normalen Feldern; fangen Shell oder Desktop die Tasten ab,
+// blendet main.mm sie aus (eigene Zusatztasten mit «Tastatur ausblenden»). Antippen einer leeren Stelle schliesst
+// die Tastatur eines Formularfelds.
+if (isMobile) {
+  const capture = (t: EventTarget | null) => t instanceof Element && t.matches(".osk-input, .xterm-helper-textarea");
+  let captured = false;
+  const report = (on: boolean) => on !== captured && ((captured = on), invoke("key_capture", { on }).catch(() => {}));
+  addEventListener("focusin", (e) => report(capture(e.target)));
+  addEventListener("focusout", (e) => !e.relatedTarget && report(false));
+  const field = "input, textarea, select, [contenteditable]";
+  addEventListener("touchend", (e) => {
+    const a = document.activeElement;
+    if (!(a instanceof HTMLElement) || !a.matches(field) || capture(a)) return;
+    const t = e.target instanceof Element ? e.target : null;
+    if (!t?.closest(`${field}, label, button, a, [role=button], [role=option], [role=tab]`)) a.blur();
+  }, { passive: true });
+}
 applyAppearance();
 $("open-settings").onclick = () => openSettings();
 // Befehle aus dem App-Menü und Tastenkürzel

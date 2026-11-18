@@ -49,6 +49,17 @@ struct LibraryPath(PathBuf);
 /// Serialisiert Lese-Ändern-Schreiben der Bibliothek.
 static LIBRARY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// iOS: Fängt Shell oder Desktop gerade die Tasten ab, blendet main.mm die Formularleiste (∧ ∨ Fertig) aus.
+#[tauri::command]
+fn key_capture(on: bool) {
+    #[cfg(target_os = "ios")]
+    if let Some(cls) = objc2::runtime::AnyClass::get(c"SesamKeyCapture") {
+        let _: () = unsafe { objc2::msg_send![cls, setOn: objc2::runtime::Bool::new(on)] };
+    }
+    #[cfg(not(target_os = "ios"))]
+    let _ = on;
+}
+
 #[tauri::command]
 fn library_list(path: State<LibraryPath>) -> Result<Vec<Connection>, String> {
     let mut items = library::load(&path.0)?;
@@ -2677,6 +2688,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            key_capture,
             library_list,
             library_save,
             library_delete,

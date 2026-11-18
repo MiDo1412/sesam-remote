@@ -32,6 +32,7 @@ import fGrid from "@fluentui/svg-icons/icons/grid_20_regular.svg?raw";
 import fHandLeft from "@fluentui/svg-icons/icons/hand_left_20_regular.svg?raw";
 import fHome from "@fluentui/svg-icons/icons/home_20_regular.svg?raw";
 import fKeyboard from "@fluentui/svg-icons/icons/keyboard_20_regular.svg?raw";
+import fKeyboardDock from "@fluentui/svg-icons/icons/keyboard_dock_20_regular.svg?raw";
 import fMoreHorizontal from "@fluentui/svg-icons/icons/more_horizontal_20_regular.svg?raw";
 import fOpen from "@fluentui/svg-icons/icons/open_20_regular.svg?raw";
 import fPin from "@fluentui/svg-icons/icons/pin_20_regular.svg?raw";
@@ -84,6 +85,7 @@ export const ICON = {
   globe: fl(fGlobe),
   handTap: fl(fHandLeft),
   keyboard: fl(fKeyboard),
+  keyboardHide: fl(fKeyboardDock),
   quick: fl(fFlash),
   save: fl(fSave),
   search: fl(fSearch),
@@ -126,7 +128,7 @@ export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
   refresh: "arrow.clockwise", back: "chevron.backward", navBack: "chevron.backward", forward: "chevron.forward", up: "arrow.up", compare: "arrow.left.arrow.right",
   home: "house", detach: "macwindow.on.rectangle", span: "rectangle.split.3x1", screenshot: "camera", typeClipboard: "doc.on.clipboard",
   copy: "doc.on.doc", download: "arrow.down.circle", folder: "folder", newFolder: "folder.badge.plus", fullscreen: "arrow.up.left.and.arrow.down.right",
-  globe: "globe", handTap: "hand.tap", keyboard: "keyboard", quick: "bolt", save: "square.and.arrow.down", search: "magnifyingglass",
+  globe: "globe", handTap: "hand.tap", keyboard: "keyboard", keyboardHide: "keyboard.chevron.compact.down", quick: "bolt", save: "square.and.arrow.down", search: "magnifyingglass",
   magnify: "plus.magnifyingglass", desktop: "display", rename: "pencil", disconnect: "powerplug", plus: "plus", shell: "terminal",
   font: "textformat", trash: "trash", upload: "arrow.up.circle", close: "xmark", minimize: "minus", splitRight: "rectangle.split.2x1",
   splitDown: "rectangle.split.1x2", screencast: "rectangle.on.rectangle", question: "questionmark.circle", viewGrid: "square.grid.2x2",
