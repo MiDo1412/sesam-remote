@@ -123,9 +123,12 @@ Vorschau im Browser: `website-tools/phone.mjs` (wie `shot.mjs`, mit iPhone-Kennu
   Einstellungen), wird auf allen Mobilgeräten angelegt und in der anderen per CSS ausgeblendet.
 - **Grösse aus `outerWidth`/`outerHeight`:** `screen` bleibt beim Aufklappen auf dem Wert des Aussenbildschirms stehen
   (und zeigt in Split View den ganzen Bildschirm). Das Viewport-Meta-Tag rechnet die Breite daraus.
-- **Kamera seitlich:** Auf dem Duo liegen Kamera und Statusleiste rechts (zugeklappt `safe-area-inset-right` 84 pt,
-  aufgeklappt meldet WebKit sie gedreht als oben 82 pt; `fixSafeArea()` legt sie dann auf beide Seiten). Blätter
-  stehen in der Mitte des freien Bereichs (`translate` um die halbe Differenz der Ränder).
+- **Kamera seitlich:** Zugeklappt meldet iOS nur die Seite der Statusleiste (`safe-area-inset-right` 84 pt); um 180°
+  gedreht liegt die Kamera aber gegenüber, darum quer beidseitig wie bei jedem iPhone. Aufgeklappt melden WebKit
+  und UIKit die Kamera auch quer als oben 82 pt (`screen.orientation` bleibt hochkant); die Statusleiste liegt quer
+  in beiden Lagen rechts, darum reserviert `fixSafeArea()` dann nur rechts. Ränder werden nach dem Start nach 0,5 s
+  noch einmal gelesen, weil WebKit sie anfangs ohne `resize` nachliefert. Blätter stehen in der Mitte des freien
+  Bereichs (`translate` um die halbe Differenz der Ränder).
 - **Tab-Leiste:** Auf Touch-Geräten eine Leiste (Werkzeuge neben den Tabs) erst ab 600 px Viewport-Breite (iPhone
   quer, iPad); darunter zwei Leisten (iPhone hochkant, Duo zu und quer, Duo offen und hochkant), sonst wird der
   aktive Tab auf wenige Buchstaben gequetscht.

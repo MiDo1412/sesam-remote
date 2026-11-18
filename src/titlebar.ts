@@ -159,9 +159,18 @@ function fixSafeArea(landscape: boolean) {
   const s = getComputedStyle(probe);
   const [top, right, left] = [s.paddingTop, s.paddingRight, s.paddingLeft].map(parseFloat);
   probe.remove();
+  // iPhone Duo zugeklappt quer: iOS meldet nur die Seite der Statusleiste, um 180° gedreht liegt die Kamera aber
+  // gegenüber. Beidseitig wie bei jedem iPhone quer.
+  if (isPhone && !left !== !right) {
+    root.setProperty("--sa-l", `${Math.max(left, right)}px`);
+    root.setProperty("--sa-r", `${Math.max(left, right)}px`);
+    return;
+  }
   if (left || right || top < 40) return; // oben nur die Statusleiste (iPad): Werte stimmen
   root.setProperty("--sa-t", "0px");
-  root.setProperty("--sa-l", `${top}px`);
+  // iPhone quer: beidseitig wie iOS selbst. iPhone Duo aufgeklappt (breite Oberfläche): WebKit und UIKit melden die
+  // Kamera als «oben» 82 pt, sie liegt aber quer immer rechts (Statusleiste rechts, auch um 180° gedreht).
+  root.setProperty("--sa-l", isPhone ? `${top}px` : "0px");
   root.setProperty("--sa-r", `${top}px`);
 }
 
@@ -184,6 +193,7 @@ function touchScale() {
     const content = `width=${Math.round(w / scale)}, initial-scale=${scale}, minimum-scale=${scale}, maximum-scale=${scale}, user-scalable=no, viewport-fit=cover`;
     if (meta?.getAttribute("content") !== content) meta?.setAttribute("content", content);
     requestAnimationFrame(() => fixSafeArea(w > h));
+    setTimeout(() => fixSafeArea(w > h), 500); // beim Start meldet WebKit die Ränder oft erst später, ohne resize
   };
   apply();
   addEventListener("resize", apply);
