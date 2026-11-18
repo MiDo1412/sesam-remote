@@ -169,6 +169,7 @@ export function createKeyboard(o: { pane: HTMLElement; press: Press; input?: HTM
     if (!on) return o.avoid ? o.avoid(null) : void (o.pane.style.paddingBottom = "");
     const kb = Math.max(vv ? innerHeight - vv.height - vv.offsetTop : 0, vk?.boundingRect.height ?? 0, 0);
     bar.style.transform = kb ? `translateY(${-kb}px)` : "";
+    bar.style.paddingBottom = kb ? "6px" : ""; // auf der Tastatur kein Abstand für die Home-Leiste
     const bottom = innerHeight - kb - bar.offsetHeight;
     if (o.avoid) o.avoid(bottom);
     else o.pane.style.paddingBottom = `${Math.max(0, o.pane.getBoundingClientRect().bottom - bottom)}px`;
