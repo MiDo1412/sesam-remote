@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.11 — 2026-11-18
+
+Der Tastatur-Knopf schliesst die Tastatur auch im entfernten Bildschirm.
+
 ### Behoben
 
 - **Tastatur-Knopf im Desktop:** Ein zweiter Tipp auf den Tastatur-Knopf schliesst die Tastatur im entfernten Bildschirm wieder, statt sie gleich neu zu öffnen.
