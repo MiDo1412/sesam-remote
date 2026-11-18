@@ -141,6 +141,25 @@ function longPressMenus() {
   addEventListener("pointercancel", cancel, true);
 }
 
+/** iPhone quer: WKWebView meldet in env(safe-area-inset-*) weiter die Werte vom Hochformat (oben die Insel, links/rechts 0),
+ *  auch nach einem Neustart im Querformat. Dann liegt die Insel seitlich über dem Inhalt: oben 0, links und rechts den
+ *  Abstand der Insel. Meldet WebKit seitliche Werte, gelten sie unverändert. */
+function phoneSafeArea(landscape: boolean) {
+  const root = document.documentElement.style;
+  for (const k of ["t", "r", "l"]) root.removeProperty(`--sa-${k}`);
+  if (!landscape) return;
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)";
+  document.body.append(probe);
+  const s = getComputedStyle(probe);
+  const [top, right, left] = [s.paddingTop, s.paddingRight, s.paddingLeft].map(parseFloat);
+  probe.remove();
+  if (left || right || !top) return;
+  root.setProperty("--sa-t", "0px");
+  root.setProperty("--sa-l", `${top}px`);
+  root.setProperty("--sa-r", `${top}px`);
+}
+
 /** iPad: die ganze Oberfläche ist für die Maus gebaut (13 px Text, 32 px Knöpfe). Einheitlich vergrössert ergibt das
  *  rund 17 pt Text und mit den Mindesthöhen in styles.css 44-pt-Touchziele (Apple HIG); Koordinaten bleiben stimmig. */
 function touchScale() {
@@ -152,6 +171,7 @@ function touchScale() {
     const landscape = matchMedia("(orientation: landscape)").matches;
     const width = Math.round((landscape ? Math.max : Math.min)(screen.width, screen.height) / scale);
     meta?.setAttribute("content", `width=${width}, initial-scale=${scale}, minimum-scale=${scale}, maximum-scale=${scale}, user-scalable=no, viewport-fit=cover`);
+    if (isPhone) requestAnimationFrame(() => phoneSafeArea(landscape));
   };
   apply();
   matchMedia("(orientation: landscape)").addEventListener("change", apply);

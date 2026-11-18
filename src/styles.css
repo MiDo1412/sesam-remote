@@ -7,6 +7,8 @@
 /* ---------- Tokens ---------- */
 :root {
   color-scheme: light dark;
+  /* Sichere Bereiche; auf dem iPhone quer setzt titlebar.ts sie selbst, wenn WebKit noch die Werte vom Hochformat meldet */
+  --sa-t: env(safe-area-inset-top); --sa-r: env(safe-area-inset-right); --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left);
   /* Farbe (hell). Kontrast: --text 15:1, --muted 6,1:1 auf --card; --accent als Fläche mit Weiss 5,5:1. */
   --accent: #157a5a;
   --accent-hover: #0f6349;
@@ -836,10 +838,10 @@ body.settings-window .settings-pane { border-top-left-radius: var(--r-panel); bo
 body.detached #library, body.detached #session-back { display: none !important; }
 body.mobile .lib-term, body.mobile .term-btns, body.mobile [data-pane="terminal"] { display: none; }
 /* iPad: Webansicht bis an die Ränder; nur der Inhalt rückt um die sicheren Bereiche ein */
-body.mobile { height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); background: var(--bg); }
-body.mobile :is(.sidebar, main) { margin-bottom: max(var(--s-2), env(safe-area-inset-bottom)); }
-body.mobile .session { padding-bottom: env(safe-area-inset-bottom); }
-body.mobile .list { padding-bottom: calc(var(--s-5) + env(safe-area-inset-bottom)); }
+body.mobile { height: 100dvh; padding: var(--sa-t) var(--sa-r) 0 var(--sa-l); background: var(--bg); }
+body.mobile :is(.sidebar, main) { margin-bottom: max(var(--s-2), var(--sa-b)); }
+body.mobile .session { padding-bottom: var(--sa-b); }
+body.mobile .list { padding-bottom: calc(var(--s-5) + var(--sa-b)); }
 body.mobile .menu-item { min-height: var(--h-ctl); }
 body.mobile .tab:not([aria-selected=true]) .tab-close { display: inline-flex; }
 body.mobile .tab-close { --h-ctl: 30px; width: 30px; }

@@ -8,7 +8,7 @@
 
 /* Unter 16px zoomt iOS beim Fokussieren */
 .osk-input { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; resize: none; font-size: 16px; pointer-events: none; }
-.osk-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); overflow-x: auto; scrollbar-width: none; background: var(--glass-strong); box-shadow: 0 -0.5px 0 var(--line-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.osk-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; gap: 6px; padding: 6px 8px calc(6px + var(--sa-b)); overflow-x: auto; scrollbar-width: none; background: var(--glass-strong); box-shadow: 0 -0.5px 0 var(--line-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .osk-bar[hidden] { display: none; }
 button.osk-key { flex: none; min-width: 44px; height: 40px; padding: 0 10px; border-radius: var(--r-field); background: var(--card); color: var(--text); box-shadow: var(--elev-1); font: 500 14px/1 system-ui, sans-serif; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 button.osk-key:hover:not(:disabled) { background: var(--card); }

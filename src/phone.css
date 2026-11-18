@@ -6,7 +6,7 @@ body.phone { --h-sm: 32px; --h-md: 38px; --h-lg: 44px; --h-ctl: var(--h-md); --h
 body.phone header.toolbar, body.phone .view-switch, body.phone #toggle-details { display: none; }
 body.phone :is(.sidebar, main) { margin: 0; border-radius: 0; box-shadow: none; }
 body.phone main { background: var(--bg); }
-body.phone .list { padding: var(--s-2) var(--phone-pad) calc(var(--s-5) + env(safe-area-inset-bottom)); gap: var(--s-3); }
+body.phone .list { padding: var(--s-2) var(--phone-pad) calc(var(--s-5) + var(--sa-b)); gap: var(--s-3); }
 body.phone .list-head { flex-wrap: wrap; gap: var(--s-1) var(--s-2); }
 body.phone .list-head h1 { order: 10; flex: 1 0 100%; font-size: 28px; letter-spacing: -0.02em; margin-top: var(--s-1); }
 body.phone #toggle-sidebar { width: auto; margin-left: -8px; margin-right: auto; padding: 0 8px 0 2px; gap: 2px; color: var(--accent); font-weight: 400; }
@@ -33,10 +33,10 @@ body.phone .nav-item:active:not(:disabled) { background: var(--fill-strong); }
 body.phone .nav-item[aria-current=page] { background: var(--card); font-weight: 400; }
 body.phone .nav-item::after { content: "›"; margin-left: var(--s-2); color: var(--muted); font-size: 18px; }
 body.phone .nav-header { padding: var(--s-5) var(--s-4) var(--s-2); }
-body.phone .sidebar-settings { margin: var(--s-4) var(--phone-pad) calc(var(--s-4) + env(safe-area-inset-bottom)); height: 44px; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); }
+body.phone .sidebar-settings { margin: var(--s-4) var(--phone-pad) calc(var(--s-4) + var(--sa-b)); height: 44px; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); }
 
 /* Verbindungen als Zeilen: kleines Vorschaubild, Name, Adresse, rechts die Türen Desktop/Shell/Dateien */
-body.phone .grid { grid-template-columns: 1fr; gap: 0; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); overflow: hidden; }
+body.phone .grid { flex-shrink: 0; grid-template-columns: 1fr; gap: 0; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); overflow: hidden; }
 body.phone .grid:empty { display: none; }
 body.phone .card-wrap + .card-wrap::before { content: ""; position: absolute; top: 0; left: 66px; right: 0; height: 0.5px; background: var(--line-strong); z-index: 1; }
 body.phone .card { display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; column-gap: 10px; min-height: 60px; padding: var(--s-2) var(--s-3); border-radius: 0; background: transparent; box-shadow: none; }
@@ -55,15 +55,15 @@ body.phone .door { --h-ctl: 44px; width: 36px; }
 body.phone .door svg { width: 20px; height: 20px; }
 
 /* Details: eigene Seite mit Zurück-Taste oben links */
-body.phone #details { position: fixed; inset: 0; z-index: 20; width: auto; padding: calc(env(safe-area-inset-top) + var(--h-ctl) + var(--s-3)) calc(var(--phone-pad) + env(safe-area-inset-right)) calc(var(--s-5) + env(safe-area-inset-bottom)) calc(var(--phone-pad) + env(safe-area-inset-left)); border-radius: 0; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; gap: var(--s-3); }
-body.phone .detail-close { top: calc(env(safe-area-inset-top) + var(--s-1)); left: calc(env(safe-area-inset-left) + 4px); right: auto; width: auto; padding: 0 8px 0 2px; }
+body.phone #details { position: fixed; inset: 0; z-index: 20; width: auto; padding: calc(var(--sa-t) + var(--h-ctl) + var(--s-3)) calc(var(--phone-pad) + var(--sa-r)) calc(var(--s-5) + var(--sa-b)) calc(var(--phone-pad) + var(--sa-l)); border-radius: 0; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; gap: var(--s-3); }
+body.phone .detail-close { top: calc(var(--sa-t) + var(--s-1)); left: calc(var(--sa-l) + 4px); right: auto; width: auto; padding: 0 8px 0 2px; }
 body.phone #details .detail-close { height: var(--h-ctl); min-height: var(--h-ctl); padding-top: 0; padding-bottom: 0; }
 body.phone .detail-title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
 body.phone #details > .sub { margin-top: -8px; font-size: 14px; }
 body.phone #details dl { padding: var(--s-3) var(--s-4); border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); font-size: 13px; }
 body.phone #details dd { font-size: 14px; }
-body.phone #details button:not(.detail-close) { min-height: 44px; font-size: 15px; }
-body.phone #details .detail-edit { position: absolute; top: calc(env(safe-area-inset-top) + var(--s-1)); right: calc(env(safe-area-inset-right) + 4px); height: var(--h-ctl); min-height: var(--h-ctl); padding: 0 var(--s-3); background: transparent; font-size: 15px; font-weight: 400; }
+body.phone #details button:not(.detail-close, .detail-edit) { min-height: 44px; font-size: 15px; }
+body.phone #details .detail-edit { position: absolute; top: calc(var(--sa-t) + var(--s-1)); right: calc(var(--sa-r) + 4px); height: var(--h-ctl); min-height: var(--h-ctl); padding: 0 var(--s-3); background: transparent; font-size: 15px; font-weight: 400; }
 body.phone #new { background: transparent; color: var(--accent); }
 body.phone #new svg { width: 22px; height: 22px; }
 
@@ -89,24 +89,27 @@ body.phone .panes { grid-template-columns: minmax(0, 1fr); }
 body.phone .panes[data-show=remote] > .pane[data-side=local], body.phone .panes[data-show=local] > .pane[data-side=remote] { display: none; }
 body.phone .pane + .pane { box-shadow: none; }
 body.phone .pane-head h2 { display: none; }
+body.phone .crumb:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body.phone .pane .date { display: none; }
 body.phone .pane td { padding-top: 9px; padding-bottom: 9px; }
 body.phone .tab-min { display: none !important; } /* Minimieren steht im Menü «…» */
 
 /* Blätter: fast ganze Breite, eine Spalte, Zeilen mit Beschriftung über dem Bedienelement */
-body.phone dialog { max-width: calc(100vw - 16px); max-height: calc(100dvh - env(safe-area-inset-top) - 16px); }
-body.phone .sheet { width: calc(100vw - 16px); max-width: none; grid-template-columns: minmax(0, 1fr); padding: var(--s-4); }
+body.phone dialog { --sheet-w: calc(100vw - 16px - var(--sa-l) - var(--sa-r)); max-width: var(--sheet-w); max-height: calc(100dvh - var(--sa-t) - 16px); }
+body.phone .sheet { width: var(--sheet-w); max-width: none; grid-template-columns: minmax(0, 1fr); padding: var(--s-4); }
 body.phone .sheet .row:not(.actions) { grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 body.phone .sheet .segmented { grid-auto-columns: minmax(0, 1fr); }
 body.phone .sheet .segmented label { padding: 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; }
 body.phone .sheet .segmented svg { display: none; }
-body.phone .sheet-tabs { justify-self: stretch; flex-wrap: wrap; justify-content: center; gap: 2px; min-height: max-content; }
-body.phone .sheet-tabs button { flex: 1 0 auto; padding: 0 var(--s-2); }
+body.phone .sheet-tabs { justify-self: stretch; display: grid; grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; border-radius: var(--r-field); }
+@media (orientation: landscape) { body.phone .sheet-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+body.phone .sheet-tabs button { padding: 0 var(--s-2); }
+@media (orientation: portrait) { body.phone .sheet :is(fieldset:not(.svc), .pair) { grid-template-columns: minmax(0, 1fr); } body.phone .sheet legend small { display: block; margin: 2px 0 0; } }
 body.phone #editor-form > .actions { margin-left: calc(-1 * var(--s-4)); margin-right: calc(-1 * var(--s-4)); padding-left: var(--s-4); padding-right: var(--s-4); }
 
 /* Einstellungen: ganzer Bildschirm; erst die Liste der Bereiche, dann ein Bereich als eigene Seite */
-body.phone dialog#settings { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border-radius: 0; box-shadow: none; background: var(--bg); padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
-body.phone dialog#settings .settings { width: 100% !important; height: 100% !important; min-width: 0; min-height: 0; max-width: none; max-height: none; resize: none; display: flex; flex-direction: column; position: relative; }
+body.phone dialog#settings { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border-radius: 0; box-shadow: none; background: var(--bg); padding: var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l); }
+body.phone dialog#settings .settings { width: 100% !important; height: 100% !important; min-width: 0; min-height: 0; max-width: none; max-height: none; resize: none; display: flex; flex-direction: column; position: relative; overflow-y: auto; }
 body.phone .settings-nav { flex: 0 0 auto; margin: calc(var(--h-ctl) + var(--s-2)) var(--phone-pad) 0; padding: 0; gap: 0; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); }
 body.phone .settings-nav::before { content: "Einstellungen"; position: absolute; top: var(--s-1); left: var(--phone-pad); font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: var(--h-ctl); }
 body.phone .settings-nav { margin-top: calc(var(--h-ctl) + 48px); }
@@ -122,6 +125,7 @@ body.phone .settings-pane .row { grid-template-columns: minmax(0, 1fr); gap: var
 body.phone .settings-pane > h2:first-child { margin-top: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
 /* iPhone quer: eine Leiste (Tabs und Werkzeuge), möglichst viel Remote-Bild */
 body.phone.one-bar #tabs { flex: 1 1 0; min-width: 0; }
+body.phone.one-bar #tabs .tab[aria-selected=true] { min-width: 120px; }
 body.phone.one-bar .session-bar #session-toolbar { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 @media (orientation: landscape) { body.phone .list-head h1 { font-size: 22px; } }
 
