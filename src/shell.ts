@@ -66,7 +66,19 @@ export function shellTab(ctx: TabCtx): TabHandle {
 
   let sid: string | null = null;
   const enc = new TextEncoder();
-  const send = (text: string) => sid && api.shellWrite(sid, enc.encode(text)).catch((e) => (status.textContent = String(e)));
+  // Eingabe vor «verbunden» (Tippen während «Verbinde …», Antworten auf Terminal-Abfragen der ersten Ausgabe) nicht
+  // wegwerfen, sondern wie ein echtes Terminal puffern und nach dem Verbinden senden: sonst fehlte oft der erste
+  // Buchstabe («sudo» kam als «udo» an).
+  let early = "";
+  const send = (text: string) => {
+    if (!sid) return void (early = (early + text).slice(-4096));
+    return api.shellWrite(sid, enc.encode(text)).catch((e) => (status.textContent = String(e)));
+  };
+  const flushEarly = () => {
+    const t = early;
+    early = "";
+    if (t) void send(t);
+  };
   const refit = () => {
     if (!host.clientWidth) return; // versteckter Tab
     fit.fit();
@@ -377,6 +389,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
   // ---------- Verbinden ----------
   const connect = async () => {
     refit();
+    if (ctx.isActive()) term.focus(); // schon während «Verbinde …» tippen können
     const onEvent = (e: Parameters<Parameters<typeof api.shellOpen>[4]>[0]) => {
       if (e.kind === "data") term.write(new Uint8Array(e.data));
       else {
@@ -399,6 +412,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
         } else if (local) sid = await api.termOpen(local, term.cols || 80, term.rows || 24, onEvent);
         else sid = await api.shellOpen(c.id, term.cols || 80, term.rows || 24, trust, onEvent, ctx.slot());
         status.textContent = "";
+        flushEarly();
         // Vorgegebener Befehl (z. B. Setup-Script): getippt, der Benutzer sieht und bestätigt alles im Terminal.
         if (ctx.extra?.command && !at) setTimeout(() => send(ctx.extra!.command!), 400);
         ctx.setState("connected");
@@ -411,6 +425,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
           if (trust) continue;
           status.textContent = "Verbindung abgebrochen: Server nicht bestätigt.";
         } else status.textContent = localNetworkText(msg, c.address) ?? `Keine Verbindung: ${msg}`;
+        early = ""; // nicht später an eine andere Sitzung schicken
         ctx.setState("closed");
       }
       break;

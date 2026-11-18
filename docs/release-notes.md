@@ -18,6 +18,15 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Verbessert
+
+- **Geteilte Ansicht verständlich:** Ein eigener Knopf in der Tab-Leiste teilt das Fenster (Menü: welche offene Sitzung daneben, oder neu eine Shell bzw. ein Terminal daneben) und heisst bei geteilter Ansicht «Teilung aufheben» (macOS/iPad «Geteilte Ansicht beenden»). Jeder Teil hat eine Kopfzeile mit Namen und den Knöpfen «Untereinander/Nebeneinander», «Seiten tauschen» und «Nur diesen Teil zeigen». Die Teile bleiben an ihrem Platz (ein Klick macht einen Teil nur aktiv, grün markiert), der Trenner lässt sich ziehen (Doppelklick: halbe-halbe), die Ausrichtung folgt der Fensterform, und ein Tab lässt sich direkt in die Fläche ziehen. Ein anderer Tab ersetzt den aktiven Teil, statt die Teilung still zu verlassen. Auch in der Befehlspalette.
+
+### Behoben
+
+- **Erster Buchstabe in der Shell verschluckt:** Was man tippte, bevor die Shell ganz verbunden war (oft das «s» von «sudo»), warf Sesam weg. Jetzt hat das Terminal die Tastatur schon beim Verbinden, und die Eingabe wird wie in einem echten Terminal gepuffert und danach gesendet (SSH und lokale Terminals, alle Plattformen).
+- **Geteilte Ansicht mit Remote-Bild:** Mit der Maus über das Remote-Bild im anderen Teil zu fahren, nahm der Shell nicht mehr die Tastatur weg.
+
 ## 26.11.7 — 2026-11-14
 
 Das iPad zeigt seine Versionsnummer wieder richtig an, und der App Store fragt nicht mehr bei jedem Build nach der Verschlüsselung.

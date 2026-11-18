@@ -289,7 +289,8 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   canvas.addEventListener("blur", syncHook);
   canvas.addEventListener("pointerenter", () => {
     hover = true;
-    if (document.hasFocus() && !document.querySelector("dialog[open]")) canvas.focus({ preventScroll: true });
+    // Nur im aktiven Teil: in der geteilten Ansicht nähme das Darüberfahren sonst der Shell daneben die Tastatur weg.
+    if (ctx.isActive() && document.hasFocus() && !document.querySelector("dialog[open]")) canvas.focus({ preventScroll: true });
     syncHook();
   });
   canvas.addEventListener("pointerleave", () => ((hover = false), syncHook()));

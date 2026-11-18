@@ -1,7 +1,7 @@
 /** Sitzungen als Tabs. «Bibliothek» und «Minimieren» lassen sie im Hintergrund weiterlaufen; erst «Trennen» beendet sie. */
 import { desktopProtocol, filesProtocol, type Connection } from "./api";
 import type { Command } from "./palette";
-import { ICON } from "./icons";
+import { ICON, onApple } from "./icons";
 import { openMenu, setFallbackAnchor } from "./menu";
 import { ask, askText, choose, tell } from "./ui";
 import { GROUP_COLORS, colorMenu, dotSvg, groupDot } from "./groups";
@@ -162,6 +162,9 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
   factories = f;
   onLibrary = library;
   $("session-back").onclick = showLibrary;
+  const sb = $("split-btn");
+  sb.innerHTML = ICON.splitRight;
+  sb.onclick = () => void splitButtonClick(sb);
   // Eine Leiste statt zwei: Werkzeuge des aktiven Tabs rechts in der Tab-Leiste, mehr Platz fürs Remote-Bild.
   // Titel und Unterzeile (Adresse, Temperatur …) stehen im Tooltip des Tabs.
   // Schmale Fenster: wieder zwei Leisten, damit Tabs und Werkzeuge Platz haben.
@@ -172,7 +175,7 @@ export function initTabs(f: Record<Kind, Factory>, library: () => void) {
     const one = wide.matches || isMobile;
     document.body.classList.toggle("one-bar", one);
     document.body.classList.toggle("compact", isMobile || !roomy.matches);
-    if (one) document.querySelector(".session-bar")!.insertBefore($("session-toolbar"), document.querySelector(".session-bar .term-btns"));
+    if (one) document.querySelector(".session-bar")!.insertBefore($("session-toolbar"), $("split-btn"));
     else document.querySelector(".session-head")!.append($("session-toolbar"));
   };
   wide.addEventListener("change", place);
@@ -222,10 +225,11 @@ export function jumpCommands(): Command[] {
   if (!t) return [];
   return (["desktop", "shell", "files"] as Kind[])
     .filter((k) => k !== t.kind)
-    .flatMap((k) => {
+    .flatMap((k): Command[] => {
       const c = sameHost(t.ctx.conn, k);
       return c ? [{ label: `${KIND_LABEL[k]} dieses Rechners`, hint: c.name, keywords: "gleicher rechner wechseln", run: () => openTab(c, k) }] : [];
-    });
+    })
+    .concat(splitCommands());
 }
 
 export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: TabCtx["extra"]) {
@@ -337,9 +341,9 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
       ...(tab.group ? [{ value: "ungroup", label: "Aus Gruppe entfernen" }] : []),
       { value: "dup", label: `Weitere ${kindName(kind)}-Sitzung`, icon: ICON.plus, disabled: kind === "desktop", separator: true },
       ...(conn.id.startsWith("quick-") ? [{ value: "save", label: "Als Verbindung sichern …", icon: ICON.save }] : []),
-      // Geteilte Ansicht wie Windows Terminal: dieser Tab neben/unter dem aktiven.
-      ...(active && active !== tab ? [{ value: "split-right", label: "Neben aktivem Tab anzeigen", icon: ICON.splitRight, separator: true }, { value: "split-down", label: "Unter aktivem Tab anzeigen", icon: ICON.splitDown }] : []),
-      ...(split && (split.tab === tab || active === tab) ? [{ value: "unsplit", label: "Geteilte Ansicht beenden", separator: true }] : []),
+      // Geteilte Ansicht: dieser Tab neben dem aktiven (Ausrichtung nach Fensterform), oder die Teilung aufheben.
+      ...(inSplit(tab) ? [{ value: "unsplit", label: SPLIT.end, icon: ICON.close, separator: true }]
+        : active && active !== tab ? [{ value: "split", label: `Neben «${tabTitle(active)}» zeigen`, icon: autoDir() === "right" ? ICON.splitRight : ICON.splitDown, separator: true }] : []),
       ...(isMobile ? [] : [{ value: "detach", label: detachedWindow ? "Ins Hauptfenster zurück" : "In eigenem Fenster öffnen", icon: ICON.detach, separator: true }]),
       { value: "min", label: "Minimieren", icon: ICON.minimize, disabled: detachedWindow },
       ...(tab.handle.reconnect ? [{ value: "reconnect", label: "Neu verbinden", icon: ICON.refresh, shortcut: keyLabel("Strg+R") }] : []),
@@ -356,8 +360,8 @@ export function openTab(conn: Connection, kind: Kind, fresh = false, extra?: Tab
     if (v === "icon") pickTabIcon(tab);
     if (v === "group") addToGroup(tab);
     if (v === "ungroup") setGroup(tab, undefined);
-    if (v === "split-right" || v === "split-down") (split = { tab, dir: v === "split-right" ? "right" : "down" }), activate(active!);
-    if (v === "unsplit") (split = null), activate(active!);
+    if (v === "split" && active) splitWith(active, tab);
+    if (v === "unsplit") unsplit();
   };
   // Gespeicherte Angaben dieser Verbindung und Art übernehmen (Werte aus dem localStorage prüfen).
   const s = saved.tabs[slotKey(`${conn.id}|${kind}`, tab.slot)];
@@ -506,7 +510,7 @@ export async function detachTab(tab: Tab) {
 
 /** Tab-Oberfläche entfernen (die Sitzung ist bereits geschlossen oder übergeben). */
 function removeTab(tab: Tab) {
-  if (split && (split.tab === tab || active === tab)) split = null;
+  if (inSplit(tab)) endSplit();
   tab.ctx.pane.remove();
   tab.ctx.toolbar.remove();
   tab.tabEl.remove();
@@ -557,6 +561,7 @@ export const handoffDone = (token: string) => emit("sesam:handoff-done", token);
 
 /** Sitzung aus der Tab-Leiste nehmen; sie läuft weiter und kommt über «Aktive Sitzungen» zurück. */
 export function minimizeTab(tab: Tab) {
+  if (inSplit(tab)) endSplit();
   tab.minimized = true;
   if (active === tab) {
     const next = [...tabs].reverse().find((t) => !t.minimized);
@@ -566,15 +571,180 @@ export function minimizeTab(tab: Tab) {
   renderActiveBar();
 }
 
-/** Zweiter sichtbarer Tab in der geteilten Ansicht (rechts bzw. unten). */
-let split: { tab: Tab; dir: "right" | "down" } | null = null;
+// ---------- Geteilte Ansicht ----------
+// Zwei Sitzungen in einem Fenster. Sichtbar statt versteckt: Knopf in der Tab-Leiste (an/aus), Kopfzeile je Teil mit
+// «Drehen», «Tauschen» und «Nur diesen Teil zeigen», verschiebbarer Trenner, Tab in die Fläche ziehen. Die Teile bleiben
+// an ihrem Platz; ein Klick macht einen Teil nur aktiv (Werkzeugleiste, Tastatur). Ein anderer Tab ersetzt den aktiven Teil.
+const apple = onApple || isMobile;
+/** Bezeichnungen wie im System: macOS/iPadOS «Geteilte Ansicht», Windows/Linux wie Windows Terminal «Bereich teilen». */
+export const SPLIT = apple
+  ? { name: "Geteilte Ansicht", start: "Geteilte Ansicht", end: "Geteilte Ansicht beenden", beside: "daneben zeigen" }
+  : { name: "Bereich teilen", start: "Bereich teilen", end: "Teilung aufheben", beside: "daneben zeigen" };
+const RATIO_KEY = "sesam.splitRatio";
+let split: { a: Tab; b: Tab; dir: "right" | "down"; ratio: number } | null = null;
+const inSplit = (t: Tab) => !!split && (split.a === t || split.b === t);
+const clampRatio = (r: number) => Math.min(0.8, Math.max(0.2, Number.isFinite(r) ? r : 0.5));
+const savedRatio = () => {
+  try {
+    return clampRatio(Number(localStorage.getItem(RATIO_KEY) ?? 0.5));
+  } catch {
+    return 0.5;
+  }
+};
+/** Ausrichtung nach der Form der Fläche: breit = nebeneinander, hoch (iPad hochkant) = untereinander. */
+function autoDir(): "right" | "down" {
+  const r = $("session-panes").getBoundingClientRect();
+  return !r.height || r.width >= r.height * 1.2 ? "right" : "down";
+}
+/** `b` neben `a` zeigen (a links bzw. oben); `b` wird aktiv. */
+function splitWith(a: Tab, b: Tab, dir = autoDir()) {
+  if (a === b) return;
+  split = { a, b, dir, ratio: savedRatio() };
+  a.minimized = b.minimized = false;
+  activate(b);
+}
+function endSplit() {
+  split = null;
+}
+/** Teilung aufheben; `keep` (Standard: der aktive Teil) bleibt sichtbar, der andere läuft als Tab weiter. */
+export function unsplit(keep: Tab | null = active) {
+  endSplit();
+  if (keep) activate(keep);
+  else if (active) activate(active);
+}
+function rotateSplit() {
+  if (!split) return;
+  split.dir = split.dir === "right" ? "down" : "right";
+  activate(active!);
+}
+function swapSplit() {
+  if (!split) return;
+  [split.a, split.b] = [split.b, split.a];
+  activate(active!);
+}
+
+/** Kopfzeile eines Teils: Name und die drei Knöpfe; nur in der geteilten Ansicht sichtbar. Doppelklick: nur diesen Teil. */
+const heads = new WeakMap<Tab, { el: HTMLElement; title: HTMLElement; rotate: HTMLButtonElement }>();
+function paneHead(t: Tab) {
+  let h = heads.get(t);
+  if (!h) {
+    const el = Object.assign(document.createElement("div"), { className: "pane-head" });
+    const title = Object.assign(document.createElement("span"), { className: "pane-title" });
+    const rotate = toolButton(ICON.splitDown, "Untereinander", () => rotateSplit());
+    const swap = toolButton(ICON.compare, "Seiten tauschen", () => swapSplit());
+    const out = toolButton(ICON.fullscreen, "Nur diesen Teil zeigen", () => unsplit(t));
+    out.title = "Nur diesen Teil zeigen (der andere läuft als Tab weiter)";
+    el.append(title, rotate, swap, out);
+    el.addEventListener("dblclick", (e) => !(e.target as HTMLElement).closest("button") && unsplit(t));
+    t.ctx.pane.prepend(el);
+    h = { el, title, rotate };
+    heads.set(t, h);
+  }
+  return h;
+}
+
+/** Trenner zwischen den Teilen: ziehen ändert das Verhältnis (gemerkt), Doppelklick stellt halbe-halbe her. */
+function divider() {
+  const panes = $("session-panes");
+  let d = panes.querySelector<HTMLElement>(":scope > .split-divider");
+  if (d) return d;
+  d = Object.assign(document.createElement("div"), { className: "split-divider" });
+  d.setAttribute("role", "separator");
+  d.tabIndex = 0;
+  d.title = "Ziehen ändert die Aufteilung, Doppelklick: halbe-halbe";
+  const set = (r: number) => {
+    if (!split) return;
+    split.ratio = clampRatio(r);
+    panes.style.setProperty("--split", String(split.ratio));
+    d!.setAttribute("aria-valuenow", String(Math.round(split.ratio * 100)));
+    try {
+      localStorage.setItem(RATIO_KEY, String(split.ratio));
+    } catch {}
+  };
+  d.addEventListener("pointerdown", (e) => {
+    if (!split || e.button !== 0) return;
+    e.preventDefault();
+    d!.setPointerCapture(e.pointerId);
+    panes.classList.add("resizing");
+    const move = (ev: PointerEvent) => {
+      const r = panes.getBoundingClientRect();
+      set(split!.dir === "right" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height);
+    };
+    const up = () => {
+      panes.classList.remove("resizing");
+      d!.removeEventListener("pointermove", move);
+      d!.removeEventListener("pointerup", up);
+      d!.removeEventListener("pointercancel", up);
+    };
+    d!.addEventListener("pointermove", move);
+    d!.addEventListener("pointerup", up);
+    d!.addEventListener("pointercancel", up);
+  });
+  d.addEventListener("dblclick", () => set(0.5));
+  d.addEventListener("keydown", (e) => {
+    if (!split) return;
+    const step = { ArrowLeft: -0.05, ArrowUp: -0.05, ArrowRight: 0.05, ArrowDown: 0.05 }[e.key];
+    if (step) (e.preventDefault(), set(split.ratio + step));
+  });
+  panes.append(d);
+  return d;
+}
+
+/** Knopf in der Tab-Leiste: ohne Teilung ein Menü «Was daneben?», mit Teilung hebt er sie auf. */
+async function splitButtonClick(btn: HTMLElement) {
+  if (split) return unsplit();
+  const cur = active;
+  if (!cur) return;
+  const others = tabs.filter((t) => t !== cur && t.state !== "closed");
+  const shellHere = cur.kind !== "shell" ? sameHost(cur.ctx.conn, "shell") : null;
+  const items = [
+    ...others.map((t, i) => ({ value: `tab:${t.ctx.id}`, label: tabTitle(t), icon: tabSvg(t), section: i === 0 ? `Neben «${tabTitle(cur)}» zeigen` : undefined, shortcut: t.minimized ? "minimiert" : undefined })),
+    ...(cur.kind === "shell" ? [{ value: "new-shell", label: cur.ctx.conn.id.startsWith("local:") ? "Weiteres Terminal" : `Weitere Shell zu ${cur.ctx.conn.name}`, icon: ICON.plus, section: "Neu daneben öffnen" }] : []),
+    ...(shellHere ? [{ value: "host-shell", label: `Shell zu ${cur.ctx.conn.name}`, icon: ICON.shell, section: cur.kind === "shell" ? undefined : "Neu daneben öffnen" }] : []),
+    ...(!isMobile && !detachedWindow && !cur.ctx.conn.id.startsWith("local:") ? [{ value: "terminal", label: "Lokales Terminal", icon: ICON.shell, section: cur.kind === "shell" || shellHere ? undefined : "Neu daneben öffnen" }] : []),
+  ];
+  if (!items.length) return tell(SPLIT.name, "Öffne eine zweite Sitzung, um sie neben dieser zu zeigen.");
+  const v = await openMenu(btn, items);
+  if (!v || active !== cur) return;
+  if (v.startsWith("tab:")) {
+    const t = tabs.find((x) => x.ctx.id === v.slice(4));
+    if (t) splitWith(cur, t);
+    return;
+  }
+  // Neu öffnen: der neue Tab kommt daneben (rechts bzw. unten) und bekommt die Tastatur.
+  if (v === "new-shell") openTab(cur.ctx.conn, "shell", true);
+  else if (v === "host-shell" && shellHere) openTab(shellHere, "shell", true);
+  else if (v === "terminal") await (await import("./terminal")).openTerminal();
+  if (active && active !== cur) splitWith(cur, active);
+}
+
+/** Tab aus der Leiste in die Sitzungsfläche ziehen: rechte bzw. untere Hälfte zeigt ihn daneben. */
+function splitDropZone(x: number, y: number): "right" | "down" | null {
+  const r = $("session-panes").getBoundingClientRect();
+  if ($("session").hidden || x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+  // Näher am rechten Rand: nebeneinander, näher am unteren: untereinander.
+  return (r.right - x) / r.width <= (r.bottom - y) / r.height ? "right" : "down";
+}
+function markDropZone(dir: "right" | "down" | null) {
+  const panes = $("session-panes");
+  let z = panes.querySelector<HTMLElement>(":scope > .split-drop");
+  if (!dir) return z?.remove();
+  if (!z) {
+    z = Object.assign(document.createElement("div"), { className: "split-drop" });
+    z.textContent = SPLIT.beside[0].toUpperCase() + SPLIT.beside.slice(1);
+    panes.append(z);
+  }
+  z.dataset.dir = dir;
+}
 
 function activate(tab: Tab) {
-  // Klick in den zweiten Teil: Rollen tauschen, beide bleiben sichtbar.
-  if (split && tab === split.tab && active && active !== tab) split.tab = active;
+  // Ein Tab ausserhalb der Teilung ersetzt den aktiven Teil (wie Split Screen in Edge); ein Teil der Teilung wird nur aktiv.
+  if (split && !inSplit(tab) && active && inSplit(active)) {
+    if (split.a === active) split.a = tab;
+    else split.b = tab;
+  } else if (split && !inSplit(tab)) split = null;
+  if (split && (!tabs.includes(split.a) || !tabs.includes(split.b) || split.a === split.b)) split = null;
   if (active && active !== tab) {
-    active.ctx.pane.hidden = true;
-    active.ctx.toolbar.hidden = true;
     active.tabEl.setAttribute("aria-selected", "false");
     active.handle.onHide?.();
   }
@@ -582,16 +752,42 @@ function activate(tab: Tab) {
   tab.minimized = false;
   if (tab.group?.collapsed) (tab.group.collapsed = false), remember();
   layoutTabs();
-  const second = split && split.tab !== tab && tabs.includes(split.tab) ? split.tab : null;
   const panes = $("session-panes");
-  panes.classList.toggle("split-right", second !== null && split!.dir === "right");
-  panes.classList.toggle("split-down", second !== null && split!.dir === "down");
+  panes.classList.toggle("split-right", split?.dir === "right");
+  panes.classList.toggle("split-down", split?.dir === "down");
+  if (split) {
+    panes.style.setProperty("--split", String(split.ratio));
+    divider().setAttribute("aria-orientation", split.dir === "right" ? "vertical" : "horizontal");
+  }
   for (const t of tabs) {
-    t.ctx.pane.classList.toggle("primary", second !== null && t === tab);
-    t.ctx.pane.classList.toggle("secondary", t === second);
-    t.ctx.pane.hidden = t !== tab && t !== second;
+    const part = split ? (t === split.a ? "a" : t === split.b ? "b" : "") : "";
+    t.ctx.pane.classList.toggle("split-a", part === "a");
+    t.ctx.pane.classList.toggle("split-b", part === "b");
+    t.ctx.pane.classList.toggle("split-active", !!part && t === tab);
+    t.ctx.pane.hidden = t !== tab && !part;
     t.ctx.toolbar.hidden = t !== tab;
     t.tabEl.setAttribute("aria-selected", String(t === tab));
+    t.tabEl.classList.toggle("split-partner", !!part && t !== tab);
+    if (part) {
+      const h = paneHead(t);
+      h.title.textContent = tabTitle(t);
+      h.el.classList.toggle("active", t === tab);
+      const next = split!.dir === "right" ? "Untereinander" : "Nebeneinander";
+      h.rotate.innerHTML = split!.dir === "right" ? ICON.splitDown : ICON.splitRight;
+      h.rotate.title = next;
+      h.rotate.setAttribute("aria-label", next);
+    }
+    heads.get(t)?.el.toggleAttribute("hidden", !part);
+  }
+  const btn = document.getElementById("split-btn");
+  if (btn) {
+    btn.classList.toggle("on", !!split);
+    btn.setAttribute("aria-pressed", String(!!split));
+    btn.title = split ? `${SPLIT.end} (beide laufen als Tabs weiter)` : `${SPLIT.start}: zweite Sitzung daneben zeigen`;
+    btn.setAttribute("aria-label", split ? SPLIT.end : SPLIT.start);
+    // Mit Teilung steht der Weg zurück als Text am Knopf.
+    btn.classList.toggle("with-text", !!split);
+    btn.innerHTML = split ? `${ICON.splitRight}<span>${SPLIT.end}</span>` : ICON.splitRight;
   }
   $("session-title").textContent = tab.name || tab.ctx.conn.name;
   $("session-sub").textContent = tab.sub;
@@ -600,6 +796,18 @@ function activate(tab: Tab) {
   // Bei vielen Tabs den aktiven sichtbar halten, auch wenn die Werkzeugleiste danach breiter wird.
   requestAnimationFrame(() => tab.tabEl.scrollIntoView({ block: "nearest", inline: "nearest" }));
   tab.handle.onShow?.();
+}
+
+/** Befehlspalette: Teilung ein, aus, drehen. */
+function splitCommands(): Command[] {
+  const cur = active;
+  if (!cur) return [];
+  if (split) return [
+    { label: SPLIT.end, keywords: "split teilen geteilt nebeneinander untereinander", run: () => unsplit() },
+    { label: split.dir === "right" ? "Geteilte Ansicht: untereinander" : "Geteilte Ansicht: nebeneinander", keywords: "split drehen ausrichtung", run: rotateSplit },
+    { label: "Geteilte Ansicht: Seiten tauschen", keywords: "split tauschen", run: swapSplit },
+  ];
+  return tabs.filter((t) => t !== cur && t.state !== "closed").map((t) => ({ label: `${tabTitle(t)} ${SPLIT.beside}`, hint: SPLIT.name, keywords: "split teilen geteilt nebeneinander", run: () => splitWith(cur, t) }));
 }
 
 export function showLibrary() {
@@ -629,6 +837,8 @@ function paintTab(t: Tab) {
   min?.setAttribute("aria-label", `${tabTitle(t)} minimieren`);
   x?.setAttribute("aria-label", `${tabTitle(t)} trennen`);
   if (active === t) $("session-title").textContent = t.name || t.ctx.conn.name;
+  const h = heads.get(t);
+  if (h) h.title.textContent = tabTitle(t);
   renderActiveBar();
 }
 
@@ -812,7 +1022,7 @@ function dragTab(tab: Tab) {
     const rest = tabs.filter((t) => t !== dragging);
     return { before: x < r.left + r.width / 2 ? tab : (rest[rest.indexOf(tab) + 1] ?? null), group: tab.group };
   });
-  let start: { x: number; id: number } | null = null;
+  let start: { x: number; y: number; id: number } | null = null;
   let over: HTMLElement | null = null;
   const mark = (el: HTMLElement | null) => {
     over?.classList.remove("drop-target");
@@ -821,18 +1031,20 @@ function dragTab(tab: Tab) {
   };
   tab.tabEl.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
-    start = { x: e.clientX, id: e.pointerId };
+    start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    tab.tabEl.setPointerCapture(e.pointerId); // auch schnelles Ziehen nach unten in die Fläche erkennen
   });
   tab.tabEl.addEventListener("pointermove", (e) => {
     if (!start || e.pointerId !== start.id) return;
     if (!dragging) {
-      if (Math.abs(e.clientX - start.x) < 6) return;
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < 6) return;
       dragging = tab;
       tab.tabEl.setPointerCapture(e.pointerId);
       tab.tabEl.classList.add("dragging");
     }
     const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>(".tab, .tab-group") ?? null;
     mark(el && el !== tab.tabEl && dropTargets.has(el) ? el : null);
+    markDropZone(active && active !== tab && !el ? splitDropZone(e.clientX, e.clientY) : null);
   });
   const end = (e: PointerEvent) => {
     if (!start || e.pointerId !== start.id) return;
@@ -840,17 +1052,21 @@ function dragTab(tab: Tab) {
     if (dragging !== tab) return;
     const target = over;
     const under = document.elementFromPoint(e.clientX, e.clientY);
+    const zone = active && active !== tab && !target ? splitDropZone(e.clientX, e.clientY) : null;
     mark(null);
+    markDropZone(null);
     tab.tabEl.classList.remove("dragging");
     const d = target ? dropTargets.get(target)!(e.clientX) : null;
     dragging = null;
-    if (d) moveTab(tab, d.before, d.group);
+    if (zone && active) splitWith(split && inSplit(tab) ? (split.a === tab ? split.b : split.a) : active, tab, zone);
+    else if (d) moveTab(tab, d.before, d.group);
     // Freie Fläche der Leiste: ans Ende, ohne Gruppe.
     else if (under?.closest("#tabs") && !under.closest(".tab, .tab-group")) moveTab(tab, null, undefined);
   };
   tab.tabEl.addEventListener("pointerup", end);
   tab.tabEl.addEventListener("pointercancel", (e) => {
     mark(null);
+    markDropZone(null);
     tab.tabEl.classList.remove("dragging");
     if (start?.id === e.pointerId) start = null;
     dragging = null;

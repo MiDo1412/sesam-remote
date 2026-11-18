@@ -34,6 +34,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Desktop freischalten | ✓ | ✓ | ✓ | ✓ |
 | Türöffner (lokale Dienste über SSH) | ✓ | ✓ | ✓ | ✓ |
 | Gehaltene Shell (tmux, «Nahtlos») | ✓ | ✓ | ✓ | ✓ wichtig, weil iPadOS Verbindungen im Hintergrund trennt |
+| Geteilte Ansicht (zwei Sitzungen in einem Fenster) | ✓ «Geteilte Ansicht» | ✓ «Bereich teilen» | ✓ «Bereich teilen» | ✓ «Geteilte Ansicht», hochkant automatisch untereinander |
 | Durchreiche (Dateien auf Shell/Remote-Bild ziehen) | ✓ | ✓ | ✓ | ✓ aus «Dateien» (Split View, Slide Over) ziehen; nur Dateien, keine Ordner |
 | Mehrfachauswahl, Tastatur, Gummiband | ✓ wie Finder (Enter benennt um, ⌘↓ öffnet) | ✓ wie Explorer (Enter öffnet, F2) | ✓ wie Explorer | ✓ Tippen, «Alle auswählen» im Menü, mit Tastatur wie am Mac; «Auswählen» mit Häkchen |
 | Vorschau (Leertaste), Suche in Unterordnern, Ordnergrösse, Spaltenbreite | ✓ | ✓ | ✓ | ✓ (Vorschau über «…»/lange drücken) |
