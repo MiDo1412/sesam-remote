@@ -21,16 +21,18 @@ aktualisiert werden; dann hilft nur eine neue Version von Hand mit neuem öffent
 
 ## Bauen und signieren
 
-macOS (Apple Silicon):
+macOS (Apple Silicon), signiert mit «Developer ID Application» und notarisiert:
 
 ```bash
-export TAURI_SIGNING_PRIVATE_KEY="$HOME/.sesam/updater.key"
-export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -s 'Sesam Remote Updater' -a updater -w)"
-npx tauri build --bundles app,dmg --config '{"bundle":{"createUpdaterArtifacts":true}}'
-node scripts/portable.mjs
-node scripts/updates.mjs
-unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+scripts/mac-release.sh
 ```
+
+Das Skript nimmt die Identität «Developer ID Application: …» aus dem Schlüsselbund, notarisiert mit dem
+App-Store-Connect-Schlüssel (wie `scripts/asc-upload.sh`), prüft Signatur, Ticket und Gatekeeper und erstellt
+danach portables ZIP und `latest.json`. Ohne Developer ID wäre die App nur ad hoc signiert: Dann bindet macOS
+die Schlüsselbund-Freigabe an genau eine Programmdatei und fragt nach jedem Update erneut. Mit Developer ID
+fragt macOS nach dem Wechsel noch einmal, danach auch über Updates hinweg nicht mehr. Entwicklungsbuilds
+bleiben ad hoc signiert (`signingIdentity: "-"` in `tauri.conf.json`).
 
 Windows (`docs/build-windows.md`): ohne Schlüssel bauen, dann die Dateien zum Mac bringen und dort
 signieren:

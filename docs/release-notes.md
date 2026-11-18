@@ -24,7 +24,9 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ### Behoben
 
-- **Erster Buchstabe in der Shell verschluckt:** Was man tippte, bevor die Shell ganz verbunden war (oft das «s» von «sudo»), warf Sesam weg. Jetzt hat das Terminal die Tastatur schon beim Verbinden, und die Eingabe wird wie in einem echten Terminal gepuffert und danach gesendet (SSH und lokale Terminals, alle Plattformen).
+- **Schlüsselbund fragt auf dem Mac nicht mehr nach jedem Update:** Die Mac-Version ist jetzt mit einer Developer ID signiert und von Apple notarisiert. Nach dem Wechsel auf diese Version fragt macOS noch einmal nach dem Schlüsselbund («Immer erlauben»), danach nicht mehr, auch nicht nach Updates. Gatekeeper warnt beim ersten Öffnen nicht mehr.
+
+- **Erster Buchstabe in der Shell verschluckt:** Was man tippte, bevor die Shell ganz verbunden war (oft das «s» von «sudo»), warf Sesam weg. Jetzt hat das Terminal die Tastatur schon beim Verbinden, und die Eingabe wird wie in einem echten Terminal gepuffert und danach gesendet (SSH und lokale Terminals, alle Plattformen) Auch Tasten direkt nach ⌘T bzw. Strg+T, noch bevor das neue Terminal offen ist, kommen jetzt an.
 - **Gehaltene Shell wie ein normales Terminal:** tmux hält die Shell nur noch im Hintergrund, auf einem eigenen tmux-Server ohne die tmux-Einstellungen des Benutzers. Ein Rechtsklick öffnete bisher das Menü von tmux («Horizontal Split», «Kill» …), und Markieren oder Scrollen schaltete den Kopiermodus von tmux ein, der danach den ersten Tastendruck schluckte. Jetzt markiert, scrollt und kopiert Sesam selbst, und die Ausgabe landet im Verlauf von Sesam. Schon laufende gehaltene Shells älterer Versionen hängt Sesam weiter an.
 - **Kontextmenü im Terminal:** Ein Rechtsklick zeigt Sesams Menü (Kopieren, Einfügen, Alles auswählen, Suchen, Verlauf leeren) statt des Menüs der Webansicht («Schreibrichtung», «Weitere Tools») oder eines Programms auf dem Server.
 - **Grösserer Verlauf:** Die Shell behält 10'000 Zeilen zum Zurückscrollen (bisher 1000), gehaltene Shells auf dem Server 50'000.

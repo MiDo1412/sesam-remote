@@ -20,9 +20,6 @@ Was bewusst noch fehlt, mit dem Grund und dem nächsten Schritt.
 
 ## Vertrieb
 
-- **macOS ohne Developer ID:** Die Builds sind nur ad hoc signiert und nicht notarisiert. Gatekeeper warnt
-  beim ersten Start («nicht verifizierter Entwickler»); öffnen mit Rechtsklick › Öffnen. Nächster Schritt:
-  Zertifikat «Developer ID Application» und Notarisierung (bezahltes Konto).
 - **Windows ohne Code-Signatur:** MSI und EXE sind unsigniert; SmartScreen warnt beim Download, Intune
   installiert trotzdem. Nächster Schritt: Code-Signing-Zertifikat.
 - **Windows und Linux bauen:** geht nur auf dem jeweiligen System (WiX bzw. AppImage-Werkzeuge). Auf dem Mac
