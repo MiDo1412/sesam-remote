@@ -83,7 +83,7 @@ export async function openSettings(tab = "general") {
     box.classList.remove("pane-open");
     let back = box.querySelector<HTMLButtonElement>(".settings-back");
     if (!back) {
-      back = Object.assign(document.createElement("button"), { type: "button", className: "plain settings-back", innerHTML: `${ICON.back}<span>Einstellungen</span>` });
+      back = Object.assign(document.createElement("button"), { type: "button", className: "plain settings-back", innerHTML: `${ICON.navBack}<span>Einstellungen</span>` });
       back.onclick = () => box.classList.remove("pane-open");
       box.prepend(back);
     }

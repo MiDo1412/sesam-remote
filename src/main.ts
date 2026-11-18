@@ -480,7 +480,7 @@ function panels() {
   $("toggle-sidebar").setAttribute("aria-pressed", String(side));
   $("toggle-details").setAttribute("aria-pressed", String(det));
 }
-$("toggle-sidebar").innerHTML = isPhone ? `${ICON.back}<span>Gruppen</span>` : ICON.sidebar;
+$("toggle-sidebar").innerHTML = isPhone ? `${ICON.navBack}<span>Gruppen</span>` : ICON.sidebar;
 $("toggle-details").innerHTML = ICON.info;
 $("toggle-sidebar").onclick = () => (isPhone ? (phone.side = true) : ((prefs[sideKey()] = document.body.classList.contains("no-sidebar")), savePrefs()), panels());
 const setDetails = (on: boolean) => (isPhone ? (phone.details = on) : ((prefs.details = on), savePrefs()), panels());
@@ -490,6 +490,8 @@ if (isPhone) {
   $("new").innerHTML = ICON.plus;
   $("new").setAttribute("aria-label", "Neue Verbindung");
   $("nav").before(el("h1", { class: "phone-title" }, "Gruppen"));
+  $("session-back").innerHTML = `${ICON.navBack}<span>Bibliothek</span>`;
+  $("session-back").setAttribute("aria-label", "Bibliothek");
 }
 $("toggle-details").onclick = () => setDetails(document.body.classList.contains("no-details"));
 portrait.addEventListener("change", panels);
@@ -534,7 +536,7 @@ function renderDetails() {
   };
   const closeBtn = el("button", { type: "button", class: "detail-close", "aria-label": "Details schliessen", title: "Details schliessen" }) as HTMLButtonElement;
   if (isPhone) closeBtn.setAttribute("aria-label", "Zurück");
-  closeBtn.innerHTML = isPhone ? `${ICON.back}<span>${filter.kind === "all" ? "Alle" : filter.name}</span>` : ICON.close;
+  closeBtn.innerHTML = isPhone ? `${ICON.navBack}<span>${filter.kind === "all" ? "Alle" : filter.name}</span>` : ICON.close;
   closeBtn.onclick = () => setDetails(false);
   aside.replaceChildren(
     closeBtn,

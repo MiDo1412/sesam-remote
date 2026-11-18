@@ -159,9 +159,10 @@ const openPlaces = () =>
     sideSwitch = el("div", "segmented side-switch");
     sideSwitch.setAttribute("role", "radiogroup");
     sideSwitch.setAttribute("aria-label", "Seite");
+    const group = `side-${Math.random()}`; // ein Name für beide Knöpfe, sonst sind beide gewählt
     for (const [side, label] of [["local", "iPhone"], ["remote", c.name]] as const) {
       const l = el("label", "", "");
-      const i = Object.assign(document.createElement("input"), { type: "radio", name: `side-${c.id}-${Math.random()}`, checked: side === "remote" });
+      const i = Object.assign(document.createElement("input"), { type: "radio", name: group, checked: side === "remote" });
       i.onchange = () => (grid.dataset.show = side);
       l.append(i, label);
       sideSwitch.append(l);

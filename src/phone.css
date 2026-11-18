@@ -10,7 +10,8 @@ body.phone .list { padding: var(--s-2) var(--phone-pad) calc(var(--s-5) + env(sa
 body.phone .list-head { flex-wrap: wrap; gap: var(--s-1) var(--s-2); }
 body.phone .list-head h1 { order: 10; flex: 1 0 100%; font-size: 28px; letter-spacing: -0.02em; margin-top: var(--s-1); }
 body.phone #toggle-sidebar { width: auto; margin-left: -8px; margin-right: auto; padding: 0 8px 0 2px; gap: 2px; color: var(--accent); font-weight: 400; }
-body.phone :is(#toggle-sidebar, .detail-close) svg { width: 20px; height: 20px; }
+body.phone :is(#toggle-sidebar, .detail-close, .settings-back, #session-back) { gap: 0; font-size: 15px; font-weight: 400; color: var(--accent); }
+body.phone :is(#toggle-sidebar, .detail-close, .settings-back, #session-back) svg { width: 22px; height: 22px; margin-left: -4px; }
 body.phone .quick-btn { width: var(--h-ctl); padding: 0; background: transparent; }
 body.phone .quick-text { display: none; }
 body.phone #new { width: var(--h-ctl); padding: 0; }
@@ -37,40 +38,45 @@ body.phone .sidebar-settings { margin: var(--s-4) var(--phone-pad) calc(var(--s-
 /* Verbindungen als Zeilen: kleines Vorschaubild, Name, Adresse, rechts die Türen Desktop/Shell/Dateien */
 body.phone .grid { grid-template-columns: 1fr; gap: 0; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); overflow: hidden; }
 body.phone .grid:empty { display: none; }
-body.phone .card-wrap + .card-wrap::before { content: ""; position: absolute; top: 0; left: 76px; right: 0; height: 0.5px; background: var(--line-strong); z-index: 1; }
-body.phone .card { display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; column-gap: var(--s-3); min-height: 60px; padding: var(--s-2) var(--s-3); border-radius: 0; background: transparent; box-shadow: none; }
+body.phone .card-wrap + .card-wrap::before { content: ""; position: absolute; top: 0; left: 66px; right: 0; height: 0.5px; background: var(--line-strong); z-index: 1; }
+body.phone .card { display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; column-gap: 10px; min-height: 60px; padding: var(--s-2) var(--s-3); border-radius: 0; background: transparent; box-shadow: none; }
 body.phone .card:hover:not(:disabled), body.phone .card[aria-pressed=true] { transform: none; box-shadow: none; }
 body.phone .card:active:not(:disabled) { background: var(--fill); }
-body.phone .card .thumb { grid-row: 1 / 3; width: 52px; height: 36px; border-radius: 6px; }
+body.phone .card .thumb { grid-row: 1 / 3; width: 44px; height: 32px; border-radius: 6px; }
 body.phone .card .thumb-os svg { width: 18px; height: 18px; }
 body.phone .card .badge { display: none; }
 body.phone .card-wrap .card-name { margin: 0; font-size: 14px; }
 body.phone .card-wrap .card-sub { margin: 1px 0 0; padding-left: 3px; }
-body.phone .card-wrap :is(.card-name, .card-sub) { margin-right: calc(var(--doors, 3) * 38px - 4px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.phone .card-wrap :is(.card-name, .card-sub) { margin-right: calc(var(--doors, 3) * 36px - 6px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body.phone .card-wrap:has(.door:only-child) { --doors: 1; }
 body.phone .card-wrap:has(.door:nth-child(2):last-child) { --doors: 2; }
 body.phone .doors { top: 50%; bottom: auto; right: var(--s-1); transform: translateY(-50%); gap: 0; }
-body.phone .door { --h-ctl: 38px; width: 38px; }
+body.phone .door { --h-ctl: 44px; width: 36px; }
 body.phone .door svg { width: 20px; height: 20px; }
 
 /* Details: eigene Seite mit Zurück-Taste oben links */
-body.phone #details { position: fixed; inset: 0; z-index: 20; width: auto; padding: calc(env(safe-area-inset-top) + var(--h-ctl) + var(--s-3)) var(--phone-pad) calc(var(--s-5) + env(safe-area-inset-bottom)); border-radius: 0; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; gap: var(--s-3); }
-body.phone .detail-close { top: calc(env(safe-area-inset-top) + var(--s-1)); left: 4px; right: auto; width: auto; padding: 0 8px 0 2px; gap: 2px; color: var(--accent); font-weight: 400; }
-body.phone #details .detail-close { min-height: var(--h-ctl); }
+body.phone #details { position: fixed; inset: 0; z-index: 20; width: auto; padding: calc(env(safe-area-inset-top) + var(--h-ctl) + var(--s-3)) calc(var(--phone-pad) + env(safe-area-inset-right)) calc(var(--s-5) + env(safe-area-inset-bottom)) calc(var(--phone-pad) + env(safe-area-inset-left)); border-radius: 0; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; gap: var(--s-3); }
+body.phone .detail-close { top: calc(env(safe-area-inset-top) + var(--s-1)); left: calc(env(safe-area-inset-left) + 4px); right: auto; width: auto; padding: 0 8px 0 2px; }
+body.phone #details .detail-close { height: var(--h-ctl); min-height: var(--h-ctl); padding-top: 0; padding-bottom: 0; }
 body.phone .detail-title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
 body.phone #details > .sub { margin-top: -8px; font-size: 14px; }
 body.phone #details dl { padding: var(--s-3) var(--s-4); border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); font-size: 13px; }
 body.phone #details dd { font-size: 14px; }
 body.phone #details button:not(.detail-close) { min-height: 44px; font-size: 15px; }
-body.phone #details .detail-edit { position: absolute; top: calc(env(safe-area-inset-top) + var(--s-1)); right: 4px; min-height: var(--h-ctl); padding: 0 var(--s-3); background: transparent; font-size: 14px; font-weight: 400; }
+body.phone #details .detail-edit { position: absolute; top: calc(env(safe-area-inset-top) + var(--s-1)); right: calc(env(safe-area-inset-right) + 4px); height: var(--h-ctl); min-height: var(--h-ctl); padding: 0 var(--s-3); background: transparent; font-size: 15px; font-weight: 400; }
 body.phone #new { background: transparent; color: var(--accent); }
 body.phone #new svg { width: 22px; height: 22px; }
 
 /* Sitzung: oben Zurück, Tabs, Teilen; darunter die Werkzeuge über die ganze Breite (Titel steht im Tab) */
 body.phone .session-bar { gap: var(--s-1); padding: 0 var(--s-2); }
-body.phone #session-back { padding: 0 var(--s-2); }
-body.phone .tab { flex: 0 1 auto; min-width: 80px; max-width: 180px; }
-body.phone .session-head { min-height: var(--h-ctl); padding: 0 var(--s-1) var(--s-1); }
+body.phone #session-back { flex-shrink: 0; padding: 0 var(--s-2) 0 2px; background: transparent; }
+body.phone #tabs .tab { flex: 0 0 auto; min-width: 0; max-width: none; gap: 4px; padding: 0 var(--s-2); }
+body.phone #tabs .tab[aria-selected=true] { flex: 1 1 auto; max-width: 260px; }
+body.phone #tabs .tab[aria-selected=true] > svg { display: none; } /* Art steht im Namen («· Shell») */
+body.phone:not(.one-bar) #session-back span { display: none; } /* hochkant nur der Pfeil, mehr Platz für den Tab */
+body.phone .tab:not([aria-selected=true]) :is(.tab-label, .tab-close) { display: none; }
+body.phone .tab-close { --h-ctl: 38px; width: 32px; margin-right: -6px; }
+body.phone .session-head { min-height: var(--h-ctl); padding: 0 var(--s-2) var(--s-1); }
 body.phone .session-id { display: none; }
 body.phone #session-toolbar { justify-content: space-between; }
 body.phone #session-toolbar > .tab-tools { flex: 1; flex-wrap: nowrap; justify-content: space-between; overflow: hidden; }
@@ -94,8 +100,8 @@ body.phone .sheet .row:not(.actions) { grid-template-columns: minmax(0, 1fr); ga
 body.phone .sheet .segmented { grid-auto-columns: minmax(0, 1fr); }
 body.phone .sheet .segmented label { padding: 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; }
 body.phone .sheet .segmented svg { display: none; }
-body.phone .sheet-tabs { justify-self: stretch; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-body.phone .sheet-tabs button { flex: 1 0 auto; padding: 0 var(--s-3); }
+body.phone .sheet-tabs { justify-self: stretch; flex-wrap: wrap; justify-content: center; gap: 2px; min-height: max-content; }
+body.phone .sheet-tabs button { flex: 1 0 auto; padding: 0 var(--s-2); }
 body.phone #editor-form > .actions { margin-left: calc(-1 * var(--s-4)); margin-right: calc(-1 * var(--s-4)); padding-left: var(--s-4); padding-right: var(--s-4); }
 
 /* Einstellungen: ganzer Bildschirm; erst die Liste der Bereiche, dann ein Bereich als eigene Seite */
@@ -109,13 +115,17 @@ body.phone .settings-nav button + button { box-shadow: inset 0 0.5px 0 var(--lin
 body.phone .settings-nav button::after { content: "›"; margin-left: auto; color: var(--muted); font-size: 18px; }
 body.phone .settings:not(.pane-open) .settings-pane, body.phone .settings:not(.pane-open) .settings-back, body.phone .settings.pane-open .settings-nav { display: none; }
 body.phone .settings-pane { flex: 1; padding: var(--s-2) var(--phone-pad) var(--s-5); }
-body.phone .settings-back { align-self: flex-start; margin: var(--s-1) 0 0 4px; padding: 0 8px 0 2px; gap: 2px; font-weight: 400; }
-body.phone .settings-back svg { width: 20px; height: 20px; }
+body.phone .settings-back { align-self: flex-start; margin: var(--s-1) 0 0 4px; padding: 0 8px 0 2px; }
 body.phone .settings-close { position: absolute; top: var(--s-1); right: 4px; padding: 0; background: transparent; }
 body.phone .settings-close button { background: transparent; color: var(--accent); font-weight: 600; }
 body.phone .settings-pane .row { grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 body.phone .settings-pane > h2:first-child { margin-top: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
 /* iPhone quer: eine Leiste (Tabs und Werkzeuge), möglichst viel Remote-Bild */
-body.phone.one-bar #tabs { flex: 0 1 auto; }
-body.phone.one-bar .session-bar #session-toolbar { flex: 1 1 auto; justify-content: flex-end; }
+body.phone.one-bar #tabs { flex: 1 1 0; min-width: 0; }
+body.phone.one-bar .session-bar #session-toolbar { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 @media (orientation: landscape) { body.phone .list-head h1 { font-size: 22px; } }
+
+/* Meldung «Verbindung getrennt» in der Breite des Bildschirms, Knöpfe umbrechen */
+body.phone .reconnect-bar { left: var(--s-2); right: var(--s-2); transform: none; flex-wrap: wrap; white-space: normal; justify-content: flex-end; }
+body.phone .reconnect-bar > :first-child { flex: 1 0 100%; }
+body.phone .sidebar-settings::after { content: "›"; margin-left: auto; color: var(--muted); font-size: 18px; }

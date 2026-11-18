@@ -9,6 +9,7 @@ import fKey from "@fluentui/svg-icons/icons/key_20_regular.svg?raw";
 import fArrowClockwise from "@fluentui/svg-icons/icons/arrow_clockwise_20_regular.svg?raw";
 import fArrowDownload from "@fluentui/svg-icons/icons/arrow_download_20_regular.svg?raw";
 import fArrowLeft from "@fluentui/svg-icons/icons/arrow_left_20_regular.svg?raw";
+import fChevronLeft from "@fluentui/svg-icons/icons/chevron_left_24_regular.svg?raw";
 import fArrowMaximize from "@fluentui/svg-icons/icons/arrow_maximize_20_regular.svg?raw";
 import fArrowRight from "@fluentui/svg-icons/icons/arrow_right_20_regular.svg?raw";
 import fArrowSwap from "@fluentui/svg-icons/icons/arrow_swap_20_regular.svg?raw";
@@ -66,6 +67,7 @@ export const fl = (s: string, n = 16) => s.replace(/<svg[^>]*?(viewBox="[^"]+")[
 export const ICON = {
   refresh: fl(fArrowClockwise),
   back: fl(fArrowLeft),
+  navBack: fl(fChevronLeft, 22), // iPhone: Zurück-Taste wie in iOS
   forward: fl(fArrowRight),
   up: fl(fArrowUp),
   compare: fl(fArrowSwap),
@@ -121,7 +123,7 @@ export const ICON = {
 
 /** macOS/iPadOS: dieselben Namen als SF-Symbol-Namen (nur auf Apple-Geräten erlaubt). */
 export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
-  refresh: "arrow.clockwise", back: "chevron.backward", forward: "chevron.forward", up: "arrow.up", compare: "arrow.left.arrow.right",
+  refresh: "arrow.clockwise", back: "chevron.backward", navBack: "chevron.backward", forward: "chevron.forward", up: "arrow.up", compare: "arrow.left.arrow.right",
   home: "house", detach: "macwindow.on.rectangle", span: "rectangle.split.3x1", screenshot: "camera", typeClipboard: "doc.on.clipboard",
   copy: "doc.on.doc", download: "arrow.down.circle", folder: "folder", newFolder: "folder.badge.plus", fullscreen: "arrow.up.left.and.arrow.down.right",
   globe: "globe", handTap: "hand.tap", keyboard: "keyboard", quick: "bolt", save: "square.and.arrow.down", search: "magnifyingglass",
