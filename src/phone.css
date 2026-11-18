@@ -130,7 +130,7 @@ body.phone.one-bar .session-bar #session-toolbar { flex: 0 1 auto; min-width: 0;
 @media (orientation: landscape) { body.phone .list-head h1 { font-size: 22px; } }
 
 /* Meldung «Verbindung getrennt» in der Breite des Bildschirms, Knöpfe umbrechen */
-body.phone .reconnect-bar { left: var(--s-2); right: var(--s-2); transform: none; flex-wrap: wrap; white-space: normal; justify-content: flex-end; }
+body.phone .reconnect-bar { left: var(--s-2); right: var(--s-2); transform: none; flex-wrap: wrap; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-2) var(--s-4); border-radius: var(--r-card); white-space: normal; justify-content: flex-end; }
 body.phone .reconnect-bar > :first-child { flex: 1 0 100%; }
 body.phone .sidebar-settings::after { content: "›"; margin-left: auto; color: var(--muted); font-size: 18px; }
 body.phone .status.sticky { min-height: 38px; display: flex; align-items: center; } /* ganze Zeile schliesst, mind. 44 pt */

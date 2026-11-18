@@ -112,6 +112,8 @@ body:not(.kbd) .segmented label:has(input:focus-visible) { outline: none; }
 svg.sf { background-color: currentColor; -webkit-mask: var(--sf) center / contain no-repeat; mask: var(--sf) center / contain no-repeat; }
 .pane td.size, .pane td.date, .count, .transfer-state, .cert-row code, .mono { font-variant-numeric: tabular-nums; }
 
+/* Kapselform (--r-ctl 999px) nur für einzeilige Elemente. Was umbrechen kann (Meldungen, Knöpfe mit langem Text),
+   bekommt höchstens die halbe Zeilenhöhe als Radius: einzeilig bleibt es eine Kapsel, mehrzeilig ein abgerundetes Rechteck. */
 /* ---------- Knöpfe: ein System ----------
    Standard (getönt) · .primary (Hauptaktion, höchstens eine je Ansicht) · .plain (Text) · .link (Text im Fliesstext)
    · .danger (zerstörend, auch mit .primary) · .tool (Symbol bzw. Leiste). Grösse über --h-ctl des Behälters. */
@@ -317,7 +319,7 @@ aside dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 
 aside dt { color: var(--muted); }
 aside dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 #details { position: relative; }
-#details button { white-space: normal; line-height: 1.25; height: auto; min-height: var(--h-ctl); padding-top: 6px; padding-bottom: 6px; }
+#details button { border-radius: min(var(--r-ctl), calc(var(--h-ctl) / 2)); white-space: normal; line-height: 1.25; height: auto; min-height: var(--h-ctl); padding-top: 6px; padding-bottom: 6px; }
 .detail-close { display: none; }
 body.no-sidebar .sidebar, body.no-details #details { display: none; }
 .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
@@ -418,7 +420,7 @@ fieldset.adv .adv-fields > :is(label.span, .span, label.option, .pair) { grid-co
 .alert h2 { margin: 0; font-size: 15px; }
 .alert p { margin: 0; font-size: 13px; white-space: pre-line; overflow-wrap: anywhere; }
 .alert .pair { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
-.alert .pair button { flex: 1 1 auto; height: auto; min-height: var(--h-ctl); padding: 6px var(--s-4); white-space: normal; }
+.alert .pair button { flex: 1 1 auto; border-radius: min(var(--r-ctl), calc(var(--h-ctl) / 2)); height: auto; min-height: var(--h-ctl); padding: 6px var(--s-4); white-space: normal; }
 #ask-detail { margin: 0; padding: 10px var(--s-3); border-radius: var(--r-field); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; text-align: left; user-select: text; }
 #ask-check { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; }
 #ask-input { width: 100%; }
@@ -532,8 +534,8 @@ body.compact.one-bar .tab { flex: 0 0 auto; min-width: 140px; max-width: 260px; 
 .tab-pane.tab-shell .status { background: transparent; color: var(--term-fg, inherit); }
 .tab-pane.tab-files .status { background: var(--surface); box-shadow: 0 -1px 0 var(--line); }
 /* Desktop: Status schwebt über dem Bild (sonst verbindet Sesam mit einer zu kleinen Fläche) */
-.tab-pane.tab-desktop .status { position: absolute; left: 50%; bottom: var(--s-3); transform: translateX(-50%); max-width: calc(100% - 48px); padding: 6px var(--s-3); border-radius: var(--r-ctl); text-align: center; pointer-events: none; z-index: 5; }
-.reconnect-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: var(--s-3); padding: 6px 6px 6px 14px; border-radius: var(--r-ctl); font-size: 13px; white-space: nowrap; }
+.tab-pane.tab-desktop .status { position: absolute; left: 50%; bottom: var(--s-3); transform: translateX(-50%); max-width: calc(100% - 48px); padding: 6px var(--s-3); border-radius: min(var(--r-ctl), 15px); text-align: center; pointer-events: none; z-index: 5; }
+.reconnect-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: var(--s-3); padding: 6px 6px 6px 14px; border-radius: min(var(--r-ctl), 20px); font-size: 13px; white-space: nowrap; }
 .reconnect-bar button { --h-ctl: 28px; }
 /* Im Vollbild rutscht die Leiste «Getrennt» unter die eingeblendete Verbindungsleiste statt dahinter. */
 .tab-pane:has(> .fs-bar.show) > .reconnect-bar { top: calc(var(--h-ctl) + 28px); transition: top var(--dur-m) var(--ease); }
