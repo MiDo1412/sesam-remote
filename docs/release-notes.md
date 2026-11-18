@@ -18,6 +18,26 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.9 — 2026-11-18
+
+Sesam auf dem iPhone, auch auf dem faltbaren iPhone Duo, und eine Tastatur ohne Formularleiste.
+
+### Neu
+
+- **iPhone:** Sesam läuft jetzt auch auf dem iPhone, mit eigener Oberfläche: Gruppen, Verbindungen und Details als Seiten, kürzere Werkzeugleisten, Dateien mit Umschalter zwischen iPhone und Server, Einstellungen als Liste. Hochkant und quer, hell und dunkel.
+- **iPhone Duo:** Zugeklappt die iPhone-Oberfläche, aufgeklappt die iPad-Oberfläche mit Seitenleiste und Details. Der Wechsel geschieht beim Falten sofort; offene Sitzungen, Blätter und Auswahl bleiben.
+
+### Verbessert
+
+- **Tastatur auf iPhone und iPad:** Die Formularleiste (∧ ∨ ✓) über der Tastatur ist weg, die Zusatztasten (Esc, Tab, Strg, Alt, Pfeile) sitzen direkt auf der Tastatur.
+- **Details:** Der grosse Knopf folgt der Standardansicht der Verbindung (Shell, Dateien oder Desktop).
+- **Meldungen:** «Verbindung getrennt» und andere Meldungen, die umbrechen, sind mehrzeilig abgerundete Rechtecke statt Ovale.
+
+### Behoben
+
+- **iPhone quer:** Die Kamera-Insel verdeckt keine Titel, Suche oder Blätter mehr; auf dem Duo bleibt nur die Kameraseite frei.
+- **Dateien:** Die leere Liste spannt über die sichtbaren Spalten, der Pfad endet mit «…».
+
 ## 26.11.8 — 2026-11-18
 
 Terminal ohne verschluckte Buchstaben, eine verständliche geteilte Ansicht und eine signierte, notarisierte Mac-Version.
