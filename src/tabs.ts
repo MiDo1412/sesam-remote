@@ -1096,6 +1096,13 @@ function renderActiveBar() {
       return b;
     }),
   );
+  dispatchEvent(new CustomEvent("sesam:tabs", { detail: tabs.length })); // iPhone: Zahl im Tab «Sitzungen»
+}
+
+/** iPhone, Tab «Sitzungen»: zur zuletzt gezeigten Sitzung, sonst zur jüngsten. */
+export function showSession() {
+  const t = active && tabs.includes(active) ? active : tabs[tabs.length - 1];
+  if (t) activate(t);
 }
 
 /** Menübefehl «Sitzung»: Werkzeugknopf des aktiven Tabs über seine Beschriftung auslösen. */

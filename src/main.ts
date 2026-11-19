@@ -4,7 +4,7 @@ import { groupDot, groupMenu, initGroups, moveGroupBefore } from "./groups";
 import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
-import { detachedWindow, detachToken, initTabs, jumpCommands, openTab, runTool, setLibrary, takeOver } from "./tabs";
+import { detachedWindow, detachToken, initTabs, jumpCommands, openTab, runTool, setLibrary, showLibrary, showSession, takeOver } from "./tabs";
 import { ask, choose, tell } from "./ui";
 import { openHelp, topicFor, topics } from "./help";
 import { connectionCommands, initPalette } from "./palette";
@@ -201,6 +201,9 @@ let items: Connection[] = [];
 /** Gruppen in der Reihenfolge der Seitenleiste (auch leere). */
 let groups: Group[] = [];
 let filter: { kind: "all" } | { kind: "group"; name: string } = { kind: "all" };
+// iPhone: Gruppen als Filter-Chips unter der Suche (phoneGroups)
+const phoneGroupBar = Object.assign(document.createElement("div"), { className: "phone-groups", ariaLabel: "Gruppen" });
+phoneGroupBar.setAttribute("role", "toolbar");
 let selected: string | null = null;
 /** Gerade angezeigte Verbindungen (für die Pfeiltasten in der Liste). */
 let shown: Connection[] = [];
@@ -331,6 +334,7 @@ function openPicked(c: Connection) {
 }
 
 function render() {
+  phoneGroups();
   const navItem = (label: string, count: number, on: boolean, click: () => void, group?: string, color = "") => {
     const a = el("button", { type: "button", class: "nav-item", "aria-current": on ? "page" : "false" }, el("span", {}, groupDot(color), label), el("span", { class: "count" }, String(count)));
     a.onclick = () => (isPhone && ((phone.side = false), panels()), click());
@@ -488,15 +492,14 @@ const setDetails = (on: boolean) => (isPhone ? (phone.details = on) : ((prefs.de
 const search = document.querySelector<HTMLElement>(".search")!;
 const searchHome = { parent: search.parentElement!, next: search.nextSibling };
 const wide = { newHtml: $("new").innerHTML, newLabel: $("new").getAttribute("aria-label"), backHtml: $("session-back").innerHTML, backLabel: $("session-back").getAttribute("aria-label") };
-const phoneTitle = el("h1", { class: "phone-title" }, "Gruppen");
 const attr = (id: string, name: string, v: string | null) => (v === null ? $(id).removeAttribute(name) : $(id).setAttribute(name, v));
 function phoneChrome() {
   if (isPhone) {
     $("title").closest(".list-head")!.after(search);
-    $("nav").before(phoneTitle);
+    search.after(phoneGroupBar);
   } else {
     searchHome.parent.insertBefore(search, searchHome.next);
-    phoneTitle.remove();
+    phoneGroupBar.remove();
   }
   $("toggle-sidebar").innerHTML = isPhone ? `${ICON.navBack}<span>Gruppen</span>` : ICON.sidebar;
   $("new").innerHTML = isPhone ? ICON.plus : wide.newHtml;
@@ -506,6 +509,47 @@ function phoneChrome() {
   if (isMobile) $("open-on-label").textContent = isPhone ? "Standardansicht" : "Bei Doppeltippen öffnen";
 }
 phoneChrome();
+
+// iPhone: Tab-Leiste unten (Verbindungen, Sitzungen, Einstellungen) wie in iOS-Apps; Gruppen als Filter über der Liste.
+const phoneTabs = $("phone-tabs");
+for (const i of phoneTabs.querySelectorAll<HTMLElement>(".seg-icon")) i.innerHTML = ICON[i.dataset.icon as keyof typeof ICON];
+const tabBtn = (t: string) => phoneTabs.querySelector<HTMLButtonElement>(`[data-tab=${t}]`)!;
+const markTab = () => {
+  const settingsOpen = ($("settings") as HTMLDialogElement).open;
+  const cur = settingsOpen ? "settings" : $("session").hidden ? "library" : "session";
+  // Einstellungen sind ein modales Blatt (alles andere ist dann träge): die Leiste solange ins Blatt hängen.
+  const home = $("settings") as HTMLDialogElement;
+  if (settingsOpen && isPhone) home.append(phoneTabs);
+  else if (phoneTabs.parentElement === home) $("session").before(phoneTabs);
+  for (const b of phoneTabs.querySelectorAll("button")) b.setAttribute("aria-current", b.dataset.tab === cur ? "page" : "false");
+};
+const closeSettings = () => ($("settings") as HTMLDialogElement).open && ($("settings") as HTMLDialogElement).close();
+tabBtn("library").onclick = () => (closeSettings(), showLibrary());
+tabBtn("session").onclick = () => (closeSettings(), showSession());
+tabBtn("settings").onclick = () => void openSettings();
+addEventListener("sesam:tabs", (e) => {
+  const n = (e as CustomEvent<number>).detail;
+  tabBtn("session").disabled = n === 0;
+  const count = tabBtn("session").querySelector<HTMLElement>(".phone-tab-count")!;
+  count.hidden = n === 0;
+  count.textContent = String(n);
+  markTab();
+});
+new MutationObserver(markTab).observe($("session"), { attributes: true, attributeFilter: ["hidden"] });
+new MutationObserver(markTab).observe($("settings"), { attributes: true, attributeFilter: ["open"] });
+function phoneGroups() {
+  phoneGroupBar.hidden = !groups.length;
+  const chip = (label: string, on: boolean, f: typeof filter, color = "", g: Group | null = null) => {
+    const b = el("button", { type: "button", class: "chip", "aria-pressed": String(on) }, groupDot(color), label);
+    b.onclick = () => ((filter = f), render());
+    b.oncontextmenu = (e) => (e.preventDefault(), groupAction(b, g));
+    return b;
+  };
+  phoneGroupBar.replaceChildren(
+    chip("Alle", filter.kind === "all", { kind: "all" }),
+    ...groups.map((g) => chip(g.name, filter.kind === "group" && filter.name === g.name, { kind: "group", name: g.name }, g.color, g)),
+  );
+}
 addEventListener("sesam:phone", () => {
   // Zugeklappt: wieder bei der Liste der gewählten Gruppe beginnen; offene Sitzungen, Blätter und Auswahl bleiben.
   phone.side = false;
@@ -1183,9 +1227,11 @@ if (isMobile) {
   const capture = (t: EventTarget | null) => t instanceof Element && t.matches(".osk-input, .xterm-helper-textarea");
   let captured = false;
   const report = (on: boolean) => on !== captured && ((captured = on), invoke("key_capture", { on }).catch(() => {}));
-  addEventListener("focusin", (e) => report(capture(e.target)));
-  addEventListener("focusout", (e) => !e.relatedTarget && report(false));
   const field = "input, textarea, select, [contenteditable]";
+  // Tastatur offen: Tab-Leiste weg (phone.css), sonst sässe sie über der Tastatur
+  const typing = (t: EventTarget | null) => t instanceof Element && t.matches(field) && !t.matches("[type=checkbox], [type=radio], [type=range], [type=button], select");
+  addEventListener("focusin", (e) => (report(capture(e.target)), document.body.classList.toggle("kbd-open", typing(e.target))));
+  addEventListener("focusout", (e) => !e.relatedTarget && (report(false), document.body.classList.remove("kbd-open")));
   addEventListener("touchend", (e) => {
     const a = document.activeElement;
     if (!(a instanceof HTMLElement) || !a.matches(field) || capture(a)) return;

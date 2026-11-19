@@ -96,10 +96,15 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 Gleicher Code und gleiche App wie auf dem iPad (`isPhone` in `src/titlebar.ts`, Stil in `src/phone.css`). Es gelten
 dieselben Grenzen wie oben, mit «iPhone» statt «iPad». Was anders aussieht, weil der Bildschirm schmal ist:
 
-- **Bibliothek als Navigationsstapel:** Gruppen › Verbindungen › Details, je als eigene Seite mit Zurück-Taste
-  oben links (wie Mail und Einstellungen). Verbindungen als Zeilen mit kleinem Vorschaubild; die Knöpfe Desktop,
+- **Tab-Leiste unten** wie in iOS-Apps: Verbindungen, Sitzungen (offene Shells, Desktops, Dateien, mit Zahl) und
+  Einstellungen. Sie verschwindet, solange die Tastatur offen ist; über den Einstellungen hängt sie im Blatt
+  (`markTab` in `src/main.ts`), weil ein modales Blatt den Rest der Seite sperrt.
+- **Startseite ist die Liste aller Verbindungen;** Gruppen stehen als Filter-Chips unter der Suche (langes Drücken:
+  Gruppenmenü), keine eigene Gruppen-Seite. Verbindungen als Zeilen mit kleinem Vorschaubild; die Knöpfe Desktop,
   Shell und Dateien rechts verbinden direkt, Tippen auf die Zeile öffnet die Details. Kein Wechsel Kacheln/Liste.
-- **Suche** unter dem grossen Titel, «Neue Verbindung» als «＋» oben rechts, Einstellungen auf der Seite «Gruppen».
+- **Suche** unter dem grossen Titel, «Schnelle Verbindung» und «Neue Verbindung» als Symbole oben rechts.
+- **Terminal:** Wischen scrollt den Verlauf mit Schwung (`touchScroll` in `src/shell.ts`, als Mausrad an xterm:
+  Verlauf, in less/vim Pfeiltasten, bei Programmen mit Maus deren Rad).
 - **Sitzung hochkant:** oben Zurück, Tabs und Geteilte Ansicht, darunter die Werkzeuge; Seltenes im Menü «…».
   Quer: eine Leiste wie auf dem iPad.
 - **Dateien:** eine Seite auf einmal, Umschalter «iPhone» / Server oben; übertragen mit «Hochladen» und

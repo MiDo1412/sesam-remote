@@ -142,3 +142,33 @@ body.phone #details .pair { display: flex; flex-wrap: wrap; }
 body.phone #details .pair > button { flex: 1 1 auto; white-space: nowrap; }
 /* Nur auf dem iPhone sichtbar; angelegt werden sie auf allen Mobilgeräten (iPhone Duo wechselt live) */
 body:not(.phone) :is(.side-switch, .settings-back) { display: none; }
+
+/* ---------- Tab-Leiste unten (iPhone): Verbindungen · Sitzungen · Einstellungen ----------
+   Ersetzt die Seite «Gruppen» und das Einstellungen-Feld; offen, solange keine Tastatur da ist. */
+.phone-tabs { display: none; }
+body.phone .phone-tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(3, 1fr); height: calc(50px + var(--sa-b)); padding: 0 var(--sa-r) var(--sa-b) var(--sa-l); background: var(--glass-strong); box-shadow: 0 -0.5px 0 var(--line-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+body.phone .phone-tabs button { position: relative; height: 50px; flex-direction: column; gap: 2px; padding: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 10px; font-weight: 500; }
+body.phone .phone-tabs button:hover:not(:disabled) { background: transparent; }
+body.phone .phone-tabs button:active:not(:disabled) { transform: none; opacity: 0.6; }
+body.phone .phone-tabs button[aria-current=page] { color: var(--accent); }
+body.phone .phone-tabs .seg-icon svg { width: 24px; height: 24px; }
+body.phone .phone-tab-count { position: absolute; top: 3px; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; }
+body.phone.kbd-open .phone-tabs, body.phone .fullscreen ~ .phone-tabs { display: none; }
+body.phone:not(.kbd-open) :is(#library, #session) { padding-bottom: calc(50px + var(--sa-b)); }
+body.phone:not(.kbd-open) .list { padding-bottom: var(--s-5); }
+body.phone:not(.kbd-open) #details { bottom: calc(50px + var(--sa-b)); padding-bottom: var(--s-5); }
+body.phone:not(.kbd-open) .osk-bar { bottom: calc(50px + var(--sa-b)); }
+
+/* Keine Gruppen-Seite mehr: Liste ist die Startseite, Gruppen als Filter unter der Suche */
+body.phone .sidebar, body.phone #toggle-sidebar { display: none; }
+body.phone:not(.no-sidebar) main { display: flex; }
+body.phone .phone-groups { display: flex; gap: var(--s-2); margin: 0 calc(-1 * var(--phone-pad)); padding: 2px var(--phone-pad) 4px; overflow-x: auto; scrollbar-width: none; }
+body.phone .phone-groups[hidden] { display: none; }
+body.phone .phone-groups::-webkit-scrollbar { display: none; }
+body.phone .phone-groups .chip { --h-ctl: 32px; flex: none; gap: 6px; padding: 0 var(--s-3); font-size: 13px; box-shadow: none; background: var(--fill); }
+body.phone .phone-groups .chip[aria-pressed=true] { background: var(--accent); color: var(--on-accent); }
+body.phone .phone-groups .chip[aria-pressed=true] .group-dot { box-shadow: 0 0 0 1.5px var(--on-accent); }
+body.phone .list-head { justify-content: flex-end; min-height: var(--h-ctl); }
+/* Einstellungen als Tab: die Leiste hängt solange im Blatt (main.ts), der Inhalt endet darüber; «Fertig» braucht es nicht */
+body.phone:not(.kbd-open) dialog#settings { padding-bottom: calc(50px + var(--sa-b)); }
+body.phone dialog#settings .settings-close { display: none; }

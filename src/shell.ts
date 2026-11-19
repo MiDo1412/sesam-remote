@@ -66,6 +66,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
   // Adressen auf dem Server selbst (localhost:3000 …) öffnet der Türöffner über SSH, alles andere der Browser.
   term.loadAddon(new WebLinksAddon((ev, uri) => (ev.ctrlKey || ev.metaKey) && (!local && localAddress(uri) ? void door(uri) : /^https?:\/\//.test(uri) && void openUrl(uri))));
   term.open(host);
+  if (isTouch()) touchScroll(host);
 
   let sid: string | null = null;
   const enc = new TextEncoder();
@@ -528,4 +529,40 @@ export function localAddress(text: string): { port: number; v6: boolean; https: 
   const port = m ? Number(m[3]) : 0;
   if (!m || port < 1 || port > 65535) return null;
   return { port, v6: m[2].startsWith("["), https: m[1] === "https://", path: m[4] ?? "/" };
+}
+
+/** Touch: Wischen scrollt mit Schwung wie eine iOS-Liste. Als Mausrad an xterm, das daraus je nach Lage den Verlauf,
+ *  Pfeiltasten (less, vim) oder Mausrad für das Programm macht. Kurzes Tippen bleibt Tippen (Tastatur, Markieren). */
+function touchScroll(host: HTMLElement) {
+  let y = 0, t = 0, v = 0, moved = false, raf = 0;
+  const wheel = (dy: number) => host.querySelector(".xterm-screen")?.dispatchEvent(new WheelEvent("wheel", { deltaY: dy, deltaMode: 0, bubbles: true, cancelable: true }));
+  host.addEventListener("touchstart", (e) => {
+    cancelAnimationFrame(raf);
+    if (e.touches.length !== 1) return;
+    [y, t, v, moved] = [e.touches[0].clientY, e.timeStamp, 0, false];
+  }, { passive: true });
+  host.addEventListener("touchmove", (e) => {
+    if (e.touches.length !== 1) return;
+    const ny = e.touches[0].clientY;
+    const dy = y - ny;
+    if (!moved && Math.abs(dy) < 8) return;
+    moved = true;
+    e.preventDefault();
+    v = 0.7 * (dy / Math.max(1, e.timeStamp - t)) + 0.3 * v; // px je ms
+    [y, t] = [ny, e.timeStamp];
+    wheel(dy);
+  }, { passive: false });
+  host.addEventListener("touchend", () => {
+    if (!moved || Math.abs(v) < 0.1) return;
+    let last = performance.now();
+    const step = (now: number) => {
+      const dt = now - last;
+      last = now;
+      v *= Math.pow(0.95, dt / 16); // Schwung klingt wie bei iOS in gut einer Sekunde aus
+      if (Math.abs(v) < 0.02) return;
+      wheel(v * dt);
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  });
 }

@@ -18,6 +18,11 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Verbessert
+
+- **iPhone-Navigation:** Unten eine Tab-Leiste mit Verbindungen, Sitzungen und Einstellungen wie in iOS-Apps. Die App startet direkt mit der Liste aller Verbindungen; Gruppen sind Filter unter der Suche statt einer eigenen Seite.
+- **Terminal auf iPhone und iPad:** Wischen scrollt den Verlauf flüssig und mit Schwung; in less, vim und top blättert es wie das Mausrad.
+
 ## 26.11.11 — 2026-11-18
 
 Der Tastatur-Knopf schliesst die Tastatur auch im entfernten Bildschirm.
