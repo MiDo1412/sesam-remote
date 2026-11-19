@@ -110,6 +110,7 @@ body.phone dialog#settings { position: fixed; inset: 0; width: 100%; height: 100
 body.phone dialog#settings .settings { width: 100% !important; height: 100% !important; min-width: 0; min-height: 0; max-width: none; max-height: none; resize: none; display: flex; flex-direction: column; position: relative; overflow-y: auto; }
 body.phone .settings-nav { flex: 0 0 auto; margin: calc(var(--h-ctl) + var(--s-2)) var(--phone-pad) 0; padding: 0; gap: 0; border-radius: var(--r-card); background: var(--card); box-shadow: var(--elev-1); }
 body.phone .settings-nav::before { content: "Einstellungen"; position: absolute; top: var(--s-1); left: var(--phone-pad); font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: var(--h-ctl); }
+html[lang=en] body.phone .settings-nav::before { content: "Settings"; }
 body.phone .settings-nav { margin-top: calc(var(--h-ctl) + 48px); }
 body.phone .settings-nav button { height: 44px; border-radius: 0; font-weight: 400 !important; background: transparent !important; }
 body.phone .settings-nav button + button { box-shadow: inset 0 0.5px 0 var(--line); }
