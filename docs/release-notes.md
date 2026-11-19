@@ -18,6 +18,8 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.12 — 2026-11-19
+
 ### Neu
 
 - **Englisch:** Die ganze Oberfläche gibt es jetzt auch auf Englisch, auf allen Geräten. Einstellungen › Allgemein › Sprache: Automatisch (wie das System), Deutsch oder English. Im App Store erscheinen Deutsch als Hauptsprache und Englisch.
