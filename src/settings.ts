@@ -47,6 +47,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 /** Grösse des Einstellungsfensters (vom Benutzer gezogen) merken. */
 const SIZE_KEY = "sesam.settingsSize";
 let trashMenu: ReturnType<typeof enhanceSelect> | undefined;
+let langMenu: ReturnType<typeof enhanceSelect> | undefined;
 let trashMaxMenu: ReturnType<typeof enhanceSelect> | undefined;
 let keysMenu: { sync(): void } | undefined;
 let sizeWatch: ResizeObserver | null = null;
@@ -130,6 +131,8 @@ export async function openSettings(tab = "general") {
   // Shell
   const langSel = $<HTMLSelectElement>("settings-lang");
   langSel.value = langPref();
+  langMenu ??= enhanceSelect(langSel);
+  langMenu.sync();
   langSel.onchange = () => setLangPref(langSel.value as LangPref); // lädt neu, damit alles in der neuen Sprache steht
   const t = termSettings();
   const list = $("settings-schemes");
