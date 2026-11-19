@@ -1,4 +1,5 @@
 /** App-Einstellungen: Erscheinungsbild, Shell, Sicherheit, Über. Gespeichert lokal (keine Geheimnisse). */
+import { langPref, setLangPref, type LangPref } from "./i18n";
 import { isMac, isMobile, isPhone } from "./titlebar";
 import { ICON } from "./icons";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -127,6 +128,9 @@ export async function openSettings(tab = "general") {
   }
 
   // Shell
+  const langSel = $<HTMLSelectElement>("settings-lang");
+  langSel.value = langPref();
+  langSel.onchange = () => setLangPref(langSel.value as LangPref); // lädt neu, damit alles in der neuen Sprache steht
   const t = termSettings();
   const list = $("settings-schemes");
   // Galerie mit Vorschau; die Auswahl wirkt sofort auf offene Shells.

@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Neu
+
+- **Englisch:** Die ganze Oberfläche gibt es jetzt auch auf Englisch, auf allen Geräten. Einstellungen › Allgemein › Sprache: Automatisch (wie das System), Deutsch oder English. Im App Store erscheinen Deutsch als Hauptsprache und Englisch.
+
 ### Verbessert
 
 - **iPhone-Navigation:** Unten eine Tab-Leiste mit Verbindungen, Sitzungen und Einstellungen wie in iOS-Apps. Die App startet direkt mit der Liste aller Verbindungen; Gruppen sind Filter unter der Suche statt einer eigenen Seite.

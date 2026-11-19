@@ -285,10 +285,11 @@
 				};
 			};
 			buildConfigurationList = 74539ABEE4B16D64E56E5DE7 /* Build configuration list for PBXProject "sesam-remote" */;
-			developmentRegion = en;
+			developmentRegion = de;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
+				de,
 				en,
 			);
 			mainGroup = 832537B8FFF7C6A441212E6D;

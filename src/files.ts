@@ -1,4 +1,5 @@
 import { dropFiles } from "./dropfiles";
+import { tr } from "./i18n";
 import { askConflict, type Choice } from "./conflict";
 import { showPreview } from "./preview";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -582,7 +583,7 @@ const openPlaces = () =>
   /** iPad: einzelne Dateien aus «Dateien» in den offenen Ordner links kopieren. */
   async function importFiles(p: Pane) {
     const dir = p.listing?.path || localRoot;
-    const picked = await openDialog({ multiple: true, title: "Dateien wählen" }).catch(() => null);
+    const picked = await openDialog({ multiple: true, title: tr("Dateien wählen") }).catch(() => null);
     const files = (Array.isArray(picked) ? picked : picked ? [picked] : []).map(String);
     if (!files.length) return;
     try {
@@ -1131,7 +1132,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   async function pickAndUpload() {
     const dest = panes.remote.listing?.path;
     if (!sid || dest == null) return;
-    const picked = await openDialog({ multiple: true, title: "Dateien hochladen" }).catch(() => null);
+    const picked = await openDialog({ multiple: true, title: tr("Dateien hochladen") }).catch(() => null);
     void uploadPaths((Array.isArray(picked) ? picked : picked ? [picked] : []).map(String));
   }
 
@@ -1306,7 +1307,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const toggle = el("button", "plain", "Details") as HTMLButtonElement;
     toggle.type = "button";
     toggle.onclick = () => {
-      const show = toggle.textContent === "Details";
+      const show = toggle.textContent === tr("Details");
       for (const r of rows) r.hidden = !show;
       toggle.textContent = show ? "Weniger" : "Details";
     };

@@ -1,6 +1,8 @@
 name: sesam-remote
 options:
   bundleIdPrefix: ch.sesam.remote
+  # Hauptsprache Deutsch, dazu Englisch (App Store zeigt beide)
+  developmentLanguage: de
   deploymentTarget:
     iOS: 16.0
 fileGroups: [../../src]
@@ -45,6 +47,7 @@ targets:
       path: sesam-remote_iOS/Info.plist
       properties:
         LSRequiresIPhoneOS: true
+        CFBundleLocalizations: [de, en]
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
         UISupportedInterfaceOrientations:

@@ -175,3 +175,15 @@ Mit dem bezahlten Team:
 - Linux: Tastenkürzel an den Remotecomputer.
 - Dateifenster: nach einem Verbindungsabbruch bei FTP (REST) und SCP fortsetzen (SFTP kann es), zuletzt besuchte Ordner je
   Verbindung, Bearbeiten auf dem iPad (dort gibt es kein Standardprogramm; denkbar über «Teilen»).
+
+## Sprachen (Deutsch, Englisch)
+
+Der Code schreibt deutsche Texte. `src/i18n.ts` übersetzt auf Englisch, was im DOM erscheint (Text, `title`,
+`aria-label`, `placeholder`), mit dem Wörterbuch `src/i18n/en.json`: feste Texte und Vorlagen mit `{}` für
+eingesetzte Werte (`{0}`, `{1}` bei anderer Reihenfolge). Die Menüleiste der Desktop-Apps (Rust) übersetzt der
+Befehl `relabel_menu`, Titel der System-Dateidialoge `tr()`. Nutzerdaten bleiben unberührt (`[translate=no]`,
+Terminal, Namen, Pfade). Code, der Beschriftungen als Schlüssel liest, nimmt `deText()` oder ein `data-`-Attribut.
+
+- Sprache: Einstellungen › Allgemein › Sprache (Automatisch = Systemsprache, sonst Englisch), lokal gespeichert.
+- Neue Texte: `node scripts/i18n.mjs check` listet, was im Wörterbuch fehlt; vor jedem Release laufen lassen.
+- App Store: Hauptsprache Deutsch, `CFBundleLocalizations` de und en (`project.yml`, Info.plist).

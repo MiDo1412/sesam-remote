@@ -1,4 +1,5 @@
 /** Gespeicherte Zugangsdaten: Liste in den Einstellungen, Bearbeiten-Dialog, Auswahl im Verbindungs-Sheet. */
+import { tr } from "./i18n";
 import { api, HOSTKEY_UNKNOWN, type Connection, type Cred } from "./api";
 import { ask, askHostKey, askPassword, tell } from "./ui";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -178,12 +179,12 @@ async function exportBackup() {
   const pw = await askPassword("Sicherung verschlüsseln", "Passwort für die Datei (mindestens 8 Zeichen). Ohne dieses Passwort lässt sie sich nicht öffnen.", "Weiter");
   if (!pw) return;
   if ((await askPassword("Passwort wiederholen", "Bitte dasselbe Passwort noch einmal.", "Weiter")) !== pw) return tell("Nicht gesichert", "Die beiden Passwörter sind nicht gleich.");
-  const file = await saveDialog({ defaultPath: `Sesam-Sicherung-${new Date().toISOString().slice(0, 10)}.sesam`, filters: [{ name: "Sesam-Sicherung", extensions: ["sesam"] }] });
+  const file = await saveDialog({ defaultPath: `Sesam-Sicherung-${new Date().toISOString().slice(0, 10)}.sesam`, filters: [{ name: tr("Sesam-Sicherung"), extensions: ["sesam"] }] });
   if (file) tell("Gesichert", await api.backupExport(file, pw));
 }
 
 async function importBackup() {
-  const file = await openDialog({ multiple: false, filters: [{ name: "Sesam-Sicherung", extensions: ["sesam"] }] });
+  const file = await openDialog({ multiple: false, filters: [{ name: tr("Sesam-Sicherung"), extensions: ["sesam"] }] });
   if (typeof file !== "string") return;
   const pw = await askPassword("Sicherung öffnen", "Passwort der Sicherung", "Öffnen");
   if (!pw) return;

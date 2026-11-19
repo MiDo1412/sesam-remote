@@ -1,4 +1,5 @@
 /** Schnelle Verbindung: nichts speichern, Passwort nur im Arbeitsspeicher, zuletzt genutzte Ziele ohne Zugangsdaten. */
+import { tr } from "./i18n";
 import { api, type Connection } from "./api";
 import { ICON } from "./icons";
 import { openTab, type Kind } from "./tabs";
@@ -84,7 +85,7 @@ export function initQuick(onSaveAsConnection: (c: Connection) => void) {
   };
   keySel.addEventListener("change", async () => {
     if (keySel.value === "file") {
-      const p = await pickFile({ title: "Privater SSH-Schlüssel", filters: [{ name: "SSH-Schlüssel", extensions: ["ppk", "pem", "key", "*"] }] });
+      const p = await pickFile({ title: tr("Privater SSH-Schlüssel"), filters: [{ name: tr("SSH-Schlüssel"), extensions: ["ppk", "pem", "key", "*"] }] });
       keyFile = typeof p === "string" ? p : keyFile;
       return fillKeys();
     }

@@ -1,6 +1,7 @@
 /** Galerie der Farbschemata mit echter Vorschau (Eingabezeile, farbige «ls»-Ausgabe, Fehler, Auswahl, Cursor, 16 Farben).
  *  Genutzt in den Einstellungen und als Aufklappfeld im Shell-Tab (dort mit Live-Vorschau beim Darüberfahren).
  *  Dazu: Suche, Filter hell/dunkel, eigene Designs (duplizieren, anpassen, importieren, exportieren). */
+import { tr } from "./i18n";
 import type { ITheme } from "@xterm/xterm";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
@@ -183,7 +184,7 @@ export function schemeGallery(current: string, onPick: (id: string) => void, onP
     } else if (v === "edit" && (await editTheme(id, label, { ...t }))) render();
     else if (v === "del" && (await ask(`«${label}» löschen?`, "Shells mit diesem Design nehmen danach «Automatisch».", "Löschen"))) (deleteCustomTheme(id), render());
     else if (v === "export") {
-      const path = await saveDialog({ defaultPath: `${label}.json`, filters: [{ name: "Windows-Terminal-Schema", extensions: ["json"] }] });
+      const path = await saveDialog({ defaultPath: `${label}.json`, filters: [{ name: tr("Windows-Terminal-Schema"), extensions: ["json"] }] });
       if (path) await invoke("save_text_file", { path, text: exportWindowsTerminal(label, t) }).catch((e) => tell("Nicht exportiert", String(e)));
     }
   }

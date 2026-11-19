@@ -1,4 +1,5 @@
 /** Setup-Script für GNOME Remote Desktop: herunterladen oder per SSH auf dem Zielrechner starten. */
+import { tr } from "./i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { HOSTKEY_UNKNOWN, type Connection } from "./api";
@@ -7,7 +8,7 @@ import { ask, askHostKey, tell } from "./ui";
 
 export async function downloadScript() {
   const [bytes, sha] = await invoke<[number[], string]>("setup_script");
-  const path = await saveDialog({ title: "Setup-Script speichern", defaultPath: "sesam-rdp-setup.sh" });
+  const path = await saveDialog({ title: tr("Setup-Script speichern"), defaultPath: "sesam-rdp-setup.sh" });
   if (!path) return;
   await invoke("save_bytes", { path, data: bytes });
   tell("Script gespeichert", `${path}\n\nSHA-256 ${sha}\n\nAuf dem Zielrechner starten mit: sudo bash sesam-rdp-setup.sh`);

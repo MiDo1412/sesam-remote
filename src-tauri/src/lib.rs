@@ -49,6 +49,45 @@ struct LibraryPath(PathBuf);
 /// Serialisiert Lese-Ändern-Schreiben der Bibliothek.
 static LIBRARY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// Menüleiste in der Sprache der Oberfläche (src/i18n.ts): Rust baut sie deutsch, die Seite schickt das Wörterbuch.
+#[tauri::command]
+fn relabel_menu(app: tauri::AppHandle, map: std::collections::HashMap<String, String>) {
+    #[cfg(desktop)]
+    {
+        use tauri::menu::MenuItemKind;
+        fn walk<R: tauri::Runtime>(items: Vec<MenuItemKind<R>>, map: &std::collections::HashMap<String, String>) {
+            for item in items {
+                match item {
+                    MenuItemKind::MenuItem(m) => {
+                        if let Some(t) = m.text().ok().and_then(|t| map.get(&t)) {
+                            let _ = m.set_text(t);
+                        }
+                    }
+                    MenuItemKind::Check(m) => {
+                        if let Some(t) = m.text().ok().and_then(|t| map.get(&t)) {
+                            let _ = m.set_text(t);
+                        }
+                    }
+                    MenuItemKind::Submenu(m) => {
+                        if let Some(t) = m.text().ok().and_then(|t| map.get(&t)) {
+                            let _ = m.set_text(t);
+                        }
+                        if let Ok(children) = m.items() {
+                            walk(children, map);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Some(items) = app.menu().and_then(|m| m.items().ok()) {
+            walk(items, &map);
+        }
+    }
+    #[cfg(not(desktop))]
+    let _ = (app, map);
+}
+
 /// iOS: Fängt Shell oder Desktop gerade die Tasten ab, blendet main.mm die Formularleiste (∧ ∨ Fertig) aus.
 #[tauri::command]
 fn key_capture(on: bool) {
@@ -2689,6 +2728,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             key_capture,
+            relabel_menu,
             library_list,
             library_save,
             library_delete,

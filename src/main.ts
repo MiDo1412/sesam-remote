@@ -1,3 +1,5 @@
+import "./i18n"; // zuerst: übersetzt alles, was danach ins DOM kommt
+import { deText, tr } from "./i18n";
 import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol, filesProtocol, ftpLabel, type Connection, type Group } from "./api";
 import { ICON } from "./icons";
 import { groupDot, groupMenu, initGroups, moveGroupBefore } from "./groups";
@@ -841,12 +843,13 @@ sectionTabs.setAttribute("role", "tablist");
   let sec = "";
   for (const n of [...form.children] as HTMLElement[]) {
     if (n.matches("h3.sec")) {
-      sec = n.textContent!.trim();
+      sec = deText(n);
       const b = document.createElement("button");
       b.type = "button";
       b.setAttribute("role", "tab");
       b.textContent = sec;
-      b.onclick = () => showSection(b.textContent!);
+      b.dataset.sec = sec; // deutscher Name als Schlüssel, die Beschriftung kann übersetzt sein
+      b.onclick = () => showSection(b.dataset.sec!);
       sectionTabs.append(b);
       n.hidden = true; // Titel steckt im Reiter
     } else if (sec && !n.matches(".actions, #editor-error")) n.dataset.sec = sec;
@@ -854,7 +857,7 @@ sectionTabs.setAttribute("role", "tablist");
   form.querySelector("h2")!.after(sectionTabs);
 }
 function showSection(name: string) {
-  for (const b of sectionTabs.children) b.setAttribute("aria-selected", String(b.textContent === name));
+  for (const b of sectionTabs.children) b.setAttribute("aria-selected", String((b as HTMLElement).dataset.sec === name));
   for (const n of document.querySelectorAll<HTMLElement>("#editor-form > [data-sec]")) n.classList.toggle("sec-hidden", n.dataset.sec !== name);
 }
 
@@ -1081,13 +1084,13 @@ $("thumb-menu").onclick = async () => {
   if (v === "clear") ((pendingThumb = null), (clearThumb = true), ($("thumb-name").textContent = "Letzter Desktop"));
 };
 const pickThumb = async () => {
-  const f = await pickFolder({ title: "Bild für die Verbindung", filters: [{ name: "Bilder", extensions: ["png", "jpg", "jpeg", "webp"] }] });
+  const f = await pickFolder({ title: tr("Bild für die Verbindung"), filters: [{ name: tr("Bilder"), extensions: ["png", "jpg", "jpeg", "webp"] }] });
   if (typeof f === "string") ((pendingThumb = f), ($("thumb-name").textContent = f.split(/[\\/]/).pop() ?? f));
 };
 
 const sharedFolder = form.elements.namedItem("sharedFolder") as HTMLInputElement;
 $("share-pick").onclick = async () => {
-  const dir = await pickFolder({ directory: true, title: "Ordner für das entfernte Laufwerk" });
+  const dir = await pickFolder({ directory: true, title: tr("Ordner für das entfernte Laufwerk") });
   if (typeof dir === "string") sharedFolder.value = dir;
 };
 $("share-clear").onclick = () => (sharedFolder.value = "");

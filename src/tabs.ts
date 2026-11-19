@@ -1,4 +1,5 @@
 /** Sitzungen als Tabs. «Bibliothek» und «Minimieren» lassen sie im Hintergrund weiterlaufen; erst «Trennen» beendet sie. */
+import { tr } from "./i18n";
 import { desktopProtocol, filesProtocol, type Connection } from "./api";
 import type { Command } from "./palette";
 import { ICON, onApple } from "./icons";
@@ -113,7 +114,7 @@ let factories: Record<Kind, Factory>;
 let onLibrary: () => void = () => {};
 let seq = 0;
 
-const kindLabel: Record<Kind, string> = { desktop: "Desktop", shell: "Shell", files: "Dateien" };
+const kindLabel: Record<Kind, string> = { desktop: "Desktop", shell: "Shell", files: tr("Dateien") };
 const kindIcon: Record<Kind, string> = { desktop: ICON.desktop, shell: ICON.shell, files: ICON.folder };
 // Fallbacks: künftige Arten (z. B. lokales Terminal) ohne Eintrag oben funktionieren trotzdem.
 const kindName = (k: Kind) => kindLabel[k] ?? k;
@@ -202,7 +203,7 @@ function autoHide(el: HTMLElement) {
     const t = el.textContent?.trim() ?? "";
     el.classList.toggle("sticky", !!t && STICKY.test(t));
     el.title = el.classList.contains("sticky") ? "Klicken zum Schliessen" : "";
-    if (t && !el.classList.contains("sticky")) timer = window.setTimeout(() => el.textContent === t && (el.textContent = ""), 6000);
+    if (t && !el.classList.contains("sticky")) timer = window.setTimeout(() => (el.textContent === t || el.textContent === tr(t)) && (el.textContent = ""), 6000);
   };
   new MutationObserver(check).observe(el, { childList: true, characterData: true, subtree: true });
   el.addEventListener("click", () => el.classList.contains("sticky") && (el.textContent = ""));
@@ -1116,7 +1117,7 @@ export function runTool(label: string) {
     return activate(open[(j + (label === "Nächster Tab" ? 1 : open.length - 1) + open.length) % open.length]!);
   }
   if (!active || $("session").hidden) return false;
-  const b = active.ctx.toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(label)}"]:not(:disabled)`);
+  const b = active.ctx.toolbar.querySelector<HTMLButtonElement>(`button[data-tool="${CSS.escape(label)}"]:not(:disabled)`);
   b?.click();
   return !!b;
 }
@@ -1173,6 +1174,7 @@ export function toolButton(icon: string, label: string, onClick: () => void, opt
   if (opts.text) b.append(Object.assign(document.createElement("span"), { textContent: label }));
   b.title = opts.shortcut ? `${label} (${keyLabel(opts.shortcut)})` : label;
   b.setAttribute("aria-label", label);
+  b.dataset.tool = label; // fester deutscher Schlüssel für runTool (aria-label kann übersetzt sein)
   b.onclick = onClick;
   return b;
 }

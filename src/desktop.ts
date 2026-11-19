@@ -1,4 +1,5 @@
 import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize, primaryMonitor } from "@tauri-apps/api/window";
+import { tr } from "./i18n";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol } from "./api";
@@ -274,7 +275,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   const hint = (text: string, ms = 3000) => {
     status.textContent = text;
     clearTimeout(hintTimer);
-    hintTimer = window.setTimeout(() => status.textContent === text && (status.textContent = ""), ms);
+    hintTimer = window.setTimeout(() => (status.textContent === text || status.textContent === tr(text)) && (status.textContent = ""), ms);
   };
   // Windows-Tastenkombinationen an den Remotecomputer (Einstellung wie in mstsc), nur solange das Bild den Fokus hat.
   // «Aktiv»: Fokus auf dem Bild oder Maus darüber (die Maus darüber gibt dem Bild auch den Fokus).
@@ -468,7 +469,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   // Bildschirmfoto als PNG speichern.
   const screenshot = async () => {
     if (!canvas.width) return;
-    const path = await saveDialog({ title: "Bildschirmfoto speichern", defaultPath: `${c.name} ${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.png`, filters: [{ name: "PNG", extensions: ["png"] }] });
+    const path = await saveDialog({ title: tr("Bildschirmfoto speichern"), defaultPath: `${c.name} ${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.png`, filters: [{ name: "PNG", extensions: ["png"] }] });
     if (!path) return;
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
     if (!blob) return;
@@ -502,7 +503,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     pop.hidden = !pop.hidden;
     quality.setAttribute("aria-expanded", String(!pop.hidden));
     if (!pop.hidden) {
-      const r = (quality.getClientRects().length ? quality : ctx.toolbar.querySelector<HTMLElement>("[aria-label='Weitere Aktionen']") ?? quality).getBoundingClientRect();
+      const r = (quality.getClientRects().length ? quality : ctx.toolbar.querySelector<HTMLElement>("[data-tool='Weitere Aktionen']") ?? quality).getBoundingClientRect();
       Object.assign(pop.style, { top: `${r.bottom + 6}px`, left: `${Math.max(8, r.right - 220)}px` });
     }
   };
