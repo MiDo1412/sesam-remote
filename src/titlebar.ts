@@ -189,7 +189,9 @@ function touchScale() {
       dispatchEvent(new Event("sesam:phone"));
     }
     // iPad mini: etwas weniger, sonst wird es eng; iPhone: 1,15 (Schrift 13 px ≈ 15 pt, Knöpfe 38 px ≈ 44 pt)
-    const scale = isPhone ? 1.15 : Math.min(screen.width, screen.height) >= 800 ? 1.3 : 1.2;
+    // Schmale iPad-Oberfläche (Duo aufgeklappt hochkant, iPad in Split View): höchstens so stark vergrössern, dass
+    // 640 px Breite bleiben, sonst ragen Einstellungen und Blätter über den Rand.
+    const scale = isPhone ? 1.15 : Math.max(1, Math.min(Math.min(screen.width, screen.height) >= 800 ? 1.3 : 1.2, w / 640));
     const content = `width=${Math.round(w / scale)}, initial-scale=${scale}, minimum-scale=${scale}, maximum-scale=${scale}, user-scalable=no, viewport-fit=cover`;
     if (meta?.getAttribute("content") !== content) meta?.setAttribute("content", content);
     requestAnimationFrame(() => fixSafeArea(w > h));

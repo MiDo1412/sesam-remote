@@ -48,8 +48,6 @@ body.phone .card .badge { display: none; }
 body.phone .card-wrap .card-name { margin: 0; font-size: 14px; }
 body.phone .card-wrap .card-sub { margin: 1px 0 0; padding-left: 3px; }
 body.phone .card-wrap :is(.card-name, .card-sub) { margin-right: calc(var(--doors, 3) * 38px - 6px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-body.phone .card-wrap:has(.door:only-child) { --doors: 1; }
-body.phone .card-wrap:has(.door:nth-child(2):last-child) { --doors: 2; }
 body.phone .doors { top: 50%; bottom: auto; right: var(--s-1); transform: translateY(-50%); gap: 0; }
 body.phone .door { --h-ctl: 44px; width: 38px; }
 body.phone .door svg { width: 20px; height: 20px; }
