@@ -174,3 +174,5 @@ body.phone .list-head { justify-content: flex-end; min-height: var(--h-ctl); }
 /* Einstellungen als Tab: die Leiste hängt solange im Blatt (main.ts), der Inhalt endet darüber; «Fertig» braucht es nicht */
 body.phone:not(.kbd-open) dialog#settings { padding-bottom: var(--tabbar-space); }
 body.phone dialog#settings .settings-close { display: none; }
+/* Quer ist die Spalte niedrig: Kopf, Suche und Gruppen nicht stauchen (sonst lag der Titel über der Suche), die Liste scrollt */
+body.phone :is(.list-head, .search, .phone-groups) { flex-shrink: 0; }
