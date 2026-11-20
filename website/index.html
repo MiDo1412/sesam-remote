@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sesam Remote – Fernzugriff auf Desktop, Shell und Dateien</title>
-<meta name="description" content="Sesam Remote verbindet Mac, Windows und iPad mit entfernten Rechnern: Desktop über RDP und VNC, Shell über SSH, Dateien über SFTP und FTP. Zugangsdaten im Schlüsselbund, kein Konto, keine Cloud. Open Source.">
+<meta name="description" content="Sesam Remote verbindet Mac, Windows, iPhone und iPad mit entfernten Rechnern: Desktop über RDP und VNC, Shell über SSH, Dateien über SFTP und FTP. Zugangsdaten im Schlüsselbund, kein Konto, keine Cloud. Open Source.">
 <link rel="canonical" href="https://sesam-remote.app/">
 <link rel="alternate" hreflang="de" href="https://sesam-remote.app/">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -22,7 +22,7 @@
 <meta property="og:locale" content="de_CH">
 <meta property="og:site_name" content="Sesam Remote">
 <meta property="og:title" content="Sesam Remote – Sesam, öffne dich.">
-<meta property="og:description" content="Desktop, Shell und Dateien entfernter Rechner in einer App. Für Mac, Windows und iPad.">
+<meta property="og:description" content="Desktop, Shell und Dateien entfernter Rechner in einer App. Für Mac, Windows, iPhone und iPad.">
 <meta property="og:url" content="https://sesam-remote.app/">
 <meta property="og:image" content="https://sesam-remote.app/img/og.png">
 <meta property="og:image:width" content="1200">
@@ -44,11 +44,11 @@
       "screenshot": "https://sesam-remote.app/img/lib-light-1440.webp",
       "applicationCategory": "UtilitiesApplication",
       "applicationSubCategory": "Remote Desktop",
-      "operatingSystem": "macOS, Windows 10, Windows 11, iPadOS 16 oder neuer",
+      "operatingSystem": "macOS, Windows 10, Windows 11, iOS 16 oder neuer, iPadOS 16 oder neuer",
       "inLanguage": "de",
       "license": "https://www.mozilla.org/MPL/2.0/",
       "isAccessibleForFree": true,
-      "description": "Fernzugriffs-App für Mac, Windows und iPad. Verbindet sich per RDP, VNC, SSH, SFTP und FTP mit Windows-PCs, Macs, Linux-Servern, Ubuntu mit GNOME und Raspberry Pi. Desktop, Shell und Dateien eines Rechners in einer Bibliothek; Passwörter und Schlüssel im Schlüsselbund des Betriebssystems; kein Konto, keine Cloud.",
+      "description": "Fernzugriffs-App für Mac, Windows, iPhone und iPad. Verbindet sich per RDP, VNC, SSH, SFTP und FTP mit Windows-PCs, Macs, Linux-Servern, Ubuntu mit GNOME und Raspberry Pi. Desktop, Shell und Dateien eines Rechners in einer Bibliothek; Passwörter und Schlüssel im Schlüsselbund des Betriebssystems; kein Konto, keine Cloud.",
       "featureList": [
         "Remotedesktop über RDP (Windows, GNOME Remote Desktop, xrdp) mit RD-Gateway, Kerberos und automatischem Wiederverbinden",
         "Bildschirmfreigabe über VNC (macOS, wayvnc unter Wayland, Raspberry Pi) mit VeNCrypt-TLS und Zertifikat-Pinning",
@@ -76,12 +76,12 @@
       "@type": "FAQPage",
       "@id": "https://sesam-remote.app/#faq",
       "mainEntity": [
-        { "@type": "Question", "name": "Was ist Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Sesam Remote ist eine Open-Source-Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen." } },
+        { "@type": "Question", "name": "Was ist Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Sesam Remote ist eine Open-Source-Fernzugriffs-App für Mac, Windows, iPhone und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen." } },
         { "@type": "Question", "name": "Mit welchen Rechnern kann sich Sesam Remote verbinden?", "acceptedAnswer": { "@type": "Answer", "text": "Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP." } },
         { "@type": "Question", "name": "Brauche ich ein Konto oder einen Cloud-Dienst?", "acceptedAnswer": { "@type": "Answer", "text": "Nein. Sesam verbindet sich direkt mit deinen Rechnern. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie." } },
-        { "@type": "Question", "name": "Wo speichert Sesam meine Passwörter?", "acceptedAnswer": { "@type": "Answer", "text": "Passwörter und SSH-Schlüssel liegen verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse." } },
+        { "@type": "Question", "name": "Wo speichert Sesam meine Passwörter?", "acceptedAnswer": { "@type": "Answer", "text": "Passwörter und SSH-Schlüssel liegen verschlüsselt im Schlüsselbund des Betriebssystems: im Schlüsselbund von macOS, iOS und iPadOS und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse." } },
         { "@type": "Question", "name": "Warum gibt es Sesam für den Mac nicht im Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "Die Sandbox des Mac App Store verbietet Funktionen, die Sesam ausmachen: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als Download von dieser Website (die Notarisierung durch Apple folgt)." } },
-        { "@type": "Question", "name": "Was kann die iPad-Version nicht?", "acceptedAnswer": { "@type": "Answer", "text": "iPadOS beendet Verbindungen kurz nachdem die App in den Hintergrund geht, behält Systemkürzel wie Befehl-Tab für sich, gibt Dateien nur über die Dateien-App frei und erlaubt die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf dem iPad nicht." } },
+        { "@type": "Question", "name": "Was können iPhone und iPad nicht?", "acceptedAnswer": { "@type": "Answer", "text": "iOS und iPadOS beenden Verbindungen kurz nachdem die App in den Hintergrund geht, behalten Systemkürzel wie Befehl-Tab für sich, geben Dateien nur über die Dateien-App frei und erlauben die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf iPhone und iPad nicht." } },
         { "@type": "Question", "name": "Unter welcher Lizenz steht Sesam Remote?", "acceptedAnswer": { "@type": "Answer", "text": "Unter der Mozilla Public License 2.0 (MPL-2.0)." } }
       ]
     }
@@ -110,12 +110,12 @@
   <section class="opening" aria-labelledby="titel">
     <div class="wrap hero">
       <h1 id="titel"><span class="l1">Sesam,</span> <span class="l2">öffne&nbsp;dich.</span></h1>
-      <p class="facts">RDP · VNC · SSH · SFTP<br>Mac · Windows · iPad<br>Open Source, MPL-2.0</p>
+      <p class="facts">RDP · VNC · SSH · SFTP<br>Mac · Windows · iPhone · iPad<br>Open Source, MPL-2.0</p>
       <div class="intro">
-        <p class="lead">Bildschirm, Shell und Dateien deiner Macs, Windows-PCs, Linux-Server und Raspberry Pis. In einer App für Mac, Windows und iPad.</p>
+        <p class="lead">Bildschirm, Shell und Dateien deiner Macs, Windows-PCs, Linux-Server und Raspberry Pis. In einer App für Mac, Windows, iPhone und iPad.</p>
         <div class="act">
           <a class="btn" href="#laden">Für Mac laden</a>
-          <a class="link" href="#laden">Windows und iPad</a>
+          <a class="link" href="#laden">Windows, iPhone und iPad</a>
         </div>
       </div>
       <div class="window"><picture><source media="(prefers-color-scheme: dark)" srcset="img/lib-dark-1440.webp 1440w, img/lib-dark-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw"><img src="img/lib-light-1440.webp" srcset="img/lib-light-1440.webp 1440w, img/lib-light-2400.webp 2400w" sizes="(min-width: 900px) 66vw, 100vw" width="1440" height="900" loading="eager" decoding="async" alt="Die Bibliothek von Sesam Remote: Karten für Studio-Mac, Buchhaltung, Werkstatt-PC, Raspberry Pi Wetterstation, Webserver, NAS und Datenbank, nach Gruppen geordnet, mit Online-Status"></picture></div>
@@ -219,7 +219,7 @@
       <div>
         <p class="lead rise" style="--i:1">Sesam spricht direkt mit deinen Rechnern. Dazwischen steht kein Dienst, und ein Konto brauchst du nicht.</p>
         <ul class="keys rise" style="--i:2">
-          <li>Passwörter und Schlüssel liegen verschlüsselt im Schlüsselbund von macOS und iPadOS bzw. in der Windows-Anmeldeinformationsverwaltung.</li>
+          <li>Passwörter und Schlüssel liegen verschlüsselt im Schlüsselbund von macOS, iOS und iPadOS bzw. in der Windows-Anmeldeinformationsverwaltung.</li>
           <li>Zugangsdaten einmal anlegen und mehreren Verbindungen zuweisen; SSH-Schlüssel erzeugt und installiert Sesam selbst.</li>
           <li>Ändert sich ein Hostschlüssel oder Zertifikat, warnt Sesam, statt still weiterzumachen.</li>
           <li>Keine Cloud, keine Telemetrie. Die Sicherung ist eine mit deinem Passwort verschlüsselte Datei.</li>
@@ -231,9 +231,9 @@
 
   <section id="laden" class="platforms" aria-labelledby="plattformen-titel">
     <div class="wrap">
-      <h2 id="plattformen-titel" class="rise">Mac, Windows, iPad. Dieselbe App.</h2>
+      <h2 id="plattformen-titel" class="rise">Mac, Windows, iPhone, iPad. Dieselbe App.</h2>
       <div class="grid">
-        <div class="ipad rise" style="--i:1"><picture><img src="img/ipad-desk-1180.webp" srcset="img/ipad-desk-1180.webp 1180w, img/ipad-desk-2360.webp 2360w" sizes="(min-width: 900px) 60vw, 100vw" width="1180" height="820" loading="lazy" decoding="async" alt="Sesam Remote auf dem iPad: Remotedesktop zu einem Ubuntu-PC mit Sitzungsleiste"></picture></div>
+        <div class="ipad rise" style="--i:1"><picture><img src="img/ipad-desk-1180.webp" srcset="img/ipad-desk-1180.webp 1180w, img/ipad-desk-2360.webp 2360w" sizes="(min-width: 900px) 60vw, 100vw" width="1180" height="820" loading="lazy" decoding="async" alt="Sesam Remote auf dem iPad: Remotedesktop zu einem Ubuntu-PC mit Sitzungsleiste"></picture><div class="iphone"><picture><source srcset="img/iphone-lib-dark-402.webp 402w, img/iphone-lib-dark-804.webp 804w" sizes="(min-width: 900px) 14vw, 26vw" media="(prefers-color-scheme: dark)"><img src="img/iphone-lib-light-402.webp" srcset="img/iphone-lib-light-402.webp 402w, img/iphone-lib-light-804.webp 804w" sizes="(min-width: 900px) 14vw, 26vw" width="402" height="874" loading="lazy" decoding="async" alt="Sesam Remote auf dem iPhone: Liste der Verbindungen mit Gruppen und Tab-Leiste"></picture></div></div>
         <div class="get">
           <article class="rise" style="--i:2">
             <h3>Mac</h3>
@@ -254,8 +254,8 @@
             <p class="alt"><a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Linux.deb" download>.deb-Paket</a> · <a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Linux_x64_portabel.zip" download>Portable Fassung (ZIP)</a></p>
           </article>
           <article class="rise" style="--i:5">
-            <h3>iPad</h3>
-            <p>Ab iPadOS 16, für Finger, Trackpad und Tastatur, mit eigener Leiste für Strg, Alt, Esc und F1 bis F12. Im App Store, vorerst nur in der Schweiz.</p>
+            <h3>iPhone und iPad</h3>
+            <p>Ab iOS und iPadOS 16. Auf dem iPhone mit Tab-Leiste und Bedienung für eine Hand, auf dem iPad für Finger, Trackpad und Tastatur; das iPhone Duo wechselt beim Auf- und Zuklappen. Mit eigener Leiste für Strg, Alt, Esc und F1 bis F12. Im App Store, vorerst nur in der Schweiz.</p>
             <a class="store-badge" href="https://apps.apple.com/ch/app/sesam-remote/id6834800137"><picture><source srcset="img/app-store-badge-de-weiss.svg" media="(prefers-color-scheme: dark)"><img src="img/app-store-badge-de-schwarz.svg" width="144" height="48" alt="Laden im App Store"></picture></a>
           </article>
         </div>
@@ -264,7 +264,7 @@
         <h3 class="rise">Was wo geht</h3>
         <div class="table-wrap rise" style="--i:1">
           <table>
-            <thead><tr><th scope="col">Funktion</th><th scope="col">Mac</th><th scope="col">Windows</th><th scope="col">iPad</th></tr></thead>
+            <thead><tr><th scope="col">Funktion</th><th scope="col">Mac</th><th scope="col">Windows</th><th scope="col">iPhone, iPad</th></tr></thead>
             <tbody>
               <tr><th scope="row">Desktop über RDP und VNC</th><td class="yes">Ja</td><td class="yes">Ja</td><td class="yes">Ja</td></tr>
               <tr><th scope="row">SSH-Shell und Dateien</th><td class="yes">Ja</td><td class="yes">Ja</td><td class="yes">Ja</td></tr>
@@ -284,13 +284,14 @@
     <div class="wrap">
       <h2 id="fragen-titel" class="rise">Gut zu wissen.</h2>
       <div class="cards rise" style="--i:1">
-        <details name="faq" open><summary>Was ist Sesam Remote?</summary><p><span>Eine Open-Source-Fernzugriffs-App für Mac, Windows und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen.</span></p></details>
+        <details name="faq" open><summary>Was ist Sesam Remote?</summary><p><span>Eine Open-Source-Fernzugriffs-App für Mac, Windows, iPhone und iPad. Sie zeigt den Bildschirm entfernter Rechner über RDP oder VNC, öffnet eine SSH-Shell und überträgt Dateien über SFTP oder FTP. Jeder Rechner ist ein Eintrag in einer Bibliothek, mit allen drei Zugängen.</span></p></details>
         <details name="faq"><summary>Mit welchen Rechnern kann sich Sesam verbinden?</summary><p><span>Mit Windows-PCs und -Servern (RDP), Macs mit Bildschirmfreigabe (VNC), Ubuntu mit GNOME Remote Desktop (RDP, auch unter Wayland und am Anmeldebildschirm), Linux mit xrdp oder wayvnc, Raspberry Pi und jedem Server mit SSH oder FTP.</span></p></details>
         <details name="faq"><summary>Brauche ich ein Konto oder einen Cloud-Dienst?</summary><p><span>Nein. Sesam verbindet sich direkt mit deinen Rechnern, im lokalen Netz, über VPN, einen SSH-Sprungserver oder ein RD-Gateway. Es gibt kein Konto, keinen Vermittlungsserver und keine Telemetrie.</span></p></details>
-        <details name="faq"><summary>Wo speichert Sesam meine Passwörter?</summary><p><span>Verschlüsselt im Schlüsselbund des Betriebssystems: im macOS- bzw. iPadOS-Schlüsselbund und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse. Für den Umzug schreibt Sesam eine mit deinem Passwort verschlüsselte Sicherung.</span></p></details>
+        <details name="faq"><summary>Wo speichert Sesam meine Passwörter?</summary><p><span>Verschlüsselt im Schlüsselbund des Betriebssystems: im Schlüsselbund von macOS, iOS und iPadOS und in der Windows-Anmeldeinformationsverwaltung. Die Liste der Verbindungen enthält keine Geheimnisse. Für den Umzug schreibt Sesam eine mit deinem Passwort verschlüsselte Sicherung.</span></p></details>
         <details name="faq"><summary>Funktioniert Sesam mit Ubuntu 26.04 und Wayland?</summary><p><span>Ja. Sesam verbindet sich über RDP mit GNOME Remote Desktop, auch mit dem Anmeldebildschirm, und folgt danach der Übergabe an die Sitzung. Ein Setup-Script richtet feste Ports pro Benutzer ein; Sesam startet es auf Wunsch selbst über SSH.</span></p></details>
         <details name="faq"><summary>Warum gibt es Sesam für den Mac nicht im Mac App Store?</summary><p><span>Die Sandbox des Mac App Store verbietet, was Sesam ausmacht: das lokale Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster. Darum gibt es die Mac-App als Download von dieser Website (die Notarisierung durch Apple folgt).</span></p></details>
-        <details name="faq"><summary>Was kann die iPad-Version nicht?</summary><p><span>iPadOS beendet Verbindungen kurz nachdem die App in den Hintergrund geht, behält Systemkürzel wie ⌘Tab für sich, gibt Dateien nur über die Dateien-App frei und erlaubt die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf dem iPad nicht.</span></p></details>
+        <details name="faq"><summary>Was können iPhone und iPad nicht?</summary><p><span>iOS und iPadOS beenden Verbindungen kurz nachdem die App in den Hintergrund geht, behalten Systemkürzel wie ⌘Tab für sich, geben Dateien nur über die Dateien-App frei und erlauben die Zwischenablage nur im Vordergrund. Ein lokales Terminal gibt es auf iPhone und iPad nicht.</span></p></details>
+        <details name="faq"><summary>Gibt es Sesam auf Englisch?</summary><p><span>Ja. Die App spricht Deutsch und Englisch und folgt der Sprache des Geräts. Unter Einstellungen › Allgemein › Sprache lässt sie sich auch fest einstellen.</span></p></details>
         <details name="faq"><summary>Unter welcher Lizenz steht Sesam?</summary><p><span>Unter der Mozilla Public License 2.0. Die Schriften dieser Website und der App stehen unter der SIL Open Font License, die Symbole unter Windows unter MIT.</span></p></details>
       </div>
     </div>
@@ -305,10 +306,10 @@
           <a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS.dmg" data-os="Mac" download>Mac</a>
           <a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Windows.msi" data-os="Windows" download>Windows</a>
           <a href="https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Linux.AppImage" data-os="Linux" download>Linux</a>
-          <a href="https://apps.apple.com/ch/app/sesam-remote/id6834800137" data-os="iPad">iPad</a>
+          <a href="https://apps.apple.com/ch/app/sesam-remote/id6834800137" data-os="iPad">iPhone, iPad</a>
         </nav>
       </div>
-      <p class="note rise" style="--i:1">Mac: Apple-Chip, signiert und von Apple notarisiert. Windows: 10 und 11, noch ohne Signatur (SmartScreen › Weitere Informationen › Trotzdem ausführen). iPad: im App Store, vorerst nur in der Schweiz.</p>
+      <p class="note rise" style="--i:1">Mac: Apple-Chip, signiert und von Apple notarisiert. Windows: 10 und 11, noch ohne Signatur (SmartScreen › Weitere Informationen › Trotzdem ausführen). iPhone und iPad: im App Store, vorerst nur in der Schweiz.</p>
     </div>
   </section>
 </main>

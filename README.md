@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Bildschirm, Shell und Dateien deiner Rechner, in einer App.</b><br>
-  Open Source für macOS, Windows, Linux und iPad: RDP, VNC, SSH, SFTP und FTP.
+  Open Source für macOS, Windows, Linux, iPhone und iPad: RDP, VNC, SSH, SFTP und FTP.
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
 <p align="center">
   <a href="https://github.com/MiDo1412/sesam-remote/releases/latest"><img src="https://img.shields.io/github/v/release/MiDo1412/sesam-remote?label=Version&color=157a5a" alt="Neueste Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MPL--2.0-157a5a" alt="Lizenz MPL-2.0"></a>
-  <img src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20iPad-555" alt="macOS, Windows, Linux, iPad">
+  <img src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20iPhone%20%C2%B7%20iPad-555" alt="macOS, Windows, Linux, iPhone, iPad">
 </p>
 
 <picture>
@@ -51,7 +51,7 @@ Was auf welchem System geht und warum: [docs/plattformen.md](docs/plattformen.md
 ## Sicherheit und Datenschutz
 
 - Kein Konto, kein Cloud-Dienst, keine Telemetrie. Sesam verbindet sich direkt mit deinen Rechnern.
-- Passwörter und SSH-Schlüssel liegen nur im Schlüsselbund des Systems (macOS- und iPadOS-Schlüsselbund,
+- Passwörter und SSH-Schlüssel liegen nur im Schlüsselbund des Systems (Schlüsselbund von macOS, iOS und iPadOS,
   Windows-Anmeldeinformationsverwaltung, Secret Service unter Linux). Die Bibliothek enthält keine Geheimnisse.
 - Hostschlüssel und Zertifikate werden beim ersten Verbinden bestätigt; ändern sie sich, warnt Sesam.
 - Sicherungen sind mit eigenem Passwort verschlüsselt (AES-256-GCM, Argon2id).
@@ -68,7 +68,7 @@ mit dem Betreff «Sicherheit», nicht als öffentliches Issue.
 | **macOS** (Apple-Chip) | [Sesam-Remote_macOS.dmg](https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS.dmg) · [portabel (ZIP)](https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_macOS_portabel.zip) | Signiert und von Apple notarisiert. Nicht im Mac App Store, weil dessen Sandbox lokales Terminal und Tastenkürzel verbietet. |
 | **Windows** 10 und 11 | [Sesam-Remote_Windows.msi](https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Windows.msi) · [portabel (ZIP)](https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Windows_portabel.zip) | Noch ohne Signatur: SmartScreen › Weitere Informationen › Trotzdem ausführen. MSI still installierbar, auch über Intune ([docs/intune.md](docs/intune.md)). |
 | **Linux** x86-64 | [Sesam-Remote_Linux.AppImage](https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Linux.AppImage) · [.deb](https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Linux.deb) · [portabel (ZIP)](https://github.com/MiDo1412/sesam-remote/releases/latest/download/Sesam-Remote_Linux_x64_portabel.zip) | Mit WebKitGTK, etwa Ubuntu ab 24.04. |
-| **iPad** | bald im App Store | Ab iPadOS 16 ([docs/app-store.md](docs/app-store.md)). |
+| **iPhone, iPad** | [App Store](https://apps.apple.com/ch/app/sesam-remote/id6834800137) (vorerst nur Schweiz) | Ab iOS bzw. iPadOS 16 ([docs/app-store.md](docs/app-store.md)). |
 
 Alle Dateien und Prüfsummen (`SHA256SUMS`): [neueste Version](https://github.com/MiDo1412/sesam-remote/releases/latest).
 Die Mac-App, das AppImage und die portablen Fassungen aktualisieren sich selbst.
@@ -97,7 +97,7 @@ Hilfe bei Problemen: [sesam-remote.app/support.html](https://sesam-remote.app/su
 ## Selbst bauen
 
 Voraussetzungen: Rust (stable), Node 20+; unter Windows WebView2 und die MSVC Build Tools
-([docs/build-windows.md](docs/build-windows.md)); unter Linux WebKitGTK; für das iPad Xcode.
+([docs/build-windows.md](docs/build-windows.md)); unter Linux WebKitGTK; für iPhone und iPad Xcode.
 
 ```bash
 git clone https://github.com/MiDo1412/sesam-remote.git

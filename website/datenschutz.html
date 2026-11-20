@@ -18,7 +18,7 @@
 <main id="inhalt" class="wrap page">
 <h1>Datenschutz&shy;erklärung</h1>
 <p class="lead-sm">Kurz gesagt: Sesam Remote sammelt keine Daten über dich. Alles, was du in der App einträgst, bleibt auf deinem Gerät oder geht nur an die Rechner, mit denen du dich selbst verbindest.</p>
-<p>Gültig für die App Sesam Remote auf macOS, Windows und iPadOS sowie für die Website sesam-remote.app. Stand: 11. November 2026.</p>
+<p>Gültig für die App Sesam Remote auf macOS, Windows, iOS und iPadOS sowie für die Website sesam-remote.app. Stand: 20. November 2026.</p>
 
 <nav class="toc" aria-label="Inhalt">
   <a href="#verantwortlich">Verantwortlich</a>
@@ -42,7 +42,7 @@
   <thead><tr><th scope="col">Daten</th><th scope="col">Wofür</th><th scope="col">Wo</th></tr></thead>
   <tbody>
     <tr><th scope="row">Verbindungen (Name, Gruppe, Adresse, Ports, Benutzername, Einstellungen, zuletzt benutzt, MAC-Adresse für Wake-on-LAN)</th><td>Bibliothek anzeigen und verbinden</td><td>App-Datenordner auf deinem Gerät, unverschlüsselt, ohne Passwörter</td></tr>
-    <tr><th scope="row">Passwörter und SSH-Schlüssel</th><td>Anmelden an deinen Rechnern</td><td>Verschlüsselt im Schlüsselbund des Systems (macOS- bzw. iPadOS-Schlüsselbund, Windows-Anmeldeinformationsverwaltung)</td></tr>
+    <tr><th scope="row">Passwörter und SSH-Schlüssel</th><td>Anmelden an deinen Rechnern</td><td>Verschlüsselt im Schlüsselbund des Systems (Schlüsselbund von macOS, iOS und iPadOS, Windows-Anmeldeinformationsverwaltung)</td></tr>
     <tr><th scope="row">Bestätigte Hostschlüssel und Zertifikate</th><td>Warnen, wenn sich ein Server verändert</td><td>App-Datenordner</td></tr>
     <tr><th scope="row">Vorschaubilder der Desktops</th><td>Karten in der Bibliothek</td><td>App-Datenordner, verkleinert</td></tr>
     <tr><th scope="row">Textbausteine, Terminal-Profile, Gruppen, Einstellungen</th><td>Deine Vorlieben</td><td>App-Datenordner, unverschlüsselt (darum keine Passwörter in Textbausteine)</td></tr>
@@ -56,9 +56,9 @@
 <h2 id="berechtigungen">Berechtigungen</h2>
 <p>Sesam fragt nur nach Berechtigungen, die eine Funktion braucht, und erst wenn du sie nutzt. Du kannst sie jederzeit in den Systemeinstellungen entziehen.</p>
 <ul>
-  <li><b>Lokales Netzwerk</b> (macOS, iPadOS): um Rechner in deinem Netz zu erreichen, ihre Erreichbarkeit zu prüfen und sie per Wake-on-LAN zu wecken.</li>
+  <li><b>Lokales Netzwerk</b> (macOS, iOS, iPadOS): um Rechner in deinem Netz zu erreichen, ihre Erreichbarkeit zu prüfen und sie per Wake-on-LAN zu wecken.</li>
   <li><b>Bedienungshilfen und Eingabeüberwachung</b> (nur macOS, freiwillig): damit Tastenkürzel wie ⌘Tab an den entfernten Rechner gehen statt an deinen Mac. Sesam fängt Tasten nur ab, solange das Bild eines entfernten Rechners aktiv ist, und gibt sie nur an diesen weiter. Nichts wird aufgezeichnet oder gespeichert. Unter Windows geschieht dasselbe ohne eigene Berechtigung.</li>
-  <li><b>Dateien</b>: Sesam liest und schreibt nur Dateien und Ordner, die du für eine Übertragung auswählst oder in die App ziehst. Auf dem iPad läuft das über die Dateien-App.</li>
+  <li><b>Dateien</b>: Sesam liest und schreibt nur Dateien und Ordner, die du für eine Übertragung auswählst oder in die App ziehst. Auf iPhone und iPad läuft das über die Dateien-App.</li>
   <li><b>Zwischenablage</b>: Nur bei aktiver gemeinsamer Zwischenablage gleicht Sesam sie mit dem verbundenen Rechner ab; die Funktion lässt sich je Verbindung ausschalten.</li>
 </ul>
 <p>Sesam nutzt weder Kamera, Mikrofon, Standort, Kontakte, Fotos noch Gesundheitsdaten.</p>
@@ -77,7 +77,7 @@
 <ul>
   <li>macOS: <code>~/Library/Application Support/ch.sesam.remote</code></li>
   <li>Windows: <code>%APPDATA%\ch.sesam.remote</code></li>
-  <li>iPad: Beim Löschen der App entfernt iPadOS ihre Daten.</li>
+  <li>iPhone und iPad: Beim Löschen der App entfernt das System ihre Daten.</li>
 </ul>
 <p>E-Mails an den Support löschen wir, wenn die Anfrage erledigt ist und keine Aufbewahrungspflicht besteht.</p>
 

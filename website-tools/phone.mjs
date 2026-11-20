@@ -2,7 +2,7 @@
 import { createRequire } from 'module'; const { chromium } = createRequire(import.meta.url)('playwright');
 const [,, name, scheme='light', act='', w='402', h='874'] = process.argv;
 const b = await chromium.launch();
-const ctx = await b.newContext({ viewport:{width:+w,height:+h}, deviceScaleFactor:2, colorScheme:scheme, hasTouch:true, isMobile:true,
+const ctx = await b.newContext({ viewport:{width:+w,height:+h}, deviceScaleFactor:2, colorScheme:scheme, locale:'de-CH', hasTouch:true, isMobile:true,
   userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148' });
 const p = await ctx.newPage();
 p.on('pageerror', e => console.log('PAGEERR', e.message));

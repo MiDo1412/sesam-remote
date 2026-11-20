@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Support – Sesam Remote</title>
-<meta name="description" content="Hilfe für Sesam Remote: Kontakt zum Support, Rechner für RDP, VNC und SSH einrichten, Lösungen für häufige Probleme, iPad-Hinweise und Systemvoraussetzungen.">
+<meta name="description" content="Hilfe für Sesam Remote: Kontakt zum Support, Rechner für RDP, VNC und SSH einrichten, Lösungen für häufige Probleme, Hinweise für iPhone und iPad und Systemvoraussetzungen.">
 <link rel="canonical" href="https://sesam-remote.app/support.html">
 <meta name="robots" content="index, follow">
 <meta name="color-scheme" content="light dark">
@@ -120,7 +120,7 @@
      "name": "Sesam vollständig entfernen",
      "acceptedAnswer": {
       "@type": "Answer",
-      "text": "Lösche zuerst in der App deine Verbindungen und Zugangsdaten; damit entfernt Sesam auch die Einträge im Schlüsselbund. Danach die App löschen und den App-Datenordner (siehe sesam.log) entfernen. Auf dem iPad genügt es, die App zu löschen."
+      "text": "Lösche zuerst in der App deine Verbindungen und Zugangsdaten; damit entfernt Sesam auch die Einträge im Schlüsselbund. Danach die App löschen und den App-Datenordner (siehe sesam.log) entfernen. Auf iPhone und iPad genügt es, die App zu löschen."
      }
     }
    ]
@@ -160,7 +160,7 @@
     <p>Damit wir schnell helfen können, schick bitte mit:</p>
     <ul>
       <li>die Version: <i>Einstellungen › Über Sesam</i> (Mac: <i>Sesam Remote › Über Sesam Remote</i>)</li>
-      <li>dein Gerät und System, zum Beispiel «MacBook, macOS 26» oder «iPad Air, iPadOS 26»</li>
+      <li>dein Gerät und System, zum Beispiel «MacBook, macOS 26» oder «iPhone 17, iOS 26»</li>
       <li>das Zielsystem und den Dienst, zum Beispiel «Ubuntu 26.04, RDP»</li>
       <li>was du getan hast, was passiert ist und was du erwartet hast</li>
       <li>bei Verbindungsfehlern das Ergebnis von <i>Erste Hilfe …</i> und auf Wunsch das Protokoll <code>sesam.log</code> (siehe unten). Es enthält keine Passwörter, aber Adressen deiner Rechner.</li>
@@ -172,7 +172,7 @@
 <nav class="toc" aria-label="Themen">
   <a href="#einrichten">Rechner einrichten</a>
   <a href="#probleme">Häufige Probleme</a>
-  <a href="#ipad">iPad</a>
+  <a href="#ipad">iPhone und iPad</a>
   <a href="#daten">Daten und Umzug</a>
   <a href="#system">Voraussetzungen</a>
 </nav>
@@ -247,13 +247,13 @@
   <p>Im App-Datenordner: macOS <code>~/Library/Application Support/ch.sesam.remote</code>, Windows <code>%APPDATA%\ch.sesam.remote</code>. Sesam schreibt keine Passwörter hinein.</p>
 </details>
 
-<h2 id="ipad">iPad</h2>
-<p>Einige Grenzen setzt iPadOS selbst:</p>
+<h2 id="ipad">iPhone und iPad</h2>
+<p>Einige Grenzen setzen iOS und iPadOS selbst:</p>
 <ul>
   <li>Verbindungen enden kurz, nachdem Sesam in den Hintergrund geht. Beim Zurückkehren verbindest du neu; RDP-Sitzungen laufen auf dem Rechner weiter.</li>
-  <li>⌘Tab, ⌘Leertaste und die Globus-Taste bleiben beim iPad. Für Strg, Alt, Esc und F1 bis F12 gibt es die Tastenleiste von Sesam.</li>
+  <li>⌘Tab, ⌘Leertaste und die Globus-Taste bleiben beim System. Für Strg, Alt, Esc und F1 bis F12 gibt es die Tastenleiste von Sesam.</li>
   <li>Dateien tauschst du über die Dateien-App aus; die Zwischenablage gleicht Sesam nur im Vordergrund ab.</li>
-  <li>Ein lokales Terminal gibt es auf dem iPad nicht.</li>
+  <li>Ein lokales Terminal gibt es auf iPhone und iPad nicht.</li>
 </ul>
 
 <h2 id="daten">Daten, Umzug und Deinstallation</h2>
@@ -263,7 +263,7 @@
 </details>
 <details>
   <summary>Sesam vollständig entfernen</summary>
-  <p>Lösche zuerst in der App deine Verbindungen und Zugangsdaten; damit entfernt Sesam auch die Einträge im Schlüsselbund. Danach die App löschen und den App-Datenordner (siehe sesam.log) entfernen. Auf dem iPad genügt es, die App zu löschen.</p>
+  <p>Lösche zuerst in der App deine Verbindungen und Zugangsdaten; damit entfernt Sesam auch die Einträge im Schlüsselbund. Danach die App löschen und den App-Datenordner (siehe sesam.log) entfernen. Auf iPhone und iPad genügt es, die App zu löschen.</p>
 </details>
 
 <h2 id="system">Voraussetzungen</h2>
@@ -271,7 +271,7 @@
   <tbody>
     <tr><th scope="row">Mac</th><td>macOS, Download von <a href="/#laden">sesam-remote.app</a>, signiert und von Apple notarisiert</td></tr>
     <tr><th scope="row">Windows</th><td>Windows 10 oder 11 mit Microsoft Edge WebView2 (bei Windows 11 vorinstalliert)</td></tr>
-    <tr><th scope="row">iPad</th><td>iPadOS 16 oder neuer, aus dem <a href="https://apps.apple.com/ch/app/sesam-remote/id6834800137">App Store</a> (vorerst nur Schweiz)</td></tr>
+    <tr><th scope="row">iPhone, iPad</th><td>iOS bzw. iPadOS 16 oder neuer, aus dem <a href="https://apps.apple.com/ch/app/sesam-remote/id6834800137">App Store</a> (vorerst nur Schweiz)</td></tr>
     <tr><th scope="row">Zielrechner</th><td>RDP (Windows Pro/Enterprise, GNOME Remote Desktop, xrdp), VNC (macOS, wayvnc, RealVNC), SSH, SFTP, FTP oder FTPS</td></tr>
   </tbody>
 </table>
