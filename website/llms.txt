@@ -8,7 +8,7 @@ Website: https://sesam-remote.app/ (Deutsch). App-Name im System: «Sesam Remote
 
 - Mac: signierter und von Apple notarisierter Download von https://sesam-remote.app/ . Bewusst nicht im Mac App Store, weil dessen Sandbox lokales Terminal, Tastenkürzel an den entfernten Rechner, Desktop-Verknüpfungen und freie Dateifenster verbietet.
 - Windows 10 und 11: Download von https://sesam-remote.app/ .
-- iPhone und iPad (iOS/iPadOS 16 oder neuer): im App Store, vorerst nur in der Schweiz (https://apps.apple.com/ch/app/sesam-remote/id6834800137).
+- iPhone und iPad (iOS/iPadOS 16 oder neuer): im App Store, weltweit ausser Frankreich und China (https://apps.apple.com/ch/app/sesam-remote/id6834800137).
 
 ## Zugänge pro Rechner («Ein Gerät, drei Türen»)
 
