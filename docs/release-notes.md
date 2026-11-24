@@ -18,6 +18,16 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.13 — 2026-11-24
+
+SSH-Schlüssel von Azure, AWS und OpenSSL funktionieren jetzt, und die Schlüsseldatei lässt sich direkt wählen.
+
+### Verbessert
+
+- **SSH-Schlüssel aus Azure, AWS und OpenSSL:** Sesam nimmt jetzt auch RSA-Schlüssel und PEM-Dateien (zum Beispiel die `.pem`-Datei, die Azure beim Anlegen einer VM ausgibt), dazu wie bisher OpenSSH und PuTTY (`.ppk`). Mit Passphrase geschützte Schlüssel gehen ebenfalls; das Passwort der Verbindung dient als Passphrase.
+- **Schlüsseldatei wählen:** Im Verbindungs-Sheet und bei den Zugangsdaten gibt es neben dem Einfügen jetzt «Datei wählen …», auf iPad und iPhone über die Dateien-App. Der Schlüssel liegt danach verschlüsselt im Tresor, die Datei braucht Sesam nicht mehr.
+- **Klarere Meldungen:** Wer einen öffentlichen Schlüssel oder ein Zertifikat einfügt, erfährt das jetzt, statt nur «kein gültiger Schlüssel» zu lesen.
+
 ## 26.11.12 — 2026-11-19
 
 ### Neu
