@@ -25,9 +25,10 @@ sudo ufw allow 22/tcp
 
 ## Mit Schlüssel statt Passwort anmelden
 
-Sesam nimmt **ed25519- und ECDSA-Schlüssel**, im OpenSSH-Format oder als PuTTY-Datei (`.ppk`, Version 2 und 3).
-RSA passt nicht in den Tresor von Windows. Ist der Schlüssel mit einer Passphrase geschützt, gilt das
-Passwort der Verbindung als Passphrase. Auf diesem Computer erzeugen:
+Sesam nimmt **ed25519-, ECDSA- und RSA-Schlüssel** im OpenSSH-Format, als PEM-Datei (`BEGIN RSA PRIVATE KEY`,
+`BEGIN PRIVATE KEY`, `BEGIN EC PRIVATE KEY`, wie sie Azure, AWS oder OpenSSL ausgeben) oder als PuTTY-Datei
+(`.ppk`, Version 2 und 3). Ist der Schlüssel mit einer Passphrase geschützt, gilt das Passwort der Verbindung
+als Passphrase. Einen neuen Schlüssel auf diesem Computer erzeugen:
 
 ```
 ssh-keygen -t ed25519
@@ -42,8 +43,10 @@ ssh-copy-id <benutzer>@<server>
 Unter Windows ohne `ssh-copy-id` den Inhalt von `%USERPROFILE%\.ssh\id_ed25519.pub` auf dem
 Server ans Ende von `~/.ssh/authorized_keys` anfügen.
 
-**In Sesam:** im Sheet bei «SSH-Schlüssel» «Schlüssel importieren …» wählen und den Inhalt von
-`id_ed25519` (ohne `.pub`) oder der `.ppk`-Datei einfügen. Der Schlüssel liegt danach im Tresor.
+**In Sesam:** im Sheet bei «SSH-Schlüssel» «Schlüssel einfügen oder Datei wählen …» wählen und mit
+«Datei wählen …» die Schlüsseldatei öffnen (`id_ed25519` ohne `.pub`, `.pem` oder `.ppk`; auf iPad und iPhone
+über «Dateien») oder ihren Inhalt einfügen. Der Schlüssel liegt danach verschlüsselt im Tresor, die Datei
+braucht Sesam nicht mehr.
 
 ## Beim ersten Verbinden
 

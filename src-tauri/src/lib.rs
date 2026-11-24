@@ -453,11 +453,23 @@ fn new_sid(id: &str) -> String {
 }
 
 /// Schnelle Verbindungen: nicht in der Bibliothek, nur für diese Sitzung der App.
+/// Gewählte Schlüsseldatei lesen und prüfen; der Inhalt kommt ins Formular und wird wie ein eingefügter Schlüssel
+/// verschlüsselt gespeichert. Nur gültige Schlüssel kommen zurück, also kein allgemeines Lesen beliebiger Dateien.
+#[tauri::command]
+fn read_key_file(path: String) -> Result<String, String> {
+    use std::io::Read;
+    let mut buf = Vec::new();
+    std::fs::File::open(&path).and_then(|f| f.take(64 * 1024).read_to_end(&mut buf)).map_err(|e| format!("Schlüsseldatei nicht lesbar: {e}"))?;
+    let key = String::from_utf8(buf).map_err(|_| "Das ist keine Textdatei und damit kein SSH-Schlüssel.".to_string())?;
+    ssh::check_private_key(&key)?;
+    Ok(key)
+}
+
 static QUICK: Mutex<Vec<Connection>> = Mutex::new(Vec::new());
 
 /// Schnelle Verbindung anlegen (nichts wird gespeichert). Gibt die ID zurück.
 #[tauri::command]
-/// `key_file`: Pfad einer privaten Schlüsseldatei (OpenSSH oder PuTTY .ppk), nur im Arbeitsspeicher gehalten.
+/// `key_file`: Pfad einer privaten Schlüsseldatei (OpenSSH, PEM oder PuTTY .ppk), nur im Arbeitsspeicher gehalten.
 /// Gespeicherte Zugangsdaten (`credential_id`) liefern Schlüssel/Passwort aus dem Tresor; ohne Benutzer auch diesen.
 fn quick_register(path: State<LibraryPath>, mut connection: Connection, password: Option<String>, key_file: Option<String>) -> Result<String, String> {
     connection.id = format!("quick-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
@@ -474,8 +486,7 @@ fn quick_register(path: State<LibraryPath>, mut connection: Connection, password
         connection.has_password = true;
     }
     if let Some(f) = key_file.filter(|f| !f.is_empty()) {
-        let key = std::fs::read_to_string(&f).map_err(|e| format!("Schlüsseldatei nicht lesbar: {e}"))?;
-        ssh::check_private_key(&key)?;
+        let key = read_key_file(f)?;
         vault::set_ephemeral(&connection.id, Kind::SshKey, &key);
         connection.has_key = true;
     }
@@ -2817,6 +2828,7 @@ pub fn run() {
             save_bytes,
             certs_list,
             quick_register,
+            read_key_file,
             creds_list,
             cred_test,
             backup_export,

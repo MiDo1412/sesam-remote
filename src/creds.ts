@@ -168,7 +168,22 @@ export function openCred(existing: Cred | null): Promise<Cred | null> {
   });
 }
 
+/** Schlüsseldatei wählen (auf iPad/iPhone über «Dateien») und ihren Inhalt ins Feld übernehmen; gespeichert wird wie eingefügt. */
+export async function pickKeyFile(field: HTMLTextAreaElement, error: HTMLElement) {
+  // Ohne Filter: OpenSSH-Schlüssel haben meist keine Endung (id_ed25519), PEM-Dateien .pem, .key oder .cer.
+  const p = await openDialog({ multiple: false, title: tr("Privater SSH-Schlüssel") }).catch(() => null);
+  if (typeof p !== "string") return;
+  try {
+    field.value = (await api.readKeyFile(p)).trim();
+    error.textContent = "";
+  } catch (e) {
+    error.textContent = String(e);
+  }
+}
+
 export function initCreds() {
+  const form = $<HTMLFormElement>("cred-form");
+  form.querySelector<HTMLButtonElement>(".key-file")!.onclick = () => void pickKeyFile(form.elements.namedItem("key") as HTMLTextAreaElement, $("cred-error"));
   $("cred-new").onclick = () => openCred(null);
   $("cred-search").oninput = () => void renderCredList();
   $("cred-export").onclick = () => void exportBackup().catch((e) => tell("Nicht gesichert", String(e)));

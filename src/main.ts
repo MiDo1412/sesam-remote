@@ -23,7 +23,7 @@ import { initQuick } from "./quick";
 import { runOnTarget } from "./setup";
 import { initFieldHelp } from "./fieldhelp";
 import { forgetThumb, renderThumb } from "./thumbs";
-import { adoptFromConnection, initCreds, openCred } from "./creds";
+import { adoptFromConnection, initCreds, openCred, pickKeyFile } from "./creds";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrent as deepLinkCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { openMenu } from "./menu";
@@ -1101,6 +1101,7 @@ if (isMobile) {
 
 const keyMode = form.elements.namedItem("keyMode") as HTMLSelectElement;
 keyMode.addEventListener("change", () => ($("key-row").hidden = keyMode.value !== "import"));
+$("key-row").querySelector<HTMLButtonElement>(".key-file")!.onclick = () => void pickKeyFile(form.elements.namedItem("key") as HTMLTextAreaElement, $("editor-error"));
 $("editor-cancel").onclick = () => dlg.close();
 
 $("editor-delete").onclick = async () => {

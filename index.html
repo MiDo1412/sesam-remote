@@ -131,15 +131,16 @@
           <input name="password" type="password" autocomplete="new-password" />
           <span class="hint"><small id="pw-hint"></small><button type="button" class="link" id="pw-clear" hidden>Entfernen</button></span>
         </label>
-        <label class="span own-cred" data-tip="Nur für SSH. Mit Schlüssel meldet sich Sesam ohne Passwort an (ed25519 oder ECDSA, OpenSSH oder PuTTY). Ein Passwort oben dient dann als Passphrase des Schlüssels.">SSH-Schlüssel
+        <label class="span own-cred" data-tip="Nur für SSH. Mit Schlüssel meldet sich Sesam ohne Passwort an (ed25519, ECDSA oder RSA; OpenSSH, PEM oder PuTTY). Ein Passwort oben dient dann als Passphrase des Schlüssels.">SSH-Schlüssel
           <select name="keyMode">
             <option value="keep">Unverändert</option>
             <option value="none">Keiner, nur Passwort</option>
-            <option value="import">Schlüssel importieren …</option>
+            <option value="import">Schlüssel einfügen oder Datei wählen …</option>
           </select>
         </label>
-        <label class="span" id="key-row" hidden>Privater Schlüssel: ed25519 oder ECDSA, OpenSSH-Format oder PuTTY (.ppk)
+        <label class="span" id="key-row" hidden>Privater Schlüssel: OpenSSH, PEM (z. B. von Azure oder AWS) oder PuTTY (.ppk)
           <textarea name="key" rows="4" class="mono" spellcheck="false"></textarea>
+          <span class="hint"><small>Inhalt einfügen oder</small><button type="button" class="link key-file">Datei wählen …</button></span>
         </label>
 
         <h3 class="sec span">Dienste</h3>
@@ -359,7 +360,9 @@
         <label class="span">Name<input name="name" required placeholder="z. B. Büro-Konto" /></label>
         <label>Benutzername<input name="user" autocomplete="off" /></label>
         <label>Passwort<input name="password" type="password" autocomplete="new-password" /><small id="cred-pw-hint"></small></label>
-        <label class="span">Privater SSH-Schlüssel (optional, OpenSSH-Format)<textarea name="key" rows="3" class="mono" spellcheck="false" placeholder="leer = unverändert"></textarea></label>
+        <label class="span">Privater SSH-Schlüssel (optional: OpenSSH, PEM oder PuTTY .ppk)<textarea name="key" rows="3" class="mono" spellcheck="false" placeholder="leer = unverändert"></textarea>
+          <span class="hint"><small>Inhalt einfügen oder</small><button type="button" class="link key-file">Datei wählen …</button></span>
+        </label>
         <p id="cred-error" class="error span" role="alert"></p>
         <div class="row actions"><span></span><button type="button" id="cred-cancel">Abbrechen</button><button type="submit" class="primary">Sichern</button></div>
       </form>

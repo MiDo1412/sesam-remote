@@ -28,7 +28,8 @@ Die Felder `hasPassword`/`hasKey` sind nur Merker für die Anzeige.
 ### vault (fertig)
 Crate `keyring` 4 (Modus `v1`): Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund.
 Dienst `ch.sesam.remote`, Konto `<id>:password` bzw. `<id>:ssh-key`.
-Grenzen: Windows erlaubt höchstens 2560 Byte pro Eintrag (ed25519 passt, RSA-4096 nicht).
+Grenzen: Windows erlaubt höchstens 2560 Byte pro Eintrag. Längere Geheimnisse (RSA-Schlüssel) legt
+`vault::set` in Teilen ab: `<id>:ssh-key` hält `sesam-parts:<n>`, die Teile heissen `<id>:ssh-key#1` usw.
 `keyring` v1 unterstützt **kein iOS**; für das iPad direkt `keyring-core` mit
 `apple-native-keyring-store` (Feature `protected`) einbinden.
 
@@ -297,9 +298,10 @@ werden abgelehnt (keine eingeschleusten Befehle). Rechte über `SITE CHMOD`. Gre
 werden aus der Liste bestimmt; ein Server, der Punktdateien nicht auflistet, kann eine gleichnamige
 Punktdatei beim Umbenennen der Teildatei überschreiben.
 
-**Schlüssel:** ed25519 und ECDSA, OpenSSH-Format oder PuTTY `.ppk` v2/v3 (über `ssh-key`, auch mit
-Passphrase; Passphrase = Passwort der Verbindung). RSA nicht, weil Windows Geheimnisse als UTF-16 mit
-höchstens 2560 Byte speichert (1280 Zeichen; RSA-2048 im OpenSSH-Format hat rund 1800).
+**Schlüssel:** ed25519, ECDSA und RSA im OpenSSH-Format, als PEM (PKCS#1, PKCS#8 auch verschlüsselt, EC/SEC1,
+altes OpenSSL-Format nur mit AES-128-CBC) oder PuTTY `.ppk` v2/v3, gelesen mit `russh::keys::decode_secret_key`
+(Passphrase = Passwort der Verbindung). Gespeichert wird der Text wie eingefügt bzw. aus der gewählten Datei
+gelesen (`read_key_file`); RSA passt nur in Teilen in den Windows-Tresor (siehe vault).
 
 **Agent:** «SSH-Agent verwenden» probiert zuerst Pageant, dann `\\.\pipe\openssh-ssh-agent`
 (unter macOS/Linux `SSH_AUTH_SOCK`). Agent-Weiterleitung auf Wunsch, nur für die Shell; Agent-Kanäle

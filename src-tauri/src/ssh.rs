@@ -178,11 +178,9 @@ fn known_hosts_file() -> Result<std::path::PathBuf, String> {
 /// Fehler-Präfix, auf das das Frontend mit einer Rückfrage reagiert: `HOSTKEY_UNKNOWN:<Algorithmus>|<SHA256-Fingerabdruck>`.
 pub const HOSTKEY_UNKNOWN: &str = "HOSTKEY_UNKNOWN:";
 
-/// Windows speichert Geheimnisse als UTF-16 mit höchstens 2560 Byte, also 1280 Zeichen.
-const VAULT_MAX_CHARS: usize = 1280;
+/// Längster Schlüsseltext, den Sesam annimmt (RSA mit 16384 Bit braucht rund 12 KB).
+const KEY_MAX_CHARS: usize = 16 * 1024;
 
-/// ed25519 oder ECDSA im OpenSSH- oder PuTTY-Format (.ppk v2/v3), klein genug für jeden Tresor.
-/// RSA passt ab 2048 Bit nicht mehr in die Windows-Anmeldeinformationsverwaltung.
 /// Neuer Ed25519-Schlüssel im OpenSSH-Format (privat) und der öffentliche Schlüssel als eine Zeile.
 pub fn generate_ed25519(comment: &str) -> Result<(String, String), String> {
     let mut seed = [0u8; 32];
@@ -198,7 +196,7 @@ pub fn generate_ed25519(comment: &str) -> Result<(String, String), String> {
 /// Öffentlicher Schlüssel (eine Zeile wie in authorized_keys) zu einem gespeicherten privaten Schlüssel.
 pub fn public_key_of(private: &str) -> Result<String, String> {
     let t = private.trim();
-    let k = if t.starts_with("PuTTY-User-Key-File-") { keys::PrivateKey::from_ppk(t, None) } else { keys::PrivateKey::from_openssh(t) }
+    let k = keys::decode_secret_key(t, None)
         .map_err(|e| format!("Schlüssel nicht lesbar (mit Passphrase geschützt?): {e}"))?;
     k.public_key().to_openssh().map_err(|e| e.to_string())
 }
@@ -214,11 +212,16 @@ pub fn install_key_script(public: &str) -> Result<String, String> {
     ))
 }
 
+/// Prüft einen privaten Schlüssel: OpenSSH, PEM (PKCS#1, PKCS#8, EC/SEC1, auch verschlüsselt) oder PuTTY .ppk v2/v3,
+/// alle Typen (ed25519, ECDSA, RSA). Verschlüsselte Schlüssel lassen sich ohne Passphrase nur grob prüfen;
+/// ganz geprüft wird beim Verbinden (Passphrase = Passwort).
 pub fn check_private_key(text: &str) -> Result<(), String> {
     let t = text.trim();
-    let algorithm = if let Some(rest) = t.strip_prefix("PuTTY-User-Key-File-") {
-        // Kopfzeile «PuTTY-User-Key-File-3: ssh-ed25519». Verschlüsselte Dateien lassen sich ohne
-        // Passphrase nicht ganz prüfen; das geschieht beim Verbinden (Passphrase = Passwort).
+    if t.chars().count() > KEY_MAX_CHARS {
+        return Err("Schlüssel ist zu gross (höchstens 16 KB)".into());
+    }
+    if let Some(rest) = t.strip_prefix("PuTTY-User-Key-File-") {
+        // Kopfzeile «PuTTY-User-Key-File-3: ssh-ed25519»
         let (version, alg) = rest.lines().next().and_then(|l| l.split_once(": ")).ok_or("Ungültige PuTTY-Schlüsseldatei")?;
         if !["2", "3"].contains(&version) {
             return Err(format!("PuTTY-Schlüsseldatei Version {version} wird nicht unterstützt (nur 2 und 3)"));
@@ -226,21 +229,31 @@ pub fn check_private_key(text: &str) -> Result<(), String> {
         if t.contains("\nEncryption: none") {
             keys::PrivateKey::from_ppk(t, None).map_err(|e| format!("PuTTY-Schlüsseldatei nicht lesbar: {e}"))?;
         }
-        alg.parse::<keys::Algorithm>().map_err(|_| format!("Unbekannter Schlüsseltyp {alg}"))?
-    } else {
-        keys::PrivateKey::from_openssh(t)
-            .map_err(|_| "Kein gültiger privater Schlüssel (OpenSSH-Format oder PuTTY .ppk)".to_string())?
-            .algorithm()
-    };
-    if !matches!(algorithm, keys::Algorithm::Ed25519 | keys::Algorithm::Ecdsa { .. }) {
-        return Err(format!(
-            "Nur ed25519- und ECDSA-Schlüssel werden unterstützt ({algorithm} ist zu gross für den Tresor). Neuen Schlüssel erzeugen: ssh-keygen -t ed25519"
-        ));
+        alg.parse::<keys::Algorithm>().map_err(|_| format!("Unbekannter Schlüsseltyp {alg}"))?;
+        return Ok(());
     }
-    if text.encode_utf16().count() > VAULT_MAX_CHARS {
-        return Err("Schlüssel ist zu gross für den Tresor (höchstens 1280 Zeichen)".into());
+    let first = t.lines().next().unwrap_or("").trim();
+    if first.starts_with("ssh-") || first.starts_with("ecdsa-") || first.contains("PUBLIC KEY") {
+        return Err("Das ist ein öffentlicher Schlüssel. Nötig ist der private Schlüssel (bei OpenSSH die Datei ohne .pub).".into());
     }
-    Ok(())
+    if first.contains("CERTIFICATE") {
+        return Err("Das ist ein Zertifikat, kein privater SSH-Schlüssel.".into());
+    }
+    if t.contains("Proc-Type: 4,ENCRYPTED") {
+        // Altes OpenSSL-Format mit Passphrase: russh entschlüsselt davon nur AES-128-CBC.
+        return if t.contains("DEK-Info: AES-128-CBC,") {
+            Ok(())
+        } else {
+            Err("Diese Verschlüsselung des PEM-Schlüssels wird nicht unterstützt. Umwandeln ins OpenSSH-Format: ssh-keygen -p -f schluesseldatei".into())
+        };
+    }
+    if first == "-----BEGIN ENCRYPTED PRIVATE KEY-----" {
+        return Ok(());
+    }
+    match keys::decode_secret_key(t, None) {
+        Ok(_) | Err(keys::Error::KeyIsEncrypted) => Ok(()),
+        Err(_) => Err("Kein gültiger privater SSH-Schlüssel. Unterstützt: OpenSSH, PEM (RSA, EC, PKCS#8) oder PuTTY (.ppk).".into()),
+    }
 }
 
 pub struct Target {
@@ -715,12 +728,37 @@ Private-MAC: 4df1d2227cb63bbbaf0821816cb82afffc2c97163d22afb114f68621a55b07c7
             assert!(check_private_key(k).is_ok(), "{:?}", check_private_key(k));
         }
         let rsa = "PuTTY-User-Key-File-3: ssh-rsa\nEncryption: aes256-cbc\n";
-        assert!(check_private_key(rsa).unwrap_err().contains("Nur ed25519- und ECDSA"));
+        assert!(check_private_key(rsa).is_ok());
         assert!(check_private_key("PuTTY-User-Key-File-1: ssh-ed25519\n").unwrap_err().contains("Version 1"));
         let broken = PPK_ED25519.replace("Private-MAC: 9", "Private-MAC: 8");
         assert!(check_private_key(&broken).is_err());
         assert!(check_private_key("kein Schlüssel").is_err());
-        assert!(check_private_key(&format!("{ED25519}{}", " ".repeat(1300))).unwrap_err().contains("zu gross"));
+        assert!(check_private_key(&format!("{ED25519}{}", "A".repeat(17000))).unwrap_err().contains("zu gross"));
+        assert!(check_private_key("ssh-ed25519 AAAA… user@host").unwrap_err().contains("öffentlicher"));
+    }
+
+    /// PEM-Schlüssel, wie sie Azure, AWS oder OpenSSL ausgeben (Testschlüssel, nirgends hinterlegt).
+    #[test]
+    fn pem_keys() {
+        let rsa = include_str!("testdata/keys/rsa-pkcs1-crlf.pem"); // Azure: PKCS#1, CRLF, 2498 Byte
+        for (k, alg) in [
+            (rsa, "rsa"),
+            (include_str!("testdata/keys/ec-sec1.pem"), "ecdsa"),
+            (include_str!("testdata/keys/ec-pkcs8.pem"), "ecdsa"),
+            (include_str!("testdata/keys/ed25519-pkcs8.pem"), "ed25519"),
+        ] {
+            assert!(check_private_key(k).is_ok(), "{alg}: {:?}", check_private_key(k));
+            // So liest `authenticate` und `public_key_of` den Schlüssel.
+            assert!(public_key_of(k).unwrap().contains(alg), "{alg}");
+        }
+        let enc = include_str!("testdata/keys/ed25519-pkcs8-enc.pem");
+        assert!(check_private_key(enc).is_ok());
+        assert_eq!(keys::decode_secret_key(enc, Some("geheim")).unwrap().algorithm(), keys::Algorithm::Ed25519);
+        let aes = include_str!("testdata/keys/rsa-pkcs1-aes128.pem");
+        assert!(check_private_key(aes).is_ok());
+        assert!(keys::decode_secret_key(aes, Some("geheim")).unwrap().algorithm().is_rsa());
+        assert!(check_private_key(include_str!("testdata/keys/rsa-pkcs1-des3.pem")).unwrap_err().contains("ssh-keygen -p"));
+        assert!(check_private_key(&rsa.replace("MII", "XXX")).unwrap_err().contains("PEM (RSA"));
     }
 
     #[test]
