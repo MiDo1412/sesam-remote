@@ -57,5 +57,12 @@ npx tauri build --bundles appimage,deb
 node scripts/portable.mjs
 ```
 
+In WSL stolpert linuxdeploy (AppImage) über die Windows-Ordner im `PATH` («Permission denied» unter
+`/mnt/c/…/WindowsApps`). Dann nur mit Linux-Pfaden bauen:
+
+```bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin APPIMAGE_EXTRACT_AND_RUN=1 npx tauri build --bundles appimage,deb
+```
+
 Konfiguration: `src-tauri/tauri.conf.json` › `bundle.windows` (UpgradeCode, Sprache, WebView2). Das MSI nutzt
 die Standardvorlage von Tauri: pro Computer, Desktop- und Startmenü-Verknüpfung ohne Bedingung, kein Neustart.
