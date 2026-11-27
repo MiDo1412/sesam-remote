@@ -107,6 +107,13 @@ pub fn rparent(path: &str) -> Option<String> {
     Some(if head.is_empty() { "/".into() } else { head.into() })
 }
 
+/// Papierkorb-Fach «JJJJMMTT-HHMMSS…» älter als `cut`? Andere Namen (auch Mehrbyte-Zeichen) bleiben liegen.
+fn is_expired_trash_slot(name: &str, cut: &str) -> bool {
+    let Some(p) = name.get(..15) else { return false };
+    let b = p.as_bytes();
+    b.iter().enumerate().all(|(i, c)| if i == 8 { *c == b'-' } else { c.is_ascii_digit() }) && p < cut
+}
+
 /// «bericht.pdf» → «bericht (2).pdf»; Ordner und Dateien ohne Endung bekommen die Zahl hinten.
 pub(crate) fn numbered(name: &str, n: u32, dir: bool) -> String {
     match name.rsplit_once('.') {
@@ -243,7 +250,7 @@ impl Sftp {
             if n == "." || n == ".." {
                 continue;
             }
-            if n.len() >= 15 && n[..15] < *cut {
+            if is_expired_trash_slot(&n, &cut) {
                 let _ = self.remove(&rjoin(&root, &n)).await;
             } else {
                 left += 1;
@@ -349,7 +356,7 @@ impl Sftp {
         }
     }
 
-    async fn unique(&self, dir: &str, name: &str, is_dir: bool) -> Result<String, String> {
+    pub(crate) async fn unique(&self, dir: &str, name: &str, is_dir: bool) -> Result<String, String> {
         let mut p = rjoin(dir, name);
         let mut n = 2;
         while self.s.try_exists(&p).await.map_err(err)? {
@@ -484,7 +491,16 @@ pub fn sudo_op_script(op: &str, path: &str, arg: &str) -> Result<String, String>
             let slot = rparent(path).ok_or("Ungültiger Pfad")?;
             let meta = q(&format!("{slot}/.sesam-meta"))?;
             let (o, slot) = (q(arg)?, trash_arg(&slot)?);
-            Ok(format!("cp -a -- {p} {o} && if [ -s {meta} ]; then set -- $(cat {meta}); {{ chown \"$1\" {o} 2>/dev/null || true; }} && chmod \"$2\" {o}; fi && rm -rf -- {slot}"))
+            // `.sesam-meta` gehört dem Benutzer: nur «uid:gid» und Oktalrechte annehmen, nie als Shell-Wörter auswerten.
+            // Ein vorhandener Ordner (oder eine Verknüpfung) am Ziel wird ersetzt, sonst kopierte `cp -a` hinein.
+            Ok(format!(
+                "if [ -d {o} ] || [ -L {o} ]; then rm -rf -- {o}; fi && cp -a -- {p} {o} && if [ -s {meta} ]; then \
+                 IFS=' ' read -r owner mode rest < {meta}; \
+                 case \"$owner\" in *[!0-9:]*|:*|*:|*:*:*) owner=;; *:*) ;; *) owner=;; esac; \
+                 case \"$mode\" in ???|????) case \"$mode\" in *[!0-7]*) mode=;; esac;; *) mode=;; esac; \
+                 if [ -n \"$owner\" ]; then chown -- \"$owner\" {o} 2>/dev/null || true; fi; \
+                 if [ -n \"$mode\" ]; then chmod -- \"$mode\" {o}; fi; fi && rm -rf -- {slot}"
+            ))
         }
         // Zum Herunterladen: Kopie in einen temporären Ordner, die dem angemeldeten Benutzer gehört.
         "fetch" => {
@@ -723,6 +739,22 @@ pub async fn wait_if_paused() {
     }
 }
 
+/// Ordnertiefe, ab der ein Download abbricht (der Server bestimmt den Baum, security-review-2026-11-11, S-06).
+pub(crate) const MAX_DEPTH: usize = 64;
+pub(crate) const TOO_DEEP: &str = "Ordner zu tief verschachtelt (mehr als 64 Ebenen), abgebrochen";
+
+tokio::task_local! {
+    /// Restliche Bytes, die eine Übertragung noch schreiben darf (gesetzt z. B. für die Zwischenablage). Gilt beim
+    /// Streamen, auch wenn der Server vorher eine kleinere Grösse gemeldet hat.
+    pub static BUDGET: Arc<std::sync::atomic::AtomicU64>;
+}
+
+/// `n` Bytes vom Budget abziehen; `false`, wenn es nicht mehr reicht. Ohne Budget immer `true`.
+fn spend(n: u64) -> bool {
+    use std::sync::atomic::Ordering::SeqCst;
+    BUDGET.try_with(|b| b.fetch_update(SeqCst, SeqCst, |left| left.checked_sub(n)).is_ok()).unwrap_or(true)
+}
+
 async fn pump<R, W, F>(mut r: R, mut w: W, m: &mut Meter<F>, file: &str) -> Result<(), String>
 where
     R: AsyncRead + Unpin,
@@ -735,6 +767,9 @@ where
         let n = r.read(&mut buf).await.map_err(err)?;
         if n == 0 {
             break;
+        }
+        if !spend(n as u64) {
+            return Err(format!("{file}: grösser als erlaubt, abgebrochen"));
         }
         w.write_all(&buf[..n]).await.map_err(err)?;
         m.add(n as u64, file);
@@ -830,16 +865,19 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
     let root = if replace && !is_dir { local_dir.join(name) } else { local_unique(local_dir, name, is_dir) };
 
     let (mut plan, mut total) = (Vec::new(), 0u64);
-    let mut stack = vec![(remote.to_string(), root.clone(), meta)];
-    while let Some((src, dst, m)) = stack.pop() {
+    let mut stack = vec![(remote.to_string(), root.clone(), meta, 0)];
+    while let Some((src, dst, m, depth)) = stack.pop() {
         if m.file_type().is_dir() {
+            if depth >= MAX_DEPTH {
+                return Err(TOO_DEEP.into());
+            }
             plan.push(Item { src: src.clone(), dst: dst.to_string_lossy().into(), dir: true, mtime: None });
             for e in sftp.s.read_dir(&src).await.map_err(err)? {
                 let n = e.file_name();
                 // Nur echte Dateien und Ordner; Verknüpfungen nicht verfolgen (keine Schleifen).
                 // Namen vom Server, die lokal aus dem Zielordner führen würden (z. B. «..\x» unter Windows), auslassen.
                 if crate::scp::check_name(&n).is_ok() && !e.file_type().is_symlink() {
-                    stack.push((rjoin(&src, &n), dst.join(&n), e.metadata()));
+                    stack.push((rjoin(&src, &n), dst.join(&n), e.metadata(), depth + 1));
                 }
             }
         } else {
@@ -894,6 +932,28 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
 
 #[cfg(test)]
 pub(crate) mod tests {
+    #[tokio::test]
+    async fn budget_begrenzt_beim_streamen() {
+        let mut m = super::Meter { done: 0, total: 0, last: std::time::Instant::now(), report: |_| {} };
+        let b = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(4));
+        let r = super::BUDGET.scope(b.clone(), super::pump(&b"12345"[..], tokio::io::sink(), &mut m, "x")).await;
+        assert!(r.is_err(), "5 Bytes bei Budget 4");
+        b.store(5, std::sync::atomic::Ordering::SeqCst);
+        assert!(super::BUDGET.scope(b, super::pump(&b"12345"[..], tokio::io::sink(), &mut m, "x")).await.is_ok());
+        assert!(super::pump(&b"12345"[..], tokio::io::sink(), &mut m, "x").await.is_ok(), "ohne Budget unbegrenzt");
+    }
+
+    #[test]
+    fn papierkorb_faecher_erkennen() {
+        let cut = "20260101-000000";
+        assert!(super::is_expired_trash_slot("20250101-120000-123", cut));
+        assert!(super::is_expired_trash_slot("20250101-120000", cut));
+        assert!(!super::is_expired_trash_slot("20261126-120000-1", cut), "aktuelles Fach bleibt");
+        for n in ["äöüäöüäöüäöü", &"🎉".repeat(5), "aaa-notiz.txt", "0000", "2025010a-120000", "20250101_120000"] {
+            assert!(!super::is_expired_trash_slot(n, cut), "{n}");
+        }
+    }
+
     use super::*;
 
     /// SFTP im Arbeitsspeicher mit einem Ordner `/home` und den Dateien darin (für Tests ausserhalb dieses Moduls).
@@ -1385,6 +1445,36 @@ pub(crate) mod tests {
         std::fs::remove_dir_all(base).unwrap();
     }
 
+    /// Manipulierte `.sesam-meta` (gehört dem Benutzer, läuft beim Zurückholen als root) wird nie als Shell-Code
+    /// ausgewertet; ein vorhandener Zielordner wird ersetzt statt hineinkopiert.
+    #[cfg(unix)]
+    #[test]
+    fn zurueckholen_mit_boeser_meta_und_ordner() {
+        let base = std::env::temp_dir().join(format!("sesam-meta-{}", std::process::id()));
+        let slot = base.join(".sesam-papierkorb/20261110-2");
+        std::fs::create_dir_all(slot.join("conf.d")).unwrap();
+        std::fs::write(slot.join("conf.d/a"), "alt").unwrap();
+        let dest = base.join("conf.d");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(dest.join("b"), "neu").unwrap();
+        let marker = base.join("pwn");
+        for meta in ["* --reference=/etc/passwd".to_string(), format!("$(touch {}) 777", marker.display()), "0:0 7777777".into()] {
+            std::fs::write(slot.join(".sesam-meta"), &meta).unwrap();
+            let script = super::sudo_op_script("restore", &format!("{}/conf.d", slot.display()), &dest.display().to_string()).unwrap();
+            let o = std::process::Command::new("sh").arg("-c").arg(&script).current_dir(&base).output().unwrap();
+            assert!(o.status.success(), "{meta}: {}", String::from_utf8_lossy(&o.stderr));
+            assert!(!marker.exists(), "Meta wurde als Befehl ausgeführt: {meta}");
+            assert_eq!(std::fs::read_to_string(dest.join("a")).unwrap(), "alt");
+            assert!(!dest.join("b").exists() && !dest.join("conf.d").exists(), "Ordner ersetzt, nicht hineinkopiert");
+            assert_ne!(std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(&dest).unwrap().permissions()) & 0o777, 0o777);
+            // Für die nächste Runde wieder ein Fach anlegen.
+            std::fs::create_dir_all(slot.join("conf.d")).unwrap();
+            std::fs::write(slot.join("conf.d/a"), "alt").unwrap();
+            std::fs::write(dest.join("b"), "neu").unwrap();
+        }
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
     #[test]
     fn skripte_fuer_rechte_und_verschieben() {
         assert_eq!(super::perms_script("/opt/a b", Some(0o755), Some("root:wheel"), true).unwrap(), "chmod -R 755 -- '/opt/a b' && chown -R root:wheel -- '/opt/a b'");
@@ -1403,7 +1493,7 @@ pub(crate) mod tests {
         let b = super::sudo_op_script("backup", "/etc/ssh/sshd_config", "/home/m/.sesam-papierkorb/20261110-1").unwrap();
         assert!(b.starts_with("cp -a -- '/etc/ssh/sshd_config' '/home/m/.sesam-papierkorb/20261110-1'/") && b.contains(".sesam-meta") && b.contains("chown -R"));
         let r = super::sudo_op_script("restore", "/home/m/.sesam-papierkorb/20261110-1/sshd_config", "/etc/ssh/sshd_config").unwrap();
-        assert!(r.contains("cp -a --") && r.contains("chown \"$1\"") && r.contains("chmod \"$2\"") && r.ends_with("rm -rf -- '/home/m/.sesam-papierkorb/20261110-1'"));
+        assert!(r.contains("cp -a --") && r.contains("chown -- \"$owner\"") && r.contains("chmod -- \"$mode\"") && !r.contains("$(cat") && r.ends_with("rm -rf -- '/home/m/.sesam-papierkorb/20261110-1'"));
         assert!(super::sudo_op_script("restore", "/etc/passwd", "/tmp/x").is_err() && super::sudo_op_script("backup", "/etc/x", "/tmp").is_err());
         assert_eq!(super::sudo_error("sudo: a password is required", 1), super::SUDO_PASSWORD);
         assert!(super::sudo_error("Sorry, try again.\nsudo: 1 incorrect password attempt", 1).contains("stimmt nicht"));

@@ -25,6 +25,8 @@ export function setLangPref(v: LangPref) {
 }
 /** «Automatisch»: Deutsch, wenn das System Deutsch spricht, sonst Englisch. */
 export const lang: Lang = langPref() === "auto" ? (/^de\b/i.test(navigator.language) ? "de" : "en") : (langPref() as Lang);
+/** Zahlen, Daten und Sortierung passend zur Sprache der Oberfläche. */
+export const locale = lang === "en" ? "en-US" : "de-CH";
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 const exact = new Map<string, string>();
@@ -79,7 +81,8 @@ function translateNode(n: Node) {
     const t = tr(n.nodeValue ?? "");
     if (t === n.nodeValue) return;
     // Code, der Beschriftungen als Schlüssel liest, findet das Original in data-de (deText)
-    if (p.childNodes.length === 1 && p.dataset.de === undefined) p.dataset.de = n.nodeValue!.trim();
+    // (bei jedem neuen deutschen Text nachgeführt, z. B. Statuszeilen mit wechselnden Meldungen)
+    if (p.childNodes.length === 1) p.dataset.de = n.nodeValue!.trim();
     n.nodeValue = t;
   } else if (n instanceof Element) {
     if (n.closest(SKIP) && !n.matches("textarea, input")) return;

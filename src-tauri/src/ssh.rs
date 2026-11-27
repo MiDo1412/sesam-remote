@@ -15,9 +15,19 @@ pub enum ShellEvent {
     Closed { reason: String },
 }
 
-/// Befehle für `Shell::probe`: nur Lesen, vcgencmd nur wenn vorhanden (Raspberry Pi OS).
-const PROBE: &str = "printf 'model='; tr -d '\\0' < /proc/device-tree/model 2>/dev/null; echo; (. /etc/os-release 2>/dev/null && echo \"id=$ID\"); \
+/// Befehle für `Shell::probe`: nur Lesen, vcgencmd nur wenn vorhanden (Raspberry Pi OS). Läuft über `posix`.
+const PROBE: &str = "printf model=; tr -d \"\\0\" < /proc/device-tree/model 2>/dev/null; echo; (. /etc/os-release 2>/dev/null && echo \"id=$ID\"); \
 command -v vcgencmd >/dev/null 2>&1 && { vcgencmd measure_temp; vcgencmd get_throttled; }";
+
+/// Verbindungsaufbau bis zum Schlüsseltausch (TCP und SSH-Begrüssung), wie bei RDP, VNC und FTP begrenzt.
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// POSIX-Skript über `sh -c` starten: die Login-Shell des Servers kann fish, tcsh oder nushell sein, die `if …; then`,
+/// `&&` oder `${…}` nicht kennen. Das Skript enthält keine `'` (und kein `\\`), so reichen alle Shells es unverändert durch.
+pub fn posix(script: &str) -> String {
+    debug_assert!(!script.contains('\'') && !script.contains("\\\\"), "{script}");
+    format!("sh -c '{script}'")
+}
 
 #[derive(serde::Serialize, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -35,7 +45,7 @@ pub struct Probe {
 
 /// Rechner kurz befragen (eigener exec-Kanal derselben Verbindung): Modell, System, Temperatur, Unterspannung.
 pub async fn probe(h: &Handle<Client>) -> Result<Probe, String> {
-    let o = crate::scp::Remote::run(h, PROBE.into()).await?;
+    let o = crate::scp::Remote::run(h, posix(PROBE)).await?;
     Ok(parse_probe(&String::from_utf8_lossy(&o.out)))
 }
 
@@ -204,12 +214,13 @@ pub fn public_key_of(private: &str) -> Result<String, String> {
 /// Skript wie ssh-copy-id: öffentlichen Schlüssel an ~/.ssh/authorized_keys anhängen, wenn er dort noch fehlt.
 pub fn install_key_script(public: &str) -> Result<String, String> {
     let line = public.trim();
-    if line.contains(['\n', '\r', '\'']) || !(line.starts_with("ssh-") || line.starts_with("ecdsa-")) {
+    // Steht in doppelten Anführungszeichen innerhalb von `sh -c '…'`: nichts, was dort etwas bedeutet.
+    if line.chars().any(|c| "\n\r'\"$`\\".contains(c)) || !(line.starts_with("ssh-") || line.starts_with("ecdsa-")) {
         return Err("Ungültiger öffentlicher Schlüssel".into());
     }
-    Ok(format!(
-        "umask 077; mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && (grep -qxF '{line}' ~/.ssh/authorized_keys && echo vorhanden || (echo '{line}' >> ~/.ssh/authorized_keys && echo eingetragen))"
-    ))
+    Ok(posix(&format!(
+        "umask 077; mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && (grep -qxF \"{line}\" ~/.ssh/authorized_keys && echo vorhanden || (echo \"{line}\" >> ~/.ssh/authorized_keys && echo eingetragen))"
+    )))
 }
 
 /// Prüft einen privaten Schlüssel: OpenSSH, PEM (PKCS#1, PKCS#8, EC/SEC1, auch verschlüsselt) oder PuTTY .ppk v2/v3,
@@ -338,6 +349,13 @@ pub fn config(o: Options) -> client::Config {
     }
 }
 
+/// Bekannte Schlüsseltypen nach vorn (Reihenfolge sonst unverändert); RSA zählt mit jedem Hash als bekannt.
+fn prefer_known(key: &mut [keys::Algorithm], known: &[keys::Algorithm]) {
+    use keys::Algorithm::Rsa;
+    let same = |a: &keys::Algorithm, k: &keys::Algorithm| matches!((a, k), (Rsa { .. }, Rsa { .. })) || a == k;
+    key.sort_by_key(|a| !known.iter().any(|k| same(a, k)));
+}
+
 type Agent = keys::agent::client::AgentClient<Box<dyn keys::agent::client::AgentStream + Send + Unpin>>;
 
 /// Laufender SSH-Agent: Pageant, sonst der OpenSSH-Agent von Windows; unter macOS/Linux `SSH_AUTH_SOCK`.
@@ -432,7 +450,19 @@ pub async fn connect(t: &Target) -> Result<Handle<Client>, String> {
         agent_forward: t.opts.agent && t.opts.agent_forward,
         jump: None,
     };
-    let config = Arc::new(config(t.opts));
+    let mut config = config(t.opts);
+    // Wie OpenSSH: Schlüsseltypen, die known_hosts für diesen Host schon kennt, zuerst anbieten. Sonst zeigt ein
+    // Server mit ed25519 und RSA beim Umstieg plötzlich einen «neuen» Schlüssel (security-review-2026-11-11, S-09).
+    if t.trusted.is_none()
+        && let Ok(file) = known_hosts_file()
+        && let Ok(known) = keys::known_hosts::known_host_keys_path(&t.host, t.port, &file)
+    {
+        let known: Vec<_> = known.iter().map(|(_, k)| k.algorithm()).collect();
+        let mut key = config.preferred.key.to_vec();
+        prefer_known(&mut key, &known);
+        config.preferred.key = key.into();
+    }
+    let config = Arc::new(config);
     let fail = |e: russh::Error| {
         rejected.lock().unwrap().take().unwrap_or_else(|| match &e {
             russh::Error::IO(io) => crate::firstaid::net_error(&t.host, t.port, io),
@@ -440,7 +470,10 @@ pub async fn connect(t: &Target) -> Result<Handle<Client>, String> {
         })
     };
     let mut handle = match &t.jump {
-        None => client::connect(config, (t.host.as_str(), t.port), client).await.map_err(fail)?,
+        None => tokio::time::timeout(CONNECT_TIMEOUT, client::connect(config, (t.host.as_str(), t.port), client))
+            .await
+            .map_err(|_| format!("Zeitüberschreitung beim Verbinden mit {}:{}", t.host, t.port))?
+            .map_err(fail)?,
         Some(j) => {
             let jh = Box::pin(connect(j)).await.map_err(|e| {
                 if e.starts_with(HOSTKEY_UNKNOWN) {
@@ -454,7 +487,10 @@ pub async fn connect(t: &Target) -> Result<Handle<Client>, String> {
                 .await
                 .map_err(|e| format!("Sprungserver {} erreicht {}:{} nicht: {e}", j.host, t.host, t.port))?;
             client.jump = Some(jh);
-            client::connect_stream(config, ch.into_stream(), client).await.map_err(fail)?
+            tokio::time::timeout(CONNECT_TIMEOUT, client::connect_stream(config, ch.into_stream(), client))
+                .await
+                .map_err(|_| format!("Zeitüberschreitung beim Verbinden mit {}:{}", t.host, t.port))?
+                .map_err(fail)?
         }
     };
     authenticate(&mut handle, t).await?;
@@ -502,22 +538,24 @@ pub fn parse_ports(text: &str) -> Vec<(String, u16)> {
 /// Was vor `new-session` steht, kann tmux seit 1.x; was bei altem tmux scheitern kann, steht hinten (tmux bricht dann
 /// nur die folgenden Befehle ab). Sitzungen älterer Sesam-Versionen auf dem Standard-Server werden weiter angehängt.
 /// Fehlt tmux: Hinweis und eine normale Login-Shell.
+const NO_TMUX: &str = "[Sesam] tmux fehlt auf diesem Server; die Shell läuft ohne Halten weiter.";
+
 pub fn tmux_command(name: &str) -> Result<String, String> {
     if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err("Ungültiger Sitzungsname".into());
     }
-    Ok(format!(
+    Ok(posix(&format!(
         "if command -v tmux >/dev/null 2>&1; then \
 if tmux has-session -t ={name} 2>/dev/null; then exec tmux attach-session -t ={name}; fi; \
-exec tmux -L sesam -f /dev/null start-server \\; set-option -g history-limit 50000 \\; set-option -ga terminal-overrides ',*:smcup@:rmcup@' \\; \
+exec tmux -L sesam -f /dev/null start-server \\; set-option -g history-limit 50000 \\; set-option -ga terminal-overrides \",*:smcup@:rmcup@\" \\; \
 new-session -A -s {name} \\; set-option status off \\; set-option -s escape-time 0 \\; set-option -s set-clipboard on \\; set-option prefix None; \
-else printf '\\033[2m[Sesam] tmux fehlt auf diesem Server; die Shell läuft ohne Halten weiter.\\033[0m\\r\\n'; exec \"${{SHELL:-/bin/sh}}\" -l; fi"
-    ))
+else printf \"\\033[2m%s\\033[0m\\r\\n\" \"{NO_TMUX}\"; exec \"${{SHELL:-/bin/sh}}\" -l; fi"
+    )))
 }
 
 /// Gehaltene Sesam-Sitzungen (tmux, Name beginnt mit «sesam-»): Name, angehängt ja/nein, gestartet (Unix-Zeit).
 pub async fn tmux_list(h: &Handle<Client>) -> Result<Vec<(String, bool, u64)>, String> {
-    let o = crate::scp::Remote::run(h, "{ tmux -L sesam ls -F '#{session_name} #{session_attached} #{session_created}'; tmux ls -F '#{session_name} #{session_attached} #{session_created}'; } 2>/dev/null".into()).await?;
+    let o = crate::scp::Remote::run(h, posix("{ tmux -L sesam ls -F \"#{session_name} #{session_attached} #{session_created}\"; tmux ls -F \"#{session_name} #{session_attached} #{session_created}\"; } 2>/dev/null")).await?;
     Ok(String::from_utf8_lossy(&o.out)
         .lines()
         .filter_map(|l| {
@@ -533,7 +571,7 @@ pub async fn tmux_kill(h: &Handle<Client>, name: &str) -> Result<(), String> {
     if !name.starts_with("sesam-") {
         return Err("Nur Sitzungen von Sesam".into());
     }
-    let o = crate::scp::Remote::run(h, format!("tmux -L sesam kill-session -t ={name} 2>/dev/null || tmux kill-session -t ={name}")).await?;
+    let o = crate::scp::Remote::run(h, posix(&format!("tmux -L sesam kill-session -t ={name} 2>/dev/null || tmux kill-session -t ={name}"))).await?;
     if o.code == 0 { Ok(()) } else { Err(String::from_utf8_lossy(&o.err).trim().to_string()) }
 }
 
@@ -611,6 +649,9 @@ mod tests {
         assert!(c.find("history-limit").unwrap() < c.find("new-session").unwrap() && c.find("status off").unwrap() < c.find("set-clipboard").unwrap() && c.find("set-clipboard").unwrap() < c.find("prefix None").unwrap());
         assert!(c.contains("tmux fehlt"));
         assert!(tmux_command("x; rm -rf ~").is_err() && tmux_command("").is_err());
+        // Läuft über sh, auch wenn die Login-Shell fish oder tcsh ist; innen keine einfachen Anführungszeichen.
+        assert!(c.starts_with("sh -c '") && c.ends_with('\'') && !c[7..c.len() - 1].contains('\''));
+        assert!(!PROBE.contains('\'') && posix(PROBE).starts_with("sh -c '"));
     }
 
     #[test]
@@ -631,6 +672,31 @@ mod tests {
         let s = install_key_script(&public).unwrap();
         assert!(s.contains(&public) && s.contains("authorized_keys") && s.contains("grep -qxF"));
         assert!(install_key_script("ssh-ed25519 AAA x'; rm -rf ~; '").is_err());
+        assert!(install_key_script("ssh-ed25519 AAA $(id)").is_err() && install_key_script("ssh-ed25519 AAA \"x").is_err());
+        assert!(s.starts_with("sh -c '") && !s[7..s.len() - 1].contains('\''));
+        // Wie die Login-Shell des Servers es ausführt: zweimal, beim zweiten Mal schon vorhanden.
+        #[cfg(unix)]
+        {
+            let home = std::env::temp_dir().join(format!("sesam-key-{}", std::process::id()));
+            std::fs::create_dir_all(&home).unwrap();
+            let run = || String::from_utf8(std::process::Command::new("sh").arg("-c").arg(&s).env("HOME", &home).output().unwrap().stdout).unwrap();
+            assert_eq!((run().trim().to_string(), run().trim().to_string()), ("eingetragen".into(), "vorhanden".into()));
+            assert_eq!(std::fs::read_to_string(home.join(".ssh/authorized_keys")).unwrap().trim(), public);
+            std::fs::remove_dir_all(&home).unwrap();
+        }
+    }
+
+    #[test]
+    fn bekannte_schluesseltypen_zuerst() {
+        use keys::{Algorithm, EcdsaCurve, HashAlg};
+        let mut key = config(Options::default()).preferred.key.to_vec();
+        prefer_known(&mut key, &[Algorithm::Rsa { hash: None }]);
+        assert_eq!(&key[..3], [Algorithm::Rsa { hash: Some(HashAlg::Sha512) }, Algorithm::Rsa { hash: Some(HashAlg::Sha256) }, Algorithm::Ed25519]);
+        prefer_known(&mut key, &[Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 }]);
+        assert_eq!(key[0], Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 });
+        let before = key.clone();
+        prefer_known(&mut key, &[]);
+        assert_eq!(key, before, "ohne Eintrag unverändert");
     }
 
     #[test]

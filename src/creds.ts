@@ -1,5 +1,5 @@
 /** Gespeicherte Zugangsdaten: Liste in den Einstellungen, Bearbeiten-Dialog, Auswahl im Verbindungs-Sheet. */
-import { tr } from "./i18n";
+import { locale, tr } from "./i18n";
 import { api, HOSTKEY_UNKNOWN, type Connection, type Cred } from "./api";
 import { ask, askHostKey, askPassword, tell } from "./ui";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -29,7 +29,7 @@ export async function renderCredList() {
         }),
         Object.assign(document.createElement("small"), {
           className: `cred-users${users.length ? "" : " unused"}`,
-          textContent: `${users.length ? `Verwendet von: ${users.join(", ")}` : "Von keiner Verbindung verwendet – löschen oder einer Verbindung zuweisen"}${c.lastUsed ? ` · zuletzt ${new Date(c.lastUsed * 1000).toLocaleDateString("de-CH")}` : ""}`,
+          textContent: `${users.length ? `Verwendet von: ${users.join(", ")}` : "Von keiner Verbindung verwendet – löschen oder einer Verbindung zuweisen"}${c.lastUsed ? ` · zuletzt ${new Date(c.lastUsed * 1000).toLocaleDateString(locale)}` : ""}`,
         }),
       );
       const edit = Object.assign(document.createElement("button"), { type: "button", className: "link", textContent: "Bearbeiten" });
@@ -205,7 +205,12 @@ async function importBackup() {
   if (!pw) return;
   const p = await api.backupPreview(file, pw);
   const line = (label: string, l: string[]) => (l.length ? `${label} (${l.length}): ${l.join(", ")}` : `${label}: keine`);
-  const text = [line("Neue Verbindungen", p.newConnections), line("Neue Zugangsdaten", p.newCredentials), line("Schon vorhanden, bleibt unverändert", [...p.knownConnections, ...p.knownCredentials])].join("\n");
+  // Aus fremden Sicherungen heikel: Weiterleitungen öffnen Ports, ein freigegebener Ordner zeigt dem Server lokale Dateien.
+  const warn = [
+    ...(p.withForwards.length ? [`Achtung, mit Port-Weiterleitungen: ${p.withForwards.join(", ")}`] : []),
+    ...(p.withSharedFolder.length ? [`Achtung, gibt einen lokalen Ordner frei: ${p.withSharedFolder.join(", ")}`] : []),
+  ];
+  const text = [line("Neue Verbindungen", p.newConnections), line("Neue Zugangsdaten", p.newCredentials), line("Schon vorhanden, bleibt unverändert", [...p.knownConnections, ...p.knownCredentials]), ...warn].join("\n");
   if (!p.newConnections.length && !p.newCredentials.length) return tell("Nichts Neues", text);
   if (!(await ask("Einlesen?", text, "Zusammenführen"))) return;
   tell("Eingelesen", await api.backupImport(file, pw));

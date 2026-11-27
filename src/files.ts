@@ -1,5 +1,5 @@
 import { dropFiles } from "./dropfiles";
-import { tr } from "./i18n";
+import { locale, tr } from "./i18n";
 import { askConflict, type Choice } from "./conflict";
 import { showPreview } from "./preview";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -20,7 +20,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") 
   return e;
 };
 
-const num = new Intl.NumberFormat("de-CH", { maximumFractionDigits: 1 });
+const num = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 export function formatSize(n: number) {
   if (n < 1024) return `${n} B`;
   const units = ["KB", "MB", "GB", "TB"];
@@ -36,9 +36,9 @@ function formatDate(secs: number | null) {
   if (secs === null) return "";
   const d = new Date(secs * 1000);
   const now = new Date();
-  const time = d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
-  if (d.toDateString() === now.toDateString()) return `heute, ${time}`;
-  return d.toLocaleDateString("de-CH", { day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() && { year: "numeric" }) });
+  const time = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === now.toDateString()) return `${new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(0, "day")}, ${time}`;
+  return d.toLocaleDateString(locale, { day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() && { year: "numeric" }) });
 }
 
 type Side = "local" | "remote";
@@ -165,7 +165,7 @@ const openPlaces = () =>
     sideSwitch.setAttribute("role", "radiogroup");
     sideSwitch.setAttribute("aria-label", "Seite");
     const group = `side-${Math.random()}`; // ein Name für beide Knöpfe, sonst sind beide gewählt
-    for (const [side, label] of [["local", "iPhone"], ["remote", c.name]] as const) {
+    for (const [side, label] of [["local", /iPhone/.test(navigator.userAgent) ? "iPhone" : "iPad"], ["remote", c.name]] as const) {
       const l = el("label", "", "");
       const i = Object.assign(document.createElement("input"), { type: "radio", name: group, checked: side === "remote" });
       i.onchange = () => (grid.dataset.show = side);
@@ -222,6 +222,7 @@ const openPlaces = () =>
 
   let sid: string | null = null;
   let scp = false;
+  const observers: ResizeObserver[] = []; // in close() trennen, sonst halten sie die Ansicht fest
   const join = (p: Pane, name: string) => {
     const dir = p.listing!.path;
     return dir === "" ? name : dir.endsWith(p.sep) ? dir + name : dir + p.sep + name;
@@ -416,7 +417,9 @@ const openPlaces = () =>
     pathEl.onclick = (ev) => ev.target === pathEl && editPath(pane);
     // Breite geändert (Fenster, Spalten, Tab sichtbar): Pfad neu kürzen.
     let lastW = 0;
-    new ResizeObserver(() => pathEl.clientWidth !== lastW && ((lastW = pathEl.clientWidth), pane.listing && renderCrumbs(pane))).observe(pathEl);
+    const ro = new ResizeObserver(() => pathEl.clientWidth !== lastW && ((lastW = pathEl.clientWidth), pane.listing && renderCrumbs(pane)));
+    ro.observe(pathEl);
+    observers.push(ro);
     scroller.oncontextmenu = (ev) => {
       ev.preventDefault();
       pane.selected.clear();
@@ -544,7 +547,7 @@ const openPlaces = () =>
       .filter((e) => (p.hidden || !e.name.startsWith(".")) && (!p.filter || e.name.toLowerCase().includes(p.filter)))
       .sort((a, b) => {
         if (a.dir !== b.dir) return a.dir ? -1 : 1;
-        const d = p.sort === "size" ? a.size - b.size : p.sort === "date" ? (a.modified ?? 0) - (b.modified ?? 0) : a.name.localeCompare(b.name, "de-CH", { numeric: true });
+        const d = p.sort === "size" ? a.size - b.size : p.sort === "date" ? (a.modified ?? 0) - (b.modified ?? 0) : a.name.localeCompare(b.name, locale, { numeric: true });
         return d * dir;
       });
   }
@@ -792,7 +795,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       items.sort((a, b) => {
         const [x, y] = [(a.l ?? a.r)!, (b.l ?? b.r)!];
         if (x.dir !== y.dir) return x.dir ? -1 : 1;
-        const d = s.sort === "name" ? x.name.localeCompare(y.name, "de-CH", { numeric: true }) : key(x) - key(y);
+        const d = s.sort === "name" ? x.name.localeCompare(y.name, locale, { numeric: true }) : key(x) - key(y);
         return d * dir || x.name.localeCompare(y.name);
       });
       const rows: Row[] = [];
@@ -1335,7 +1338,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       toggle.textContent = show ? "Weniger" : "Details";
     };
     for (const r of rows) r.hidden = true;
-    sum.append(text, el("span"), el("span", "transfer-state", new Date().toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })), toggle);
+    sum.append(text, el("span"), el("span", "transfer-state", new Date().toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })), toggle);
     transferList.prepend(sum);
   }
 
@@ -1402,7 +1405,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
           if (now && now.modified !== remoteMod && !(await ask(`«${e.name}» hat sich auf dem Server geändert`, "Seit dem Öffnen hat jemand die Datei auf dem Server geändert. Deine Fassung trotzdem hochladen? Die andere kommt in den Papierkorb.", "Hochladen"))) return;
           const done = async () => {
             remoteMod = (await api.sftpList(sid!, remoteDir)).entries.find((x) => x.name === e.name)?.modified ?? remoteMod;
-            st.textContent = `Hochgeladen um ${new Date().toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+            st.textContent = `Hochgeladen um ${new Date().toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
             if (rp.listing?.path === remoteDir) load(rp, remoteDir);
           };
           start(true, local, remoteDir, e.name, true, done);
@@ -1894,6 +1897,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     for (const t of running) api.transferCancel(t);
     running.clear();
     for (const t of watchers.values()) clearInterval(t);
+    for (const o of observers.splice(0)) o.disconnect();
     if (sid) api.sftpClose(sid);
     sid = null;
   };

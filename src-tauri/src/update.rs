@@ -51,9 +51,43 @@ pub struct Status {
 #[derive(Default)]
 pub struct State {
     status: Mutex<Status>,
-    /// Heruntergeladen und signaturgeprüft, wird beim Beenden installiert.
-    pending: Mutex<Option<(tauri_plugin_updater::Update, Vec<u8>)>>,
+    /// Gefunden; heruntergeladen und signaturgeprüft (OnQuit) liegt es im Cache-Ordner, nicht im Arbeitsspeicher.
+    pending: Mutex<Option<(tauri_plugin_updater::Update, Option<Stored>)>>,
     busy: tokio::sync::Mutex<()>,
+}
+
+/// Heruntergeladenes Paket auf der Platte (statt bis zum Beenden im Arbeitsspeicher) samt SHA-256 vom Download.
+pub struct Stored {
+    path: PathBuf,
+    sha: [u8; 32],
+}
+
+fn sha256(b: &[u8]) -> [u8; 32] {
+    use sha2::Digest;
+    sha2::Sha256::digest(b).into()
+}
+
+fn pending_file<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("pending-update.bin"))
+}
+
+fn store(path: PathBuf, bytes: &[u8]) -> Result<Stored, String> {
+    std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(Stored { path, sha: sha256(bytes) })
+}
+
+/// Paket lesen und gegen den Fingerabdruck vom Download prüfen (wurde die Datei inzwischen verändert: Fehler).
+/// Die Datei ist danach weg, ob es klappt oder nicht.
+fn take_stored(s: &Stored) -> Result<Vec<u8>, String> {
+    let bytes = std::fs::read(&s.path).map_err(|e| format!("{}: {e}", s.path.display()));
+    let _ = std::fs::remove_file(&s.path);
+    let bytes = bytes?;
+    if sha256(&bytes) != s.sha {
+        return Err("Update-Datei wurde nach dem Herunterladen verändert, nicht installiert".into());
+    }
+    Ok(bytes)
 }
 
 /// Einstellung des Benutzers neben der Bibliothek (`update.json`), Vorgabe: an.
@@ -185,14 +219,16 @@ pub async fn check<R: Runtime>(app: &AppHandle<R>, manual: bool) -> Result<(), S
                 } else {
                     // download() prüft die Signatur, bevor es die Daten zurückgibt.
                     let bytes = u.download(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
+                    let stored = store(pending_file(app)?, &bytes)?;
+                    drop(bytes);
                     s.ready = Some(u.version.clone());
                     tracing::info!(version = %u.version, "Update heruntergeladen, wird beim Beenden installiert");
-                    *st.pending.lock().unwrap() = Some((u, bytes));
+                    *st.pending.lock().unwrap() = Some((u, Some(stored)));
                 }
             }
             Some(u) => {
                 s.ready = Some(u.version.clone());
-                *st.pending.lock().unwrap() = Some((u, Vec::new()));
+                *st.pending.lock().unwrap() = Some((u, None));
             }
         }
         *st.status.lock().unwrap() = s;
@@ -210,6 +246,10 @@ pub async fn check<R: Runtime>(app: &AppHandle<R>, manual: bool) -> Result<(), S
 
 /// Prüfschleife im Hintergrund.
 pub fn start<R: Runtime>(app: AppHandle<R>) {
+    // Rest eines früheren Laufs (nie installiert): gehört zu keinem Update mehr, das dieser Lauf kennt.
+    if let Ok(f) = pending_file(&app) {
+        let _ = std::fs::remove_file(f);
+    }
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST).await;
         loop {
@@ -222,10 +262,15 @@ pub fn start<R: Runtime>(app: AppHandle<R>) {
 /// Beim Beenden: heruntergeladenes Update still installieren (nur OnQuit).
 pub fn install_on_quit<R: Runtime>(app: &AppHandle<R>) {
     let Some(st) = app.try_state::<State>() else { return };
-    let Some((u, bytes)) = st.pending.lock().unwrap().take() else { return };
-    if bytes.is_empty() || kind() != Install::OnQuit || !effective_auto(policy(), user_auto()) {
+    let Some((u, Some(stored))) = st.pending.lock().unwrap().take() else { return };
+    if kind() != Install::OnQuit || !effective_auto(policy(), user_auto()) {
+        let _ = std::fs::remove_file(&stored.path);
         return;
     }
+    let bytes = match take_stored(&stored) {
+        Ok(b) => b,
+        Err(e) => return tracing::warn!(error = %e, "Update konnte nicht installiert werden"),
+    };
     let r = if target().is_some() { replace_exe(&bytes) } else { u.install(&bytes).map_err(|e| e.to_string()) };
     match r {
         Ok(()) => tracing::info!(version = %u.version, "Update installiert"),
@@ -236,11 +281,10 @@ pub fn install_on_quit<R: Runtime>(app: &AppHandle<R>) {
 /// Auf Wunsch sofort (MSI: fragt nach Administratorrechten, beendet die App).
 pub async fn install_now<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let st = app.state::<State>();
-    let Some((u, bytes)) = st.pending.lock().unwrap().take() else { return Err("Kein Update bereit".into()) };
-    let bytes = if bytes.is_empty() {
-        u.download(|_, _| {}, || {}).await.map_err(|e| e.to_string())?
-    } else {
-        bytes
+    let Some((u, stored)) = st.pending.lock().unwrap().take() else { return Err("Kein Update bereit".into()) };
+    let bytes = match stored {
+        None => u.download(|_, _| {}, || {}).await.map_err(|e| e.to_string())?,
+        Some(s) => take_stored(&s)?,
     };
     if target().is_some() {
         replace_exe(&bytes)?;
@@ -277,6 +321,18 @@ pub fn cleanup() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paket_auf_der_platte_mit_pruefsumme() {
+        let p = std::env::temp_dir().join(format!("sesam-update-{}.bin", std::process::id()));
+        let s = store(p.clone(), b"paket").unwrap();
+        assert_eq!(take_stored(&s).unwrap(), b"paket");
+        assert!(!p.exists(), "nach dem Lesen weg");
+        let s = store(p.clone(), b"paket").unwrap();
+        std::fs::write(&p, b"anders").unwrap();
+        assert!(take_stored(&s).is_err(), "verändert: nicht installieren");
+        assert!(!p.exists());
+    }
 
     #[test]
     fn richtlinie_aus_der_registry() {

@@ -1,6 +1,7 @@
 /** Rückfrage vor dem Überschreiben im Dateifenster: beide Fassungen nebeneinander, Wahl für dieses oder alle
  *  weiteren Elemente. Sesam überschreibt nie still; der Papierkorb auf dem Server bleibt als Sicherheitsnetz. */
 import type { Entry } from "./api";
+import { locale } from "./i18n";
 
 export type Choice = "replace" | "skip" | "keep" | "newer" | "merge";
 export interface Decision {
@@ -16,7 +17,7 @@ const size = (n: number) => {
   while (n >= 1024 && i < u.length - 1);
   return `${n.toFixed(n < 10 ? 1 : 0)} ${u[i]}`;
 };
-const when = (s: number | null) => (s ? new Date(s * 1000).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" }) : "unbekannt");
+const when = (s: number | null) => (s ? new Date(s * 1000).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) : "unbekannt");
 
 /** `src`/`dst`: Quelle und vorhandenes Ziel; `rest`: weitere Konflikte nach diesem. */
 export function askConflict(src: Entry, dst: Entry, from: string, to: string, dir: string, rest: number): Promise<Decision> {

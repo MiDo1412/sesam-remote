@@ -1,4 +1,5 @@
 import { dropFiles } from "./dropfiles";
+import { locale } from "./i18n";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
@@ -256,7 +257,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     try {
       list = JSON.parse(localStorage.getItem(snipKey) ?? "[]");
     } catch {}
-    const v = await openMenu(schemeBtn, [
+    const v = await openMenu(snipBtn, [
       ...list.map((t, i) => ({ value: String(i), label: t.length > 60 ? `${t.slice(0, 57)}…` : t })),
       { value: "new", label: "Neuer Textbaustein …", separator: list.length > 0 },
       ...(list.length ? [{ value: "clear", label: "Alle Textbausteine löschen" }] : []),
@@ -324,6 +325,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     gallery.querySelector<HTMLElement>("[aria-checked=true]")?.focus();
   });
   // Bildschirmtastatur: xterm-Eingabefeld plus Zusatztasten (Esc, Strg, Pfeile, F-Tasten).
+  const snipBtn = toolButton(ICON.typeClipboard, "Textbausteine", () => void snippets(), { secondary: true });
   const kb = createKeyboard({ pane: ctx.pane, input: term.textarea!, press: (k, m) => term.input(termSequence(k, m, term.modes.applicationCursorKeysMode)) });
   ctx.toolbar.append(
     toolButton(ICON.plus, "Neue Shell", () => ctx.openTab("shell", true), { shortcut: "Strg+Umschalt+T" }),
@@ -332,7 +334,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     toolButton(ICON.typeClipboard, "Einfügen", paste, { shortcut: "Strg+Umschalt+V" }),
     toolButton(ICON.search, "Suchen", find, { shortcut: "Strg+Umschalt+F" }),
     broadcastBtn,
-    toolButton(ICON.typeClipboard, "Textbausteine", () => void snippets(), { secondary: true }),
+    snipBtn,
     ...(local ? [] : [doorsBtn]),
     ...(local ? [] : [toolButton(ICON.shell, "Gehaltene Sitzungen", () => void heldSessions(), { secondary: true, shortcut: "tmux auf dem Server" })]),
     schemeBtn,
@@ -416,7 +418,7 @@ export function shellTab(ctx: TabCtx): TabHandle {
     if (!list) return;
     if (!list.length) return tell("Gehaltene Sitzungen", "Auf diesem Server läuft keine von Sesam gehaltene Sitzung (oder tmux fehlt).");
     for (const [name, attached, created] of list) {
-      const when = created ? new Date(created * 1000).toLocaleString("de-CH") : "?";
+      const when = created ? new Date(created * 1000).toLocaleString(locale) : "?";
       if (await ask(name, `Gestartet ${when}${attached ? ", gerade angehängt" : ", nicht angehängt (verwaist)"}. Beenden schliesst die Sitzung samt laufenden Befehlen.`, "Beenden", "Weiter")) {
         await api.shellHeldKill(sid, name).catch((e) => tell("Nicht beendet", String(e)));
       }

@@ -175,7 +175,7 @@ export const api = {
   credTest: (connection: string, trust: string | null) => invoke<string>("cred_test", { connection, trust }),
   backupExport: (file: string, password: string) => invoke<string>("backup_export", { file, password }),
   backupPreview: (file: string, password: string) =>
-    invoke<{ newConnections: string[]; knownConnections: string[]; newCredentials: string[]; knownCredentials: string[] }>("backup_preview", { file, password }),
+    invoke<{ newConnections: string[]; knownConnections: string[]; newCredentials: string[]; knownCredentials: string[]; withForwards: string[]; withSharedFolder: string[] }>("backup_preview", { file, password }),
   backupImport: (file: string, password: string) => invoke<string>("backup_import", { file, password }),
   credDuplicate: (id: string, newId: string, name: string) => invoke<Cred>("cred_duplicate", { id, newId, name }),
   credSave: (cred: Cred, password?: string, sshKey?: string) => invoke<Cred>("cred_save", { cred, password, sshKey }),

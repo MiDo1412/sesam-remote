@@ -58,18 +58,24 @@ fn entry_part(id: &str, kind: Kind, part: usize) -> Result<Entry, String> {
     Entry::new(SERVICE, &user).map_err(|e| format!("Tresor nicht verfügbar: {e}"))
 }
 
+/// Erst alles Neue schreiben, dann den Haupteintrag umstellen, zuletzt überzählige alte Teile löschen: scheitert
+/// ein Schreiben mittendrin, bleibt das alte Geheimnis lesbar (ausser dort überschriebene Teile).
 pub fn set(id: &str, kind: Kind, secret: &str) -> Result<(), String> {
-    delete_parts(id, kind)?;
-    if secret.encode_utf16().count() <= PART {
-        return entry(id, kind)?.set_password(secret).map_err(|e| e.to_string());
-    }
-    // Halbe Länge in Zeichen: auch Zeichen aus zwei UTF-16-Einheiten passen sicher.
-    let chars: Vec<char> = secret.chars().collect();
-    let parts: Vec<String> = chars.chunks(PART / 2).map(|c| c.iter().collect()).collect();
-    for (i, p) in parts.iter().enumerate() {
-        entry_part(id, kind, i + 1)?.set_password(p).map_err(|e| e.to_string())?;
-    }
-    entry(id, kind)?.set_password(&format!("{PARTS}{}", parts.len())).map_err(|e| e.to_string())
+    let old = part_count(id, kind)?;
+    let new = if secret.encode_utf16().count() <= PART {
+        entry(id, kind)?.set_password(secret).map_err(|e| e.to_string())?;
+        0
+    } else {
+        // Halbe Länge in Zeichen: auch Zeichen aus zwei UTF-16-Einheiten passen sicher.
+        let chars: Vec<char> = secret.chars().collect();
+        let parts: Vec<String> = chars.chunks(PART / 2).map(|c| c.iter().collect()).collect();
+        for (i, p) in parts.iter().enumerate() {
+            entry_part(id, kind, i + 1)?.set_password(p).map_err(|e| e.to_string())?;
+        }
+        entry(id, kind)?.set_password(&format!("{PARTS}{}", parts.len())).map_err(|e| e.to_string())?;
+        parts.len()
+    };
+    delete_part_range(id, kind, new + 1, old)
 }
 
 fn get_raw(e: Entry) -> Result<Option<String>, String> {
@@ -86,7 +92,11 @@ fn part_count(id: &str, kind: Kind) -> Result<usize, String> {
 }
 
 fn delete_parts(id: &str, kind: Kind) -> Result<(), String> {
-    for i in 1..=part_count(id, kind)? {
+    delete_part_range(id, kind, 1, part_count(id, kind)?)
+}
+
+fn delete_part_range(id: &str, kind: Kind, from: usize, to: usize) -> Result<(), String> {
+    for i in from..=to {
         match entry_part(id, kind, i)?.delete_credential() {
             Ok(()) | Err(Error::NoEntry) => {}
             Err(e) => return Err(e.to_string()),
@@ -97,15 +107,25 @@ fn delete_parts(id: &str, kind: Kind) -> Result<(), String> {
 
 /// Passwörter schneller Verbindungen: nur im Arbeitsspeicher, nie im Schlüsselbund.
 /// Auch der Schlüssel einer gewählten Schlüsseldatei (nur Passwort und SSH-Schlüssel).
-static EPHEMERAL: std::sync::Mutex<Vec<(String, u8, String)>> = std::sync::Mutex::new(Vec::new());
+static EPHEMERAL: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<(String, u8), String>>> = std::sync::LazyLock::new(Default::default);
+
+/// Geheimnis im Speicher mit Nullen überschreiben, bevor es freigegeben wird (Nullbytes sind gültiges UTF-8).
+fn wipe(mut s: String) {
+    // SAFETY: nur Nullen, das bleibt gültiges UTF-8.
+    for b in unsafe { s.as_bytes_mut() } {
+        unsafe { std::ptr::write_volatile(b, 0) };
+    }
+}
 
 pub fn set_ephemeral(id: &str, kind: Kind, secret: &str) {
-    EPHEMERAL.lock().unwrap().push((id.to_string(), kind as u8, secret.to_string()));
+    if let Some(old) = EPHEMERAL.lock().unwrap().insert((id.to_string(), kind as u8), secret.to_string()) {
+        wipe(old);
+    }
 }
 
 pub fn get(id: &str, kind: Kind) -> Result<Option<String>, String> {
     if id.starts_with("quick-") {
-        return Ok(EPHEMERAL.lock().unwrap().iter().find(|(i, k, _)| i == id && *k == kind as u8).map(|(_, _, s)| s.clone()));
+        return Ok(EPHEMERAL.lock().unwrap().get(&(id.to_string(), kind as u8)).cloned());
     }
     let Some(s) = get_raw(entry(id, kind)?)? else { return Ok(None) };
     let Some(n) = s.strip_prefix(PARTS).and_then(|n| n.parse::<usize>().ok()) else { return Ok(Some(s)) };
@@ -117,6 +137,12 @@ pub fn get(id: &str, kind: Kind) -> Result<Option<String>, String> {
 }
 
 pub fn delete(id: &str, kind: Kind) -> Result<(), String> {
+    if id.starts_with("quick-") {
+        if let Some(old) = EPHEMERAL.lock().unwrap().remove(&(id.to_string(), kind as u8)) {
+            wipe(old);
+        }
+        return Ok(());
+    }
     delete_parts(id, kind)?;
     match entry(id, kind)?.delete_credential() {
         Ok(()) | Err(Error::NoEntry) => Ok(()),
@@ -127,6 +153,18 @@ pub fn delete(id: &str, kind: Kind) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn schnelle_geheimnisse_ersetzen_und_loeschen() {
+        set_ephemeral("quick-t1", Kind::Password, "alt");
+        set_ephemeral("quick-t1", Kind::Password, "neu");
+        set_ephemeral("quick-t1", Kind::SshKey, "schluessel");
+        assert_eq!(get("quick-t1", Kind::Password).unwrap().as_deref(), Some("neu"), "Ersetzen statt anhängen");
+        delete("quick-t1", Kind::Password).unwrap();
+        assert_eq!(get("quick-t1", Kind::Password).unwrap(), None);
+        assert_eq!(get("quick-t1", Kind::SshKey).unwrap().as_deref(), Some("schluessel"));
+        delete("quick-t1", Kind::SshKey).unwrap();
+    }
 
     /// Schreibt in den echten Schlüsselbund: `cargo test -- --ignored`
     #[test]

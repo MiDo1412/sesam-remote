@@ -18,7 +18,7 @@ import { openHelp } from "./help";
 import { listen } from "@tauri-apps/api/event";
 import { appSettings } from "./settings";
 import { openMenu } from "./menu";
-import { isMobile } from "./titlebar";
+import { isMac, isMobile } from "./titlebar";
 import { dropFiles } from "./dropfiles";
 
 type Mode = "fit" | "scale" | "native";
@@ -406,7 +406,8 @@ export function desktopTab(ctx: TabCtx): TabHandle {
       const prev = spanned;
       spanned = null;
       await win.setAlwaysOnTop(false);
-      await win.setDecorations(true);
+      // Ursprung wiederherstellen: nur macOS hat die Titelleiste des Systems, Windows/Linux zeichnen ihre eigene.
+      await win.setDecorations(isMac);
       await win.setSize(prev.size);
       await win.setPosition(prev.pos);
       document.getElementById("session")!.classList.remove("fullscreen");
@@ -508,11 +509,13 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     }
   };
   const closePop = () => ((pop.hidden = true), quality.setAttribute("aria-expanded", "false"));
-  addEventListener("pointerdown", (e) => !pop.hidden && !pop.contains(e.target as Node) && e.target !== quality && closePop());
+  const onOutsidePop = (e: PointerEvent) => !pop.hidden && !pop.contains(e.target as Node) && e.target !== quality && closePop();
+  addEventListener("pointerdown", onOutsidePop);
   document.body.append(pop);
   const qTimer = window.setInterval(async () => {
     if (!sid || !ctx.isActive()) return closePop();
-    if (stats.tick++ % 5 === 0 && !c.id.startsWith("quick")) stats.ms = await api.connReach(c.id).catch(() => null);
+    // Latenz alle 30 s (Intervall 2 s), nur wenn die Online-Prüfung an ist: schont Server mit fail2ban.
+    if (stats.tick++ % 15 === 0 && !c.id.startsWith("quick") && appSettings().onlineProbe) stats.ms = await api.connReach(c.id).catch(() => null);
     const fps = Math.round(stats.frames / 2);
     const mb = stats.bytes / 2 / 1e6;
     quality.innerHTML = bars(fps >= 24 ? 4 : fps >= 12 ? 3 : fps >= 4 ? 2 : fps > 0 ? 1 : 0);
@@ -578,6 +581,7 @@ export function desktopTab(ctx: TabCtx): TabHandle {
     invoke("kbhook_set", { active: false }).catch(() => {});
     clearTimeout(barTimer);
     clearInterval(qTimer);
+    removeEventListener("pointerdown", onOutsidePop);
     pop.remove();
     if (sid) (rdp ? api.rdpClose(sid) : api.vncClose(sid)).catch(() => {});
     sid = null;

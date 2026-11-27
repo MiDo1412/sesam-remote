@@ -125,6 +125,10 @@ fn library_save(
     ssh_key: Option<String>,
 ) -> Result<Connection, String> {
     connection.validate()?;
+    // «quick-» gehört den schnellen Verbindungen (nur im Arbeitsspeicher), nie der Bibliothek.
+    if connection.id.starts_with("quick-") {
+        return Err("Ungültige ID".into());
+    }
     if let Some(k) = ssh_key.as_deref().filter(|k| !k.trim().is_empty()) {
         ssh::check_private_key(k)?;
     }
@@ -306,6 +310,9 @@ struct BackupPreview {
     known_connections: Vec<String>,
     new_credentials: Vec<String>,
     known_credentials: Vec<String>,
+    /// Neue Verbindungen mit Port-Weiterleitungen bzw. freigegebenem lokalem Ordner: vor dem Einlesen zeigen (S-08).
+    with_forwards: Vec<String>,
+    with_shared_folder: Vec<String>,
 }
 
 fn backup_read(file: &str, password: &str) -> Result<backup::Contents, String> {
@@ -322,7 +329,16 @@ fn backup_preview(path: State<LibraryPath>, file: String, password: String) -> R
     let name = |v: &serde_json::Value| v["name"].as_str().unwrap_or("?").to_string();
     let (kc, nc): (Vec<_>, Vec<_>) = c.connections.iter().partition(|v| have.contains(v["id"].as_str().unwrap_or("")));
     let (kr, nr): (Vec<_>, Vec<_>) = c.credentials.iter().partition(|x| have_c.contains(&x.id));
+    let has = |v: &serde_json::Value, k: &str| match &v[k] {
+        serde_json::Value::Array(a) => !a.is_empty(),
+        serde_json::Value::String(s) => !s.trim().is_empty(),
+        _ => false,
+    };
+    let with_forwards = nc.iter().filter(|v| has(v, "forwards")).map(|v| name(v)).collect();
+    let with_shared_folder = nc.iter().filter(|v| has(v, "sharedFolder")).map(|v| name(v)).collect();
     Ok(BackupPreview {
+        with_forwards,
+        with_shared_folder,
         new_connections: nc.into_iter().map(name).collect(),
         known_connections: kc.into_iter().map(name).collect(),
         new_credentials: nr.into_iter().map(|x| x.name.clone()).collect(),
@@ -353,13 +369,13 @@ fn backup_import(path: State<LibraryPath>, file: String, password: String) -> Re
         }
     }
     let mut unlinked = 0;
-    let imported_ids: std::collections::HashSet<String> = c.connections.iter().filter_map(|v| v.get("id")?.as_str().map(String::from)).collect();
+    let fresh_conns = fresh_conn_ids(&c.connections, &conns);
     for v in c.connections {
         let mut conn: Connection = serde_json::from_value(v).map_err(|e| format!("Verbindung nicht lesbar: {e}"))?;
         conn.validate()?;
         // Verbindungen und Zugangsdaten teilen sich den Schlüsselbund («cred-<id>»): solche IDs nie als Verbindung.
         if !conns.iter().any(|x| x.id == conn.id) {
-            unlinked += import_unlink(&mut conn, &fresh_creds, &imported_ids)?;
+            unlinked += import_unlink(&mut conn, &fresh_creds, &fresh_conns)?;
             fresh_ids.insert(conn.id.clone());
             conns.push(conn);
             added.0 += 1;
@@ -387,11 +403,22 @@ fn backup_import(path: State<LibraryPath>, file: String, password: String) -> Re
     Ok(format!("{} Verbindungen und {} Zugangsdaten übernommen; Bestehendes blieb unverändert.{note}", added.0, added.1))
 }
 
+/// IDs der Verbindungen, die mit der Sicherung wirklich neu dazukommen. Eine mitgelieferte Attrappe mit der ID einer
+/// vorhandenen Verbindung zählt nicht, sonst liesse sich ein lokaler Sprungserver darüber erreichen (S-08).
+fn fresh_conn_ids(imported: &[serde_json::Value], have: &[Connection]) -> std::collections::HashSet<String> {
+    imported
+        .iter()
+        .filter_map(|v| v.get("id")?.as_str())
+        .filter(|id| !id.starts_with("cred-") && !id.starts_with("quick-") && !have.iter().any(|x| x.id == *id))
+        .map(String::from)
+        .collect()
+}
+
 /// Eingelesene Verbindung entschärfen: keine reservierte Kennung, Zugangsdaten nur aus derselben Sicherung.
 /// Gibt die Zahl entfernter Zuweisungen zurück.
 fn import_unlink(conn: &mut Connection, fresh_creds: &std::collections::HashSet<String>, fresh_conns: &std::collections::HashSet<String>) -> Result<usize, String> {
     // Verbindungen und Zugangsdaten teilen sich den Schlüsselbund («cred-<id>»): solche IDs nie als Verbindung.
-    if conn.id.starts_with("cred-") {
+    if conn.id.starts_with("cred-") || conn.id.starts_with("quick-") {
         return Err("Ungültige Sicherung: Verbindung mit reservierter Kennung".into());
     }
     let mut n = 0;
@@ -466,6 +493,7 @@ fn read_key_file(path: String) -> Result<String, String> {
 }
 
 static QUICK: Mutex<Vec<Connection>> = Mutex::new(Vec::new());
+const QUICK_MAX: usize = 20;
 
 /// Schnelle Verbindung anlegen (nichts wird gespeichert). Gibt die ID zurück.
 #[tauri::command]
@@ -491,7 +519,15 @@ fn quick_register(path: State<LibraryPath>, mut connection: Connection, password
         connection.has_key = true;
     }
     let id = connection.id.clone();
-    QUICK.lock().unwrap().push(connection);
+    let mut q = QUICK.lock().unwrap();
+    q.push(connection);
+    // shortcut: die Oberfläche meldet nicht, wann eine schnelle Verbindung fertig ist; darum nur die letzten
+    // QUICK_MAX behalten (samt Geheimnissen). Ein Abmelden beim Schliessen der Tabs wäre genauer.
+    while q.len() > QUICK_MAX {
+        let old = q.remove(0);
+        let _ = vault::delete(&old.id, Kind::Password);
+        let _ = vault::delete(&old.id, Kind::SshKey);
+    }
     Ok(id)
 }
 
@@ -525,6 +561,45 @@ fn rdp_login(path: &LibraryPath, c: &Connection) -> Result<(String, String), Str
     })
 }
 
+/// RD-Gateway der Verbindung samt Anmeldung (eigene Zugangsdaten, eigenes Passwort oder die der Verbindung).
+fn rdp_gateway(path: &LibraryPath, c: &Connection, user: &str, domain: &Option<String>, password: &str) -> Result<Option<rdp::Gateway>, String> {
+    Ok(match c.rdp_gateway.trim() {
+        "" => None,
+        gw if c.gateway_credential_id.is_some() => {
+            let (u, p) = cred_login(path, c.gateway_credential_id.as_deref().unwrap_or_default())?;
+            Some(rdp::Gateway { endpoint: gw.to_string(), user: u, password: p.unwrap_or_default() })
+        }
+        gw if c.rdp_gateway_user.trim().is_empty() => Some(rdp::Gateway {
+            endpoint: gw.to_string(),
+            // «Gleiche wie Verbindung»: Domäne wie bei mstsc vor den Benutzer.
+            user: match domain {
+                Some(d) if !user.contains(['@', '\\']) => format!("{d}\\{user}"),
+                _ => user.to_string(),
+            },
+            password: password.to_string(),
+        }),
+        gw => {
+            let pw = vault::get(&c.id, Kind::GatewayPassword)?.unwrap_or_default();
+            diag::add_secret(&pw);
+            Some(rdp::Gateway { endpoint: gw.to_string(), user: c.rdp_gateway_user.trim().to_string(), password: pw })
+        }
+    })
+}
+
+/// Host und Port eines RD-Gateways (`host`, `host:8443`, `[::1]:443`); Standard 443.
+fn gateway_addr(endpoint: &str) -> (String, u16) {
+    let e = endpoint.trim();
+    if let Some(rest) = e.strip_prefix('[')
+        && let Some((h, tail)) = rest.split_once(']')
+    {
+        return (h.to_string(), tail.strip_prefix(':').and_then(|p| p.parse().ok()).unwrap_or(443));
+    }
+    match e.rsplit_once(':') {
+        Some((h, p)) if !h.contains(':') => (h.to_string(), p.parse().unwrap_or(443)),
+        _ => (e.to_string(), 443),
+    }
+}
+
 /// «Zugangsdaten prüfen»: nur bis zur Anmeldung (NLA), dann sauber trennen. Zertifikat muss schon bestätigt sein.
 #[tauri::command]
 async fn rdp_check(path: State<'_, LibraryPath>, id: String, trust: Option<String>, remember: Option<bool>) -> Result<(), String> {
@@ -532,13 +607,16 @@ async fn rdp_check(path: State<'_, LibraryPath>, id: String, trust: Option<Strin
     let port = c.rdp_port.ok_or("RDP ist für diese Verbindung ausgeschaltet")?;
     let (user, password) = rdp_login(&path, &c)?;
     let pins_path = path.0.with_file_name("known_certs.json");
-    let mut pins = load_pins(&pins_path);
+    let pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
+    let domain = (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string());
+    let gateway = rdp_gateway(&path, &c, &user, &domain, &password)?;
     let t = rdp::Target {
         host: c.address.clone(),
+        server_name: c.address.clone(),
         port,
         user,
-        domain: (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string()),
+        domain,
         password,
         expected_cert: trust.clone().or_else(|| pins.get(&pin_key).cloned()),
         skip_cert_check: c.skip_cert_check,
@@ -550,14 +628,13 @@ async fn rdp_check(path: State<'_, LibraryPath>, id: String, trust: Option<Strin
         share: None,
         kdc: kdc::kdc_url(&c.rdp_kdc)?,
         no_ntlm: c.rdp_no_ntlm,
-        gateway: None,
+        gateway,
     };
     let seen: rdp::SeenCert = Default::default();
     rdp::check_login(t, seen.clone()).await?;
     // Wie beim Verbinden: bestätigtes Zertifikat merken, damit die nächste Verbindung nicht erneut fragt.
     if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && seen.lock().unwrap().as_ref() == Some(fp)) {
-        pins.insert(pin_key, fp);
-        let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+        let _ = save_pins(&pins_path, &pin_key, Some(fp));
     }
     Ok(())
 }
@@ -582,6 +659,13 @@ async fn conn_diagnose(path: State<'_, LibraryPath>, id: String, service: String
     };
     if !c.jump_host.is_empty() && service == "ssh" {
         send(step("name", "Sprungserver", None, "Die Verbindung läuft über einen Sprungserver; geprüft wird nur die Anmeldung.", ""));
+    } else if service == "rdp" && !c.rdp_gateway.trim().is_empty() {
+        // Über ein RD-Gateway ist das interne Ziel von hier aus meist gar nicht erreichbar: das Gateway prüfen.
+        let (gh, gp) = gateway_addr(&c.rdp_gateway);
+        send(step("name", "RD-Gateway", None, format!("Der Desktop läuft über das RD-Gateway {gh}:{gp}; geprüft wird zuerst das Gateway."), ""));
+        if !firstaid::network(&gh, gp, "gateway", &send).await {
+            return Ok(());
+        }
     } else if c.ssh_tunnel && service != "ssh" {
         send(step("name", "SSH-Tunnel", None, "Der Desktop läuft durch SSH; geprüft wird zuerst SSH.", ""));
         if !firstaid::network(&c.address, c.ssh_port.unwrap_or(22), "ssh", &send).await {
@@ -1209,7 +1293,7 @@ struct FilesOpened {
 async fn ftp_open(path: &LibraryPath, c: &Connection, trust: Option<String>, remember: bool) -> Result<ftp::Ftp, String> {
     let port = c.ftp_port.ok_or("FTP ist für diese Verbindung ausgeschaltet")?;
     let pins_path = path.0.with_file_name("known_certs.json");
-    let mut pins = load_pins(&pins_path);
+    let pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
     let password = login_secret(c, Kind::Password)?.unwrap_or_default();
     diag::add_secret(&password);
@@ -1225,8 +1309,7 @@ async fn ftp_open(path: &LibraryPath, c: &Connection, trust: Option<String>, rem
     };
     let (s, seen) = ftp::Ftp::open(t).await?;
     if let Some(fp) = trust.filter(|fp| remember && seen.as_ref() == Some(fp)) {
-        pins.insert(pin_key, fp);
-        let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+        let _ = save_pins(&pins_path, &pin_key, Some(fp));
     }
     Ok(s)
 }
@@ -1239,6 +1322,7 @@ async fn sftp_open(path: State<'_, LibraryPath>, files: State<'_, Files>, id: St
         let s = ftp_open(&path, &c, trust, remember.unwrap_or(true)).await?;
         let sid = new_sid(&c.id);
         files.0.lock().unwrap().insert(sid.clone(), FileSession::Ftp(Arc::new(s)));
+        touch(&path, &c.id);
         return Ok(FilesOpened { sid, scp: false });
     }
     let session = ssh_files_open(&c, trust).await?;
@@ -1744,8 +1828,15 @@ fn thumb_import(path: State<LibraryPath>, id: String, file: String) -> Result<()
     std::fs::write(&p, data).map_err(|e| e.to_string())
 }
 
+/// Freedesktop-Starter (Linux). Steuerzeichen im Namen würden neue Schlüssel einschleusen, darum weg damit.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn desktop_entry(name: &str, label: &str, url: &str) -> String {
+    let name: String = name.chars().filter(|c| !c.is_control()).collect();
+    format!("[Desktop Entry]\nType=Application\nName={name} ({label})\nExec=xdg-open \"{url}\"\nIcon=sesam-remote\nTerminal=false\n")
+}
+
 /// Verknüpfung auf dem Schreibtisch: öffnet `sesam://open?id=…&view=…`.
-/// Windows: .url mit dem Sesam-Symbol, macOS: .webloc.
+/// Windows: .url mit dem Sesam-Symbol, macOS: .webloc, Linux: .desktop.
 #[tauri::command]
 fn create_shortcut(app: AppHandle, path: State<LibraryPath>, id: String, view: String) -> Result<String, String> {
     let c = find(&path, &id)?;
@@ -1753,7 +1844,7 @@ fn create_shortcut(app: AppHandle, path: State<LibraryPath>, id: String, view: S
         return Err("Unbekannte Ansicht".into());
     }
     let label = match view.as_str() { "desktop" => "Desktop", "shell" => "Shell", _ => "Dateien" };
-    let safe: String = c.name.chars().map(|ch| if r#"\/:*?"<>|"#.contains(ch) || ch.is_control() { '_' } else { ch }).collect();
+    let safe: String = c.name.chars().map(|ch| if "\\/:*?\"<>|".contains(ch) || ch.is_control() { '_' } else { ch }).collect();
     let url = format!("sesam://open?id={}&view={view}", c.id);
     let desk = app.path().desktop_dir().map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
@@ -1761,12 +1852,17 @@ fn create_shortcut(app: AppHandle, path: State<LibraryPath>, id: String, view: S
         desk.join(format!("{safe} ({label}).webloc")),
         format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict><key>URL</key><string>{url}</string></dict></plist>\n"),
     );
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    let (file, body) = (desk.join(format!("{safe} ({label}).desktop")), desktop_entry(&c.name, label, &url));
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let (file, body) = {
         let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
         (desk.join(format!("{safe} ({label}).url")), format!("[InternetShortcut]\r\nURL={url}\r\nIconFile={exe}\r\nIconIndex=0\r\n"))
     };
     std::fs::write(&file, body).map_err(|e| format!("{}: {e}", file.display()))?;
+    // Freedesktop: Starter auf dem Schreibtisch müssen ausführbar sein.
+    #[cfg(target_os = "linux")]
+    std::fs::set_permissions(&file, std::os::unix::fs::PermissionsExt::from_mode(0o755)).map_err(|e| format!("{}: {e}", file.display()))?;
     #[cfg(target_os = "macos")]
     sfsymbol::set_app_icon(&file);
     Ok(file.display().to_string())
@@ -1795,7 +1891,7 @@ async fn drop_files(path: State<'_, LibraryPath>, id: String, files: Vec<String>
             let mut target = dir.join(name);
             let mut n = 2;
             while target.exists() {
-                target = dir.join(format!("{} ({n})", name.to_string_lossy()));
+                target = dir.join(sftp::numbered(&name.to_string_lossy(), n, false));
                 n += 1;
             }
             if f.is_dir() {
@@ -1818,10 +1914,7 @@ fn certs_list(path: State<LibraryPath>) -> Vec<(String, String)> {
 
 #[tauri::command]
 fn cert_remove(path: State<LibraryPath>, host: String) -> Result<(), String> {
-    let p = path.0.with_file_name("known_certs.json");
-    let mut pins = load_pins(&p);
-    pins.remove(&host);
-    std::fs::write(&p, serde_json::to_string_pretty(&pins).unwrap_or_default()).map_err(|e| e.to_string())
+    save_pins(&path.0.with_file_name("known_certs.json"), &host, None)
 }
 
 /// Vom Benutzer im Speichern-Dialog gewählte Datei schreiben (z. B. Bildschirmfoto).
@@ -1989,12 +2082,38 @@ fn local_open(path: String) -> Result<(), String> {
         return Err("Diese Art Datei würde das System ausführen statt zum Bearbeiten öffnen. Bitte herunterladen und in einem Editor öffnen.".into());
     }
     #[cfg(desktop)]
-    return tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string());
+    {
+        mark_from_internet(&path);
+        tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
+    }
     #[cfg(mobile)]
     {
         let _ = path;
         Err("Auf dem iPad gibt es kein Standardprogramm zum Bearbeiten".into())
     }
+}
+
+/// Datei vom Server als «aus dem Internet» kennzeichnen, bevor das System sie öffnet (S-05, ergänzt die Sperrliste):
+/// macOS Quarantäne (Gatekeeper fragt vor dem Ausführen), Windows Mark-of-the-Web (Zone Internet, Office öffnet in der
+/// geschützten Ansicht). Linux kennt nichts Vergleichbares. Klappt es nicht (z. B. FAT-Laufwerk), geht es trotzdem weiter.
+#[cfg(desktop)]
+fn mark_from_internet(path: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let r = std::process::Command::new("/usr/bin/xattr").args(["-w", "com.apple.quarantine", &format!("0083;{now:x};Sesam Remote;"), path]).status();
+        if !r.is_ok_and(|s| s.success()) {
+            tracing::warn!("Quarantäne-Markierung nicht gesetzt");
+        }
+    }
+    #[cfg(windows)]
+    {
+        if let Err(e) = std::fs::write(format!("{path}:Zone.Identifier"), "[ZoneTransfer]\r\nZoneId=3\r\n") {
+            tracing::warn!(error = %e, "Mark-of-the-Web nicht gesetzt");
+        }
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let _ = path;
 }
 
 #[tauri::command]
@@ -2121,6 +2240,22 @@ fn load_pins(path: &std::path::Path) -> HashMap<String, String> {
     std::fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
 }
 
+/// Einen Fingerabdruck merken (`Some`) oder vergessen (`None`): unter Sperre frisch lesen, ändern und atomar
+/// schreiben, damit gleichzeitige Verbindungen einander nichts überschreiben und die Datei nie halb ist.
+fn save_pins(path: &std::path::Path, key: &str, fp: Option<String>) -> Result<(), String> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut pins = load_pins(path);
+    match fp {
+        Some(fp) => pins.insert(key.to_string(), fp),
+        None => pins.remove(key),
+    };
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, serde_json::to_string_pretty(&pins).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+
 /// Binärrahmen ans Frontend (Big Endian): 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis, 6 Mauszeiger.
 /// Ein Bild mit allen geänderten Rechtecken (Art 7): Anzahl, dann je x, y, b, h und RGBA.
 fn frame_rects(list: &[(vnc::decode::Rect, Vec<u8>)]) -> InvokeResponseBody {
@@ -2160,7 +2295,7 @@ async fn vnc_open(
         None => vault::get(&c.id, Kind::VncPassword)?,
     };
     let pins_path = path.0.with_file_name("known_certs.json");
-    let mut pins = load_pins(&pins_path);
+    let pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
     let cert = if c.skip_cert_check {
         vnc::tls::Pinned::accept_any()
@@ -2181,8 +2316,7 @@ async fn vnc_open(
         .map_err(|_| "Zeitüberschreitung bei der Anmeldung".to_string())??;
     // Bestätigtes Zertifikat merken, aber nur wenn TLS es wirklich gesehen hat.
     if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && login.cert.seen.lock().unwrap().as_ref() == Some(fp)) {
-        pins.insert(pin_key, fp);
-        let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+        let _ = save_pins(&pins_path, &pin_key, Some(fp));
     }
 
     let downloads = app.path().download_dir().unwrap_or_else(|_| std::env::temp_dir());
@@ -2429,34 +2563,15 @@ async fn rdp_open(
     let port = c.rdp_port.ok_or("Desktop über RDP ist für diese Verbindung ausgeschaltet")?;
     let (user, password) = rdp_login(&path, &c)?;
     let domain = (!c.rdp_domain.trim().is_empty()).then(|| c.rdp_domain.trim().to_string());
-    let gateway = match c.rdp_gateway.trim() {
-        "" => None,
-        gw if c.gateway_credential_id.is_some() => {
-            let (u, p) = cred_login(&path, c.gateway_credential_id.as_deref().unwrap_or_default())?;
-            Some(rdp::Gateway { endpoint: gw.to_string(), user: u, password: p.unwrap_or_default() })
-        }
-        gw if c.rdp_gateway_user.trim().is_empty() => Some(rdp::Gateway {
-            endpoint: gw.to_string(),
-            // «Gleiche wie Verbindung»: Domäne wie bei mstsc vor den Benutzer.
-            user: match &domain {
-                Some(d) if !user.contains(['@', '\\']) => format!("{d}\\{}", user),
-                _ => user.clone(),
-            },
-            password: password.clone(),
-        }),
-        gw => {
-            let pw = vault::get(&c.id, Kind::GatewayPassword)?.unwrap_or_default();
-            diag::add_secret(&pw);
-            Some(rdp::Gateway { endpoint: gw.to_string(), user: c.rdp_gateway_user.trim().to_string(), password: pw })
-        }
-    };
+    let gateway = rdp_gateway(&path, &c, &user, &domain, &password)?;
     let pins_path = path.0.with_file_name("known_certs.json");
-    let mut pins = load_pins(&pins_path);
+    let pins = load_pins(&pins_path);
     let pin_key = format!("{}:{port}", c.address);
     let (via_host, via_port, tunnel) = desktop_via_ssh(&c, port).await?;
     let mut tunnel = TunnelGuard(tunnel);
     let target = rdp::Target {
         host: via_host,
+        server_name: c.address.clone(),
         port: via_port,
         user,
         domain,
@@ -2496,8 +2611,7 @@ async fn rdp_open(
         TUNNELS.lock().unwrap().insert(sid.clone(), t);
     }
     if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && seen.lock().unwrap().as_ref() == Some(fp)) {
-        pins.insert(pin_key, fp);
-        let _ = std::fs::write(&pins_path, serde_json::to_string_pretty(&pins).unwrap_or_default());
+        let _ = save_pins(&pins_path, &pin_key, Some(fp));
     }
     sessions.0.lock().unwrap().insert(sid.clone(), session);
     Ok(sid)
@@ -2900,6 +3014,28 @@ pub fn run() {
 }
 
 #[cfg(test)]
+mod shortcut_tests {
+    #[test]
+    fn desktop_starter_ohne_eingeschleuste_zeilen() {
+        let d = super::desktop_entry("Büro\nExec=rm -rf ~\r", "Shell", "sesam://open?id=abc-1&view=shell");
+        assert_eq!(d, "[Desktop Entry]\nType=Application\nName=BüroExec=rm -rf ~ (Shell)\nExec=xdg-open \"sesam://open?id=abc-1&view=shell\"\nIcon=sesam-remote\nTerminal=false\n");
+        assert_eq!(d.lines().filter(|l| l.starts_with("Exec=")).count(), 1);
+    }
+}
+
+#[cfg(test)]
+mod gateway_tests {
+    #[test]
+    fn gateway_adresse_lesen() {
+        assert_eq!(super::gateway_addr("gw.firma.ch"), ("gw.firma.ch".into(), 443));
+        assert_eq!(super::gateway_addr("gw.firma.ch:8443"), ("gw.firma.ch".into(), 8443));
+        assert_eq!(super::gateway_addr("[::1]:443"), ("::1".into(), 443));
+        assert_eq!(super::gateway_addr("[fe80::1]"), ("fe80::1".into(), 443));
+        assert_eq!(super::gateway_addr(" 10.0.0.5:4433 "), ("10.0.0.5".into(), 4433));
+    }
+}
+
+#[cfg(test)]
 mod import_tests {
     use super::*;
 
@@ -2917,6 +3053,20 @@ mod import_tests {
         assert!(import_unlink(&mut bad, &fresh, &none).is_err());
         let mut j = Connection { id: "v2".into(), jump_host: "v1".into(), ..Default::default() };
         assert_eq!(import_unlink(&mut j, &fresh, &["v1".to_string()].into()).unwrap(), 0, "Sprung über mitgelieferte Verbindung bleibt");
+        let mut q = Connection { id: "quick-123".into(), ..Default::default() };
+        assert!(import_unlink(&mut q, &fresh, &none).is_err());
+    }
+
+    /// Attrappe mit der ID eines vorhandenen Sprungservers plus Verbindung, die über ihn springen will: der Verweis fällt weg.
+    #[test]
+    fn attrappe_mit_vorhandener_id_oeffnet_keinen_sprung() {
+        let have = [Connection { id: "bastion".into(), ..Default::default() }];
+        let imported = [serde_json::json!({"id": "bastion"}), serde_json::json!({"id": "neu"}), serde_json::json!({"id": "quick-1"}), serde_json::json!({"id": "cred-x"})];
+        let fresh_conns = fresh_conn_ids(&imported, &have);
+        assert_eq!(fresh_conns, ["neu".to_string()].into());
+        let mut c = Connection { id: "neu".into(), jump_host: "bastion".into(), ..Default::default() };
+        assert_eq!(import_unlink(&mut c, &Default::default(), &fresh_conns).unwrap(), 1);
+        assert!(c.jump_host.is_empty());
     }
 }
 
@@ -3013,5 +3163,20 @@ mod setup_script_tests {
         assert_eq!(sha, "066c8bbdf4ca6173713f3e21f46d1fa695aac8d1815e388dc2fe868492571b7a");
         assert_eq!(bytes.len(), 17656);
         assert!(!bytes.starts_with(&[0xEF, 0xBB, 0xBF]) && !bytes.windows(2).any(|w| w == b"\r\n"));
+    }
+}
+
+#[cfg(test)]
+mod pins_tests {
+    #[test]
+    fn merken_und_vergessen() {
+        let p = std::env::temp_dir().join(format!("sesam-pins-{}.json", std::process::id()));
+        super::save_pins(&p, "a:3389", Some("AA".into())).unwrap();
+        super::save_pins(&p, "b:990", Some("BB".into())).unwrap();
+        super::save_pins(&p, "a:3389", None).unwrap();
+        let m = super::load_pins(&p);
+        assert_eq!((m.get("a:3389"), m.get("b:990").map(String::as_str)), (None, Some("BB")));
+        assert!(!p.with_extension("json.tmp").exists());
+        std::fs::remove_file(p).unwrap();
     }
 }

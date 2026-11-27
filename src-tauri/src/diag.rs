@@ -11,7 +11,27 @@ use tracing_subscriber::filter::Targets;
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::prelude::*;
 
-static FILE: Mutex<Option<File>> = Mutex::new(None);
+static FILE: Mutex<Option<Log>> = Mutex::new(None);
+
+/// Laufendes Log; ab `RUN_MAX` geschriebenen Bytes wechselt es im Betrieb auf eine neue Datei (Rotation wie beim Start).
+struct Log {
+    file: File,
+    dir: PathBuf,
+    written: u64,
+}
+
+impl Log {
+    fn write(&mut self, b: &[u8], max: u64) {
+        let _ = self.file.write_all(b);
+        self.written += b.len() as u64;
+        if self.written > max {
+            rotate(&self.dir);
+            if let Ok(f) = File::create(self.dir.join("sesam.log")) {
+                (self.file, self.written) = (f, 0);
+            }
+        }
+    }
+}
 static SECRETS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /// Geheimnis merken, damit es im Log als `***` erscheint (kurze Werte < 3 Zeichen nicht, sonst zu viele Treffer).
@@ -49,7 +69,7 @@ impl Drop for LineWriter {
     fn drop(&mut self) {
         let line = redact(&String::from_utf8_lossy(&self.0));
         if let Some(f) = FILE.lock().unwrap().as_mut() {
-            let _ = f.write_all(line.as_bytes());
+            f.write(line.as_bytes(), RUN_MAX);
         }
     }
 }
@@ -64,6 +84,8 @@ impl<'a> MakeWriter<'a> for Make {
 
 /// Höchstgrösse eines aufbewahrten Logs; von einem grösseren bleibt das Ende (dort steht, was zuletzt geschah).
 const KEEP_MAX: u64 = 5 * 1024 * 1024;
+/// So viel schreibt ein Lauf höchstens in eine Datei, bevor sie rotiert (lange laufende App, gesprächige Sitzungen).
+const RUN_MAX: u64 = 10 * 1024 * 1024;
 
 /// Logs der letzten Läufe aufbewahren: sesam.log → sesam.1.log → sesam.2.log (das älteste fällt weg).
 /// So bleibt z. B. nachlesbar, was ein Update vor dem Neustart heruntergeladen und installiert hat.
@@ -87,7 +109,7 @@ pub fn init(dir: &Path) -> Option<PathBuf> {
     std::fs::create_dir_all(dir).ok()?;
     rotate(dir);
     let path = dir.join("sesam.log");
-    *FILE.lock().unwrap() = Some(File::create(&path).ok()?);
+    *FILE.lock().unwrap() = Some(Log { file: File::create(&path).ok()?, dir: dir.to_path_buf(), written: 0 });
     let filter = Targets::new()
         .with_default(Level::WARN)
         .with_target("sesam_remote_lib", Level::DEBUG)
@@ -150,6 +172,20 @@ mod tests {
         rotate(&dir);
         assert_eq!(std::fs::metadata(dir.join("sesam.1.log")).unwrap().len(), KEEP_MAX);
         assert_eq!(read("sesam.2.log"), "lauf3");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn rotiert_im_laufenden_betrieb() {
+        let dir = std::env::temp_dir().join(format!("sesam-runlog-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut log = Log { file: File::create(dir.join("sesam.log")).unwrap(), dir: dir.clone(), written: 0 };
+        log.write(b"aaaaa\n", 10);
+        log.write(b"bbbbb\n", 10);
+        log.write(b"c\n", 10);
+        let read = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap_or_default();
+        assert_eq!((read("sesam.log"), read("sesam.1.log")), ("c\n".into(), "aaaaa\nbbbbb\n".into()));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

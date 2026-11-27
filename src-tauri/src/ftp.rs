@@ -261,9 +261,12 @@ impl Ftp {
         if rparent(safe(path)?).is_none() {
             return Err("Das Wurzelverzeichnis lässt sich nicht löschen".into());
         }
+        let parent = rparent(path).unwrap_or_default();
+        let name = path.rsplit('/').next().unwrap_or(path);
         let mut g = self.ctl().await?;
         let s = &mut g.s;
-        if s.cwd(path).await.is_err() {
+        // Erst im Elternordner nachsehen, was es ist: `cwd` folgt einer Verknüpfung und würde sonst den Zielordner leeren.
+        if !is_real_dir(&self.entries(s, &parent).await?.1, name) {
             return s.rm(path).await.map_err(|e| format!("{path}: {}", err(e)));
         }
         let (mut dirs, mut stack) = (Vec::new(), vec![path.to_string()]);
@@ -402,8 +405,11 @@ pub async fn download(ftp: &Arc<Ftp>, remote: &str, local_dir: &Path, replace: b
         let is_dir = s.cwd(remote).await.is_ok();
         let root = if replace && !is_dir { local_dir.join(name) } else { local_unique(local_dir, name, is_dir) };
         if is_dir {
-            let mut stack = vec![(remote.to_string(), root.clone())];
-            while let Some((src, dst)) = stack.pop() {
+            let mut stack = vec![(remote.to_string(), root.clone(), 0)];
+            while let Some((src, dst, depth)) = stack.pop() {
+                if depth >= crate::sftp::MAX_DEPTH {
+                    return Err(crate::sftp::TOO_DEEP.into());
+                }
                 for (e, link) in ftp.entries(s, &src).await?.1 {
                     // Verknüpfungen nicht verfolgen (keine Schleifen); Namen, die lokal aus dem Ziel führen würden, auslassen.
                     if link || crate::scp::check_name(&e.name).is_err() {
@@ -411,7 +417,7 @@ pub async fn download(ftp: &Arc<Ftp>, remote: &str, local_dir: &Path, replace: b
                     }
                     let (p, d) = (rjoin(&src, &e.name), dst.join(&e.name));
                     if e.dir {
-                        stack.push((p, d));
+                        stack.push((p, d, depth + 1));
                     } else {
                         total += e.size;
                         plan.push((p, d, false));
@@ -453,6 +459,12 @@ pub async fn download(ftp: &Arc<Ftp>, remote: &str, local_dir: &Path, replace: b
     Ok(root)
 }
 
+/// Nur ein echter Ordner (keine Verknüpfung) wird rekursiv gelöscht. Fehlt der Eintrag im Listing (z. B. versteckt),
+/// wird nur `DELE` versucht: das löscht eine Datei, scheitert bei einem Ordner, folgt aber nie einer Verknüpfung.
+fn is_real_dir(entries: &[(Entry, bool)], name: &str) -> bool {
+    entries.iter().any(|(e, link)| e.name == name && e.dir && !link)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,6 +479,12 @@ mod tests {
         assert_eq!((e.name.as_str(), e.dir, e.size, e.perm), ("bilder mit leer", true, 0, Some(0o755)));
         let (e, link) = parse_line("lrwxrwxrwx    1 web      web            11 Jan 10 09:15 www -> public_html", false).unwrap();
         assert_eq!((e.name.as_str(), link), ("www", true));
+        // Verknüpfung auf einen Ordner wird nie rekursiv gelöscht, nur der echte Ordner.
+        let (d, l) = parse_line("drwxr-xr-x    2 web      web          4096 Jan 10 09:15 public_html", false).unwrap();
+        let listing = [(Entry { dir: true, ..e }, link), (d, l)];
+        assert!(!is_real_dir(&listing, "www"));
+        assert!(is_real_dir(&listing, "public_html"));
+        assert!(!is_real_dir(&listing, "versteckt"));
         assert!(parse_line("total 12", false).is_none());
         assert!(parse_line("drwxr-xr-x    2 web      web          4096 Jan 10 09:15 ..", false).is_none());
 

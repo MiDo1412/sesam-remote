@@ -382,6 +382,9 @@ pub async fn download<R: Remote>(s: &Arc<Scp<R>>, remote: &str, local_dir: &Path
                 cwd.pop().ok_or_else(|| "SCP: unerwartetes Ende".to_string())?;
             }
             Record::Dir { name: n, .. } => {
+                if cwd.len() >= crate::sftp::MAX_DEPTH {
+                    return Err(crate::sftp::TOO_DEEP.into());
+                }
                 let p = target(&n, true, &mut root, &cwd);
                 tokio::fs::create_dir_all(&p).await.map_err(|e| format!("{}: {e}", p.display()))?;
                 cwd.push(p);

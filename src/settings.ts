@@ -13,6 +13,7 @@ import { enhanceSelect } from "./menu";
 import { renderCredList } from "./creds";
 import { renderProfiles } from "./termprofiles";
 import { renderGroupSettings } from "./groups";
+import { hasTabs } from "./tabs";
 
 export type Appearance = "auto" | "light" | "dark";
 const KEY = "sesam.app";
@@ -20,11 +21,11 @@ const KEY = "sesam.app";
 /** Wo Windows-Tastenkombinationen (Win, Alt+Tab …) wirken, wie in mstsc. */
 export type SystemKeys = "remote" | "fullscreen" | "local";
 
-export function appSettings(): { appearance: Appearance; systemKeys: SystemKeys } {
+export function appSettings(): { appearance: Appearance; systemKeys: SystemKeys; onlineProbe: boolean } {
   try {
-    return { appearance: "auto", systemKeys: "remote", ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
+    return { appearance: "auto", systemKeys: "remote", onlineProbe: true, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
   } catch {
-    return { appearance: "auto", systemKeys: "remote" };
+    return { appearance: "auto", systemKeys: "remote", onlineProbe: true };
   }
 }
 
@@ -40,6 +41,9 @@ export function applyAppearance() {
 addEventListener("storage", (e) => {
   if (e.key === KEY) applyAppearance();
   if (e.key === "sesam.terminal") dispatchEvent(new CustomEvent("sesam:terminal-settings"));
+  // Sprache in einem anderen Fenster gewechselt (z. B. Einstellungsfenster auf dem Mac): neu laden, aber nie
+  // ein Fenster mit offenen Sitzungen (die liefen sonst ins Leere); das folgt beim nächsten Öffnen.
+  if (e.key === "sesam.lang" && !hasTabs()) location.reload();
 });
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -48,6 +52,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const SIZE_KEY = "sesam.settingsSize";
 let trashMenu: ReturnType<typeof enhanceSelect> | undefined;
 let langMenu: ReturnType<typeof enhanceSelect> | undefined;
+let probeMenu: ReturnType<typeof enhanceSelect> | undefined;
 let trashMaxMenu: ReturnType<typeof enhanceSelect> | undefined;
 let keysMenu: { sync(): void } | undefined;
 let sizeWatch: ResizeObserver | null = null;
@@ -111,6 +116,11 @@ export async function openSettings(tab = "general") {
   keysMenu ??= enhanceSelect(keys);
   keysMenu.sync();
   keys.onchange = () => localStorage.setItem(KEY, JSON.stringify({ ...appSettings(), systemKeys: keys.value }));
+  const probe = dlg.querySelector<HTMLSelectElement>("[name=onlineProbe]")!;
+  probe.value = appSettings().onlineProbe ? "on" : "off";
+  probeMenu ??= enhanceSelect(probe);
+  probeMenu.sync();
+  probe.onchange = () => localStorage.setItem(KEY, JSON.stringify({ ...appSettings(), onlineProbe: probe.value === "on" }));
   // Windows und macOS fangen die Kombinationen ab (kbhook.rs), Linux noch nicht.
   const row = $("system-keys-row");
   const note = row.nextElementSibling as HTMLElement;

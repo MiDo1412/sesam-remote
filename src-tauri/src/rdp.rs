@@ -30,8 +30,11 @@ const MAX_REDIRECTS: u32 = 8;
 
 #[derive(Clone)]
 pub struct Target {
+    /// Transportziel (bei SSH-Tunnel `127.0.0.1`).
     pub host: String,
     pub port: u16,
+    /// Echter Name des Servers für TLS-SNI, Zertifikatsprüfung und Kerberos-SPN (bei SSH-Tunnel ≠ `host`).
+    pub server_name: String,
     pub user: String,
     pub domain: Option<String>,
     pub password: String,
@@ -553,8 +556,16 @@ async fn credssp(t: &Target, server: &str, connector: &mut ClientConnector, fram
 }
 
 /// Ein Verbindungsversuch bis zum Ende des Verbindungsaufbaus.
+/// (Transportziel, Servername): nach einer Umleitung beide die neue Adresse, sonst wie im Ziel.
+fn hop_names(t: &Target, hop: &Hop) -> (String, String) {
+    match &hop.host {
+        Some(h) => (h.clone(), h.clone()),
+        None => (t.host.clone(), t.server_name.clone()),
+    }
+}
+
 async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(ConnectionOutcome, Framed), String> {
-    let host = hop.host.clone().unwrap_or_else(|| t.host.clone());
+    let (host, name) = hop_names(t, hop);
     let redirected = hop.session_id != 0 || hop.routing_token.is_some();
     let user_log = if redirected { "***" } else { t.user.as_str() };
     tracing::info!(%host, port = t.port, user = %user_log, redirected, "RDP: Verbindung");
@@ -620,7 +631,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
         tracing::warn!("RDP: Zertifikatsprüfung ist für diese Verbindung ausgeschaltet");
     }
     tracing::info!(ms = ms(), "RDP: TLS");
-    let (tls, cert) = ironrdp_tls::upgrade_with_certificate_validation(tcp, &t.host, ironrdp_tls::CertificateValidation::DangerouslyAcceptInvalidCertificate)
+    let (tls, cert) = ironrdp_tls::upgrade_with_certificate_validation(tcp, &name, ironrdp_tls::CertificateValidation::DangerouslyAcceptInvalidCertificate)
         .await
         .map_err(|e| {
             tracing::warn!(error = %e, "RDP: TLS gescheitert");
@@ -630,7 +641,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     let fp = chain.first().map(|c| fingerprint(c)).ok_or("TLS: Der Server zeigt kein Zertifikat")?;
     *seen.lock().unwrap() = Some(fp.clone());
     let pinned = t.expected_cert.as_deref() == Some(fp.as_str());
-    if !(t.skip_cert_check || pinned || system_trusts(chain, &t.host)) {
+    if !(t.skip_cert_check || pinned || system_trusts(chain, &name)) {
         tracing::warn!(seen = %fp, expected = ?t.expected_cert, "RDP: Zertifikat nicht bestätigt");
         return Err(match &t.expected_cert {
             None => format!("{CERT_UNKNOWN}{fp}"),
@@ -655,7 +666,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     tracing::info!("RDP: Anmeldung (NLA/CredSSP) und Verbindungsaufbau");
     let check = CHECK_ONLY.try_with(|v| *v).unwrap_or(false);
     if connector.should_perform_credssp() {
-        credssp(t, &host, &mut connector, &mut framed, key.clone()).await?;
+        credssp(t, &name, &mut connector, &mut framed, key.clone()).await?;
         tracing::info!(ms = ms(), "RDP: CredSSP fertig");
     } else if check {
         return Err("Dieser Server prüft die Zugangsdaten erst am Bildschirm, nicht vorab.".into());
@@ -670,7 +681,7 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
         connector,
         &mut framed,
         &mut crate::kdc::Kdc,
-        ironrdp_connector::ServerName::new(host.clone()),
+        ironrdp_connector::ServerName::new(name),
         key,
         None,
     )
@@ -1506,6 +1517,7 @@ mod tests {
     fn redirect_updates_target() {
         let mut t = Target {
             host: "pc-buero".into(),
+            server_name: "pc-buero".into(),
             port: 3389,
             user: "mike".into(),
             domain: None,
@@ -1559,6 +1571,14 @@ mod tests {
 
         let bad = Redir { load_balance_info: Some(vec![1, 2, 3]), ..Default::default() };
         assert!(apply_redirect(&mut t, &mut hop, &bad).is_err());
+
+        // Hostnamen: direkt beide gleich; SSH-Tunnel Transport 127.0.0.1, TLS/Kerberos der echte Name;
+        // Umleitung mit Zieladresse beide die neue Adresse.
+        assert_eq!(hop_names(&t, &Hop::default()), ("pc-buero".into(), "pc-buero".into()));
+        t.host = "127.0.0.1".into();
+        assert_eq!(hop_names(&t, &Hop::default()), ("127.0.0.1".into(), "pc-buero".into()));
+        let h = Hop { host: Some("rdsh2.firma.ch".into()), ..Default::default() };
+        assert_eq!(hop_names(&t, &h), ("rdsh2.firma.ch".into(), "rdsh2.firma.ch".into()));
     }
 }
 
@@ -1607,6 +1627,7 @@ mod probe {
             std::fs::read_to_string(appdata.join("known_certs.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let t = Target {
             host: host.into(),
+            server_name: host.into(),
             port: port.parse().unwrap(),
             user,
             domain: None,
@@ -1759,7 +1780,7 @@ mod probe {
             std::fs::read_to_string(appdata.join("known_certs.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let (host, port) = addr.rsplit_once(':').unwrap();
         let t = Target {
-            host: host.into(), port: port.parse().unwrap(), user, domain, password: pw,
+            host: host.into(), server_name: host.into(), port: port.parse().unwrap(), user, domain, password: pw,
             expected_cert: std::env::var("SESAM_RDP_TRUST").ok().or_else(|| pins.get(&addr).cloned()), skip_cert_check: false, width: 1024, height: 768, scale: 100,
             clipboard: None, audio: false, share: None, kdc: None, no_ntlm: false, gateway: None,
         };
@@ -1773,6 +1794,7 @@ mod probe {
         let (host, port) = addr.rsplit_once(':').unwrap();
         let mut t = Target {
             host: host.into(),
+            server_name: host.into(),
             port: port.parse().unwrap(),
             user: "sesam-probe".into(),
             domain: None,

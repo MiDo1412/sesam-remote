@@ -23,10 +23,10 @@ eigene Unit-Tests auf diesem Rechner (keine Server im Netz, keine fremden Dienst
 | S-02 | KDC-Proxy über HTTPS ohne Zertifikatsprüfung | mittel | behoben |
 | S-03 | VNC: Rückfall von verschlüsselter auf unverschlüsselte Anmeldung trotz gemerktem Zertifikat | mittel | behoben (Vertrauen beim ersten Kontakt bleibt) |
 | S-04 | Befehlsausführung als root über einen Dateinamen im sudo-Skript beim Hochladen | mittel | behoben, mit Test |
-| S-05 | «Bearbeiten» führte ausführbare Dateien vom Server lokal aus | mittel | behoben (Sperrliste je System) |
+| S-05 | «Bearbeiten» führte ausführbare Dateien vom Server lokal aus | mittel | behoben (Sperrliste je System, dazu Quarantäne bzw. Mark-of-the-Web seit 2026-11-27) |
 | S-08 | Fremde Sicherung konnte vorhandene Zugangsdaten nutzen oder überschreiben | mittel | behoben, mit Test |
-| S-09 | SSH-Schlüssel anderen Typs sah aus wie ein neuer Server | mittel | entschärft (deutliche Warnung) |
-| S-06 | VNC-Zwischenablage holte beliebige Dateien und Ordner ungefragt | niedrig | entschärft (Grenzen) |
+| S-09 | SSH-Schlüssel anderen Typs sah aus wie ein neuer Server | mittel | entschärft (deutliche Warnung; bekannte Schlüsseltypen zuerst wie OpenSSH, seit 2026-11-27) |
+| S-06 | VNC-Zwischenablage holte beliebige Dateien und Ordner ungefragt | niedrig | entschärft (Grenzen, auch beim Streamen; Downloads höchstens 64 Ordnerebenen tief, seit 2026-11-27) |
 | S-07 | Sicherung mit allen Passwörtern ohne Touch ID | niedrig | behoben auf Mac/iPad; Windows/Linux offen |
 | S-10 | Server setzte die lokale Zwischenablage über das Terminal (OSC 52) ohne Bedingung | niedrig | behoben |
 | S-11 | VNC: unbegrenzte Bildgrösse (Speicher) | niedrig | behoben |

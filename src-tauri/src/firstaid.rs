@@ -99,6 +99,10 @@ pub async fn network(host: &str, port: u16, service: &str, send: &impl Fn(Step))
             return false;
         }
     };
+    // RD-Gateway (HTTPS) grüsst nicht von selbst; der offene Port genügt hier, den Rest prüft die Anmeldung.
+    if service == "gateway" {
+        return true;
+    }
     let greet = "Begrüssung des Dienstes";
     let mut buf = vec![0u8; 256];
     if service == "rdp" {

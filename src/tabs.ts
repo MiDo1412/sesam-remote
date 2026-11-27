@@ -201,7 +201,10 @@ function autoHide(el: HTMLElement) {
   const check = () => {
     clearTimeout(timer);
     const t = el.textContent?.trim() ?? "";
-    el.classList.toggle("sticky", !!t && STICKY.test(t));
+    // Übersetzte Meldungen am deutschen Original erkennen (data-de, nur wenn es zum angezeigten Text gehört),
+    // sonst verschwänden Fehler auf Englisch nach 6 s.
+    const de = el.dataset.de;
+    el.classList.toggle("sticky", !!t && STICKY.test(de !== undefined && tr(de) === t ? de : t));
     el.title = el.classList.contains("sticky") ? "Klicken zum Schliessen" : "";
     if (t && !el.classList.contains("sticky")) timer = window.setTimeout(() => (el.textContent === t || el.textContent === tr(t)) && (el.textContent = ""), 6000);
   };

@@ -39,10 +39,10 @@ for (const f of readdirSync(root + "/src").filter((f) => f.endsWith(".ts"))) {
 }
 add(readFileSync(root + "/index.html", "utf8").replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, ""));
 for (const f of readdirSync(root + "/src-tauri/src", { recursive: true }).filter((f) => String(f).endsWith(".rs"))) {
-  const src = readFileSync(`${root}/src-tauri/src/${f}`, "utf8").replace(/\/\/.*$/gm, "").replace(/#\[cfg\(test\)\][\s\S]*$/m, "");
+  const src = readFileSync(`${root}/src-tauri/src/${f}`, "utf8").replace(/(^|\s)\/\/.*$/gm, "$1").replace(/#\[cfg\(test\)\][\s\S]*$/m, "");
   // Menüleiste (macOS, Windows, Linux): Beschriftungen in SubmenuBuilder::new / .text / with_id
   for (const m of src.matchAll(/(?:SubmenuBuilder::new\(\s*app,\s*|\.text\(\s*"[^"]*",\s*|with_id\(\s*"[^"]*",\s*)"([^"]+)"/g)) if (LABEL.test(m[1].trim()) || isText(m[1])) exact.add(m[1].trim());
-  for (const m of src.matchAll(/"((?:[^"\\]|\\.)*)"/g)) { const s = m[1].replace(/\\"/g, '"').replace(/\\n/g, " "); if (!/[äöüÄÖÜß«]/.test(s) && !(DE.test(s) && /\s/.test(s))) continue; add(s.replace(/\{[^{}]*\}/g, SUB)); }
+  for (const m of src.matchAll(/"((?:[^"\\]|\\.)*)"/g)) { const s = m[1].replace(/\\"/g, '"').replace(/\\n/g, " "); if (/^[a-z][\w-]*:\S/.test(s)) continue; if (!/[äöüÄÖÜß«]/.test(s) && !(DE.test(s) && /\s/.test(s))) continue; add(s.replace(/\{[^{}]*\}/g, SUB)); }
 }
 const en = JSON.parse(readFileSync(root + "/src/i18n/en.json", "utf8"));
 const missing = [...exact, ...tpl].filter((s) => !(s in en)).sort();

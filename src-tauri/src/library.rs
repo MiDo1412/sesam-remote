@@ -177,6 +177,10 @@ impl Connection {
         if self.id.trim().is_empty() || self.id.len() > 64 || !self.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Err("Ungültige ID".into());
         }
+        // «cred-<id>» sind Zugangsdaten im Schlüsselbund; eine Verbindung darf nie so heissen.
+        if self.id.starts_with("cred-") {
+            return Err("Ungültige ID".into());
+        }
         if self.name.trim().is_empty() {
             return Err("Name fehlt".into());
         }

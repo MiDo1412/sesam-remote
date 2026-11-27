@@ -199,7 +199,10 @@ impl ClipShare {
     /// SFTP-Sitzung bei Bedarf öffnen. Der Server-Schlüssel muss schon bestätigt sein (Shell oder Dateien).
     async fn sftp(&self) -> Result<Arc<Sftp>, String> {
         let mut slot = self.sftp.lock().await;
-        if let Some(s) = slot.as_ref() {
+        // Nach Ruhezustand oder Server-Neustart ist die alte Sitzung tot: dann neu aufbauen.
+        if let Some(s) = slot.as_ref()
+            && !s.closed()
+        {
             return Ok(s.clone());
         }
         let target = crate::ssh_target(&self.conn, None)?;
@@ -250,11 +253,13 @@ impl ClipShare {
     pub async fn upload_png(&self, png: &[u8]) -> Result<String, String> {
         let s = self.sftp().await?;
         let dir = Self::ablage(&s).await?;
-        let tmp = std::env::temp_dir().join(format!("Bild {}.png", chrono::Local::now().format("%Y-%m-%d %H.%M.%S")));
-        std::fs::write(&tmp, png).map_err(|e| e.to_string())?;
-        let r = sftp::upload(&s, &tmp, &dir, false, |_| {}).await;
-        let _ = std::fs::remove_file(&tmp);
-        r
+        // Direkt hochladen, ohne Umweg über eine vorhersagbare Datei im gemeinsamen Temp-Ordner.
+        let name = format!("Bild {}.png", chrono::Local::now().format("%Y-%m-%d %H.%M.%S"));
+        let target = s.unique(&dir, &name, false).await?;
+        let mut f = s.s.create(&target).await.map_err(|e| format!("{target}: {e}"))?;
+        tokio::io::AsyncWriteExt::write_all(&mut f, png).await.map_err(|e| format!("{target}: {e}"))?;
+        tokio::io::AsyncWriteExt::shutdown(&mut f).await.map_err(|e| format!("{target}: {e}"))?;
+        Ok(target)
     }
 
     /// Dateien vom Server laden und als Dateien in die lokale Zwischenablage legen.
@@ -278,10 +283,17 @@ impl ClipShare {
         }
         let dir = self.download_dir.join("Sesam-Ablage");
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let mut local = Vec::new();
-        for r in remote {
-            local.push(PathBuf::from(sftp::download(&s, r, &dir, false, |_| {}).await?));
-        }
+        // Gemeldete Grössen können lügen: das Limit gilt auch beim Streamen.
+        let budget = Arc::new(std::sync::atomic::AtomicU64::new(CLIP_BYTES));
+        let local = sftp::BUDGET
+            .scope(budget, async {
+                let mut local = Vec::new();
+                for r in remote {
+                    local.push(PathBuf::from(sftp::download(&s, r, &dir, false, |_| {}).await?));
+                }
+                Ok::<_, String>(local)
+            })
+            .await?;
         write_local_files(&local)?;
         *self.last.lock().unwrap() = Last::Files(local.clone());
         Ok(local.len())

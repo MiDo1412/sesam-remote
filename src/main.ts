@@ -1,5 +1,5 @@
 import "./i18n"; // zuerst: übersetzt alles, was danach ins DOM kommt
-import { deText, tr } from "./i18n";
+import { deText, locale, tr } from "./i18n";
 import { api, CERT_CHANGED, CERT_UNKNOWN, desktopProtocol, filesProtocol, ftpLabel, type Connection, type Group } from "./api";
 import { ICON } from "./icons";
 import { groupDot, groupMenu, initGroups, moveGroupBefore } from "./groups";
@@ -14,7 +14,7 @@ import { clipHistory, initClipHistory } from "./cliphistory";
 import { initTitlebar, isMac, isMobile, isPhone, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
-import { applyAppearance, LINKS, openLink, openSettings, openWebsite, settingsWindow } from "./settings";
+import { appSettings, applyAppearance, LINKS, openLink, openSettings, openWebsite, settingsWindow } from "./settings";
 import { openFirstAid, serviceOf, type Service } from "./firstaid";
 import { unlockDesktop } from "./unlock";
 import { openPermissions } from "./permissions";
@@ -227,13 +227,13 @@ const savePrefs = () => {
   }
 };
 const services = (c: Connection) => [c.rdpPort && "RDP", c.vncPort && "VNC", c.sshPort && "SSH", c.ftpPort && "FTP"].filter(Boolean) as string[];
-const byName = (a: Connection, b: Connection) => a.name.localeCompare(b.name, "de-CH", { numeric: true });
+const byName = (a: Connection, b: Connection) => a.name.localeCompare(b.name, locale, { numeric: true });
 const SORT: Record<SortKey, (a: Connection, b: Connection) => number> = {
   name: byName,
-  address: (a, b) => a.address.localeCompare(b.address, "de-CH", { numeric: true }),
+  address: (a, b) => a.address.localeCompare(b.address, locale, { numeric: true }),
   services: (a, b) => services(a).join(" ").localeCompare(services(b).join(" ")),
   // Ohne Gruppe zuletzt (aufsteigend)
-  group: (a, b) => (a.group || "￿").localeCompare(b.group || "￿", "de-CH"),
+  group: (a, b) => (a.group || "￿").localeCompare(b.group || "￿", locale),
   lastUsed: (a, b) => (Date.parse(a.lastUsed ?? "") || 0) - (Date.parse(b.lastUsed ?? "") || 0),
 };
 
@@ -242,7 +242,7 @@ function ago(iso: string | null) {
   const t = Date.parse(iso ?? "");
   if (!t) return "Nie";
   const s = (t - Date.now()) / 1000;
-  const rtf = new Intl.RelativeTimeFormat("de-CH", { numeric: "auto" });
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   const units = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]] as const;
   for (const [u, n] of units) if (Math.abs(s) >= n) return rtf.format(Math.round(s / n), u);
   return "gerade eben";
@@ -268,7 +268,7 @@ function onlineDot(c: Connection) {
 let probing = false;
 /** Alle Verbindungen prüfen (höchstens 4 gleichzeitig), danach neu zeichnen. Alle 30 s, solange die Bibliothek sichtbar ist. */
 async function probeAll() {
-  if (probing || document.hidden || $("library").hidden) return;
+  if (probing || document.hidden || $("library").hidden || !appSettings().onlineProbe) return;
   probing = true;
   const queue = items.filter((c) => c.address);
   await Promise.all(Array.from({ length: 4 }, async () => {
@@ -435,7 +435,7 @@ function renderTable(visible: Connection[]) {
       }
       const grp = el("td", {}, ...(c.group ? [groupDot(groups.find((g) => g.name === c.group)?.color ?? ""), c.group] : ["–"]));
       const date = el("td", { class: "date-col" }, ago(c.lastUsed));
-      if (c.lastUsed) date.title = new Date(c.lastUsed).toLocaleString("de-CH");
+      if (c.lastUsed) date.title = new Date(c.lastUsed).toLocaleString(locale);
       const tr = el("tr", { "aria-selected": String(c.id === selected) }, el("td", { class: "name" }, c.name), el("td", { class: "mono" }, c.address), svc, grp, date);
       tr.tabIndex = c.id === tabId ? 0 : -1;
       tr.onclick = () => pick(c);
