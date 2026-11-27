@@ -71,6 +71,12 @@ impl Framebuffer {
         self.rgba[i..i + 4].copy_from_slice(&[px[0], px[1], px[2], 255]);
     }
 
+    /// Zeile `y` (relativ zum Rechteck) als RGBA-Ausschnitt; `r` muss vorher mit `check` geprüft sein.
+    fn row(&mut self, r: Rect, y: usize) -> &mut [u8] {
+        let start = ((r.y as usize + y) * self.width as usize + r.x as usize) * 4;
+        &mut self.rgba[start..start + r.w as usize * 4]
+    }
+
     /// RGBA-Kopie eines Ausschnitts, fürs Frontend.
     pub fn crop(&self, r: Rect) -> Vec<u8> {
         let mut out = Vec::with_capacity(r.w as usize * r.h as usize * 4);
@@ -86,8 +92,11 @@ impl Framebuffer {
         if pixels.len() != r.w as usize * r.h as usize * 4 {
             return Err("Raw-Daten haben die falsche Länge".into());
         }
-        for (i, px) in pixels.as_chunks::<4>().0.iter().enumerate() {
-            self.set(r.x as usize + i % r.w as usize, r.y as usize + i / r.w as usize, [px[0], px[1], px[2]]);
+        let line = r.w as usize * 4;
+        for (y, src) in pixels.chunks_exact(line).enumerate() {
+            for (d, s) in self.row(r, y).chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+                d.copy_from_slice(&[s[0], s[1], s[2], 255]);
+            }
         }
         Ok(())
     }
@@ -102,6 +111,13 @@ impl Framebuffer {
             self.rgba[start..start + row].copy_from_slice(line);
         }
         Ok(())
+    }
+}
+
+/// RGB-Zeile (3 Bytes je Pixel) in eine RGBA-Zeile schreiben.
+fn rgb_row(dst: &mut [u8], rgb: &[u8]) {
+    for (d, s) in dst.chunks_exact_mut(4).zip(rgb.chunks_exact(3)) {
+        d.copy_from_slice(&[s[0], s[1], s[2], 255]);
     }
 }
 
@@ -184,10 +200,9 @@ impl Tight {
 
     pub fn fill(fb: &mut Framebuffer, r: Rect, px: [u8; 3]) -> Result<(), String> {
         fb.check(r)?;
-        for y in r.y as usize..(r.y + r.h) as usize {
-            for x in r.x as usize..(r.x + r.w) as usize {
-                fb.set(x, y, px);
-            }
+        let pat = [px[0], px[1], px[2], 255];
+        for y in 0..r.h as usize {
+            fb.row(r, y).chunks_exact_mut(4).for_each(|d| d.copy_from_slice(&pat));
         }
         Ok(())
     }
@@ -199,21 +214,28 @@ impl Tight {
         if data.len() != Self::data_len(r, filter, palette.len()) {
             return Err("Tight: falsche Datenlänge".into());
         }
-        let put = |fb: &mut Framebuffer, i: usize, px: [u8; 3]| fb.set(r.x as usize + i % w, r.y as usize + i / w, px);
+        let set = |d: &mut [u8], p: [u8; 3]| d.copy_from_slice(&[p[0], p[1], p[2], 255]);
         match filter {
-            0 => data.as_chunks::<3>().0.iter().enumerate().for_each(|(i, p)| put(fb, i, [p[0], p[1], p[2]])),
+            0 => {
+                for y in 0..h {
+                    rgb_row(fb.row(r, y), &data[y * w * 3..][..w * 3]);
+                }
+            }
             1 => {
                 let color = |k: usize| palette.get(k).copied().ok_or("Tight: Farbe ausserhalb der Palette");
                 if palette.len() <= 2 {
                     let stride = w.div_ceil(8);
                     for y in 0..h {
-                        for x in 0..w {
-                            put(fb, y * w + x, color((data[y * stride + x / 8] >> (7 - x % 8) & 1) as usize)?);
+                        let bits = &data[y * stride..][..stride];
+                        for (x, d) in fb.row(r, y).chunks_exact_mut(4).enumerate() {
+                            set(d, color((bits[x / 8] >> (7 - x % 8) & 1) as usize)?);
                         }
                     }
                 } else {
-                    for (i, &k) in data.iter().enumerate() {
-                        put(fb, i, color(k as usize)?);
+                    for y in 0..h {
+                        for (d, &k) in fb.row(r, y).chunks_exact_mut(4).zip(&data[y * w..][..w]) {
+                            set(d, color(k as usize)?);
+                        }
                     }
                 }
             }
@@ -230,8 +252,8 @@ impl Tight {
                             let pred = (left + up - ul).clamp(0, 255) as u8;
                             cur[x * 3 + c] = data[(y * w + x) * 3 + c].wrapping_add(pred);
                         }
-                        put(fb, y * w + x, [cur[x * 3], cur[x * 3 + 1], cur[x * 3 + 2]]);
                     }
+                    rgb_row(fb.row(r, y), &cur);
                     std::mem::swap(&mut prev, &mut cur);
                 }
             }
@@ -247,9 +269,9 @@ impl Tight {
             return Err("Tight: JPEG passt nicht zum Rechteck".into());
         }
         for y in 0..h {
-            for x in 0..w {
-                let i = y * stride + x * spp;
-                fb.set(r.x as usize + x, r.y as usize + y, [data[i], data[i + 1], data[i + 2]]);
+            let src = &data[y * stride..];
+            for (d, s) in fb.row(r, y).chunks_exact_mut(4).zip(src.chunks(spp)) {
+                d.copy_from_slice(&[s[0], s[1], s[2], 255]);
             }
         }
         Ok(())

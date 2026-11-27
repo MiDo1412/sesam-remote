@@ -15,7 +15,7 @@ const ENC_RAW: i32 = 0;
 const ENC_COPYRECT: i32 = 1;
 const ENC_TIGHT: i32 = 7;
 const ENC_ZRLE: i32 = 16;
-/// Tight: JPEG-Qualität 8 von 9 (nur wo ein JPEG-Decoder da ist) und Kompressionsstufe 2 (schnell).
+/// Tight: JPEG-Qualität 8 von 9 (zune-jpeg, alle Systeme) und Kompressionsstufe 2 (schnell).
 const ENC_JPEG_QUALITY_8: i32 = -24;
 const ENC_COMPRESS_2: i32 = -254;
 const ENC_DESKTOP_SIZE: i32 = -223;
@@ -264,11 +264,8 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
 
     s.write_all(&set_pixel_format()).await.map_err(io)?;
     // Tight vor ZRLE: kompakter, und mit JPEG für Fotos und Videos viel kleiner (Server wie TigerVNC und wayvnc
-    // nehmen JPEG nur, wenn der Client eine Qualitätsstufe nennt; ohne JPEG-Decoder bleibt Tight verlustfrei).
-    let mut encs = vec![ENC_COPYRECT, ENC_TIGHT, ENC_ZRLE, ENC_RAW, ENC_EXT_DESKTOP_SIZE, ENC_DESKTOP_SIZE, ENC_LAST_RECT, ENC_CURSOR, ENC_EXT_CLIPBOARD, ENC_COMPRESS_2];
-    if cfg!(target_os = "macos") {
-        encs.push(ENC_JPEG_QUALITY_8);
-    }
+    // nehmen JPEG nur, wenn der Client eine Qualitätsstufe nennt).
+    let encs = [ENC_COPYRECT, ENC_TIGHT, ENC_ZRLE, ENC_RAW, ENC_EXT_DESKTOP_SIZE, ENC_DESKTOP_SIZE, ENC_LAST_RECT, ENC_CURSOR, ENC_EXT_CLIPBOARD, ENC_COMPRESS_2, ENC_JPEG_QUALITY_8];
     s.write_all(&set_encodings(&encs))
     .await
     .map_err(io)?;
@@ -276,15 +273,19 @@ pub async fn handshake(stream: impl Io + 'static, l: &Login<'_>) -> Result<(Stre
     Ok((s, ServerInit { width, height, name: String::from_utf8_lossy(&name).into_owned() }))
 }
 
-/// JPEG für Tight: auf dem Mac über ImageIO, sonst nicht angefordert (siehe Kodierungsliste).
-fn jpeg(data: &[u8]) -> Option<(usize, usize, usize, usize, Vec<u8>)> {
-    #[cfg(target_os = "macos")]
-    return crate::sfsymbol::decode_jpeg(data);
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = data;
-        None
+/// JPEG für Tight (reines Rust, alle Systeme) als RGB. Erst den Kopf lesen und die Grösse gegen das Rechteck prüfen,
+/// dann dekodieren: ein Server kann sonst mit einem riesigen JPEG den Speicher füllen.
+fn jpeg(data: &[u8], w: u16, h: u16) -> Result<Vec<u8>, String> {
+    use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
+    let bad = "Tight: JPEG nicht lesbar";
+    let opts = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGB).set_max_width(w.into()).set_max_height(h.into());
+    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(data), opts);
+    d.decode_headers().map_err(|_| bad)?;
+    let info = d.info().ok_or(bad)?;
+    if (info.width, info.height) != (w, h) {
+        return Err("Tight: JPEG passt nicht zum Rechteck".into());
     }
+    d.decode().map_err(|_| bad.into())
 }
 
 // ---------- Client-Nachrichten ----------
@@ -487,8 +488,9 @@ impl<R: AsyncRead + Unpin> Reader<R> {
             TightNeed::Jpeg => {
                 let len = self.compact_len().await?;
                 let data = self.bytes(len).await?;
-                let (w, h, bpp, stride, px) = jpeg(&data).ok_or("Tight: JPEG nicht lesbar")?;
-                Tight::pixels(&mut self.fb, r, w, h, bpp, stride, &px)
+                self.fb.check(r)?;
+                let px = jpeg(&data, r.w, r.h)?;
+                Tight::pixels(&mut self.fb, r, r.w.into(), r.h.into(), 3, usize::from(r.w) * 3, &px)
             }
             TightNeed::Basic { stream, filter } => {
                 let f = if filter { self.rd.read_u8().await.map_err(io)? } else { 0 };
@@ -686,6 +688,18 @@ impl<R: AsyncRead + Unpin> Reader<R> {
 mod tests {
     use super::*;
     use tokio::io::duplex;
+
+    #[test]
+    fn tight_jpeg_auf_allen_systemen() {
+        let data = include_bytes!("../testdata/tight-16x8.jpg");
+        let px = jpeg(data, 16, 8).unwrap();
+        assert_eq!(px.len(), 16 * 8 * 3);
+        let p = &px[(4 * 16 + 8) * 3..][..3];
+        assert!(p[0] > 170 && p[1] < 80 && p[2] < 80, "Farbe {p:?}");
+        assert!(jpeg(data, 16, 7).is_err(), "Grösse muss zum Rechteck passen");
+        assert!(jpeg(data, 8, 4).is_err(), "grösser als das Rechteck: vor dem Dekodieren ablehnen");
+        assert!(jpeg(b"kein jpeg", 16, 8).is_err());
+    }
 
     fn server_init(w: u16, h: u16) -> Vec<u8> {
         let mut m = Vec::new();

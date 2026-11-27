@@ -6049,6 +6049,7 @@ dependencies = [
  "trash",
  "url",
  "windows",
+ "zune-jpeg",
 ]
 
 [[package]]

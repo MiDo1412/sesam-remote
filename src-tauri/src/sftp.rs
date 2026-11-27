@@ -19,6 +19,27 @@ pub struct Sftp {
     ssh: Option<Handle<Client>>,
 }
 
+/// Alle Futures gleichzeitig abwarten (ohne eigene Tasks, also auch mit geliehenen Daten); Ergebnisse in Reihenfolge.
+async fn join_all<F: std::future::Future>(futs: Vec<F>) -> Vec<F::Output> {
+    use std::task::Poll;
+    let mut futs: Vec<_> = futs.into_iter().map(Box::pin).collect();
+    let mut out: Vec<Option<F::Output>> = futs.iter().map(|_| None).collect();
+    std::future::poll_fn(|cx| {
+        let mut pending = false;
+        for (f, o) in futs.iter_mut().zip(out.iter_mut()) {
+            if o.is_none() {
+                match f.as_mut().poll(cx) {
+                    Poll::Ready(v) => *o = Some(v),
+                    Poll::Pending => pending = true,
+                }
+            }
+        }
+        if pending { Poll::Pending } else { Poll::Ready(()) }
+    })
+    .await;
+    out.into_iter().map(|o| o.expect("fertig")).collect()
+}
+
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -139,17 +160,27 @@ impl Sftp {
 
     pub async fn list(&self, path: &str) -> Result<Listing, String> {
         let path = self.s.canonicalize(if path.is_empty() { "." } else { path }).await.map_err(err)?;
-        let mut entries = Vec::new();
-        for e in self.s.read_dir(&path).await.map_err(err)? {
-            let name = e.file_name();
-            if name == "." || name == ".." {
-                continue;
-            }
-            let mut m = e.metadata();
-            if e.file_type().is_symlink()
-                && let Ok(target) = self.s.metadata(rjoin(&path, &name)).await {
-                    m = target;
+        let mut raw: Vec<_> = self
+            .s
+            .read_dir(&path)
+            .await
+            .map_err(err)?
+            .filter(|e| e.file_name() != "." && e.file_name() != "..")
+            .map(|e| (e.file_name(), e.metadata(), e.file_type().is_symlink()))
+            .collect();
+        // Ziele von Verknüpfungen: höchstens 8 Anfragen gleichzeitig statt eine nach der anderen (grosse Ordner
+        // mit vielen Verknüpfungen, z. B. /usr/lib, laden sonst spürbar langsam).
+        let links: Vec<usize> = (0..raw.len()).filter(|&i| raw[i].2).collect();
+        for chunk in links.chunks(8) {
+            let found = join_all(chunk.iter().map(|&i| self.s.metadata(rjoin(&path, &raw[i].0))).collect()).await;
+            for (&i, m) in chunk.iter().zip(found) {
+                if let Ok(m) = m {
+                    raw[i].1 = m;
                 }
+            }
+        }
+        let mut entries = Vec::new();
+        for (name, m, _) in raw {
             let modified = m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs());
             let dir = m.file_type().is_dir();
             entries.push(Entry { name, dir, size: if dir { 0 } else { m.len() }, modified, perm: m.permissions.map(|p| p & 0o7777) });
@@ -752,7 +783,16 @@ tokio::task_local! {
 /// `n` Bytes vom Budget abziehen; `false`, wenn es nicht mehr reicht. Ohne Budget immer `true`.
 fn spend(n: u64) -> bool {
     use std::sync::atomic::Ordering::SeqCst;
-    BUDGET.try_with(|b| b.fetch_update(SeqCst, SeqCst, |left| left.checked_sub(n)).is_ok()).unwrap_or(true)
+    // Übertragungen eines Budgets laufen nacheinander; Laden und Abziehen müssen nicht atomar zusammen sein.
+    BUDGET
+        .try_with(|b| {
+            let ok = b.load(SeqCst) >= n;
+            if ok {
+                b.fetch_sub(n, SeqCst);
+            }
+            ok
+        })
+        .unwrap_or(true)
 }
 
 async fn pump<R, W, F>(mut r: R, mut w: W, m: &mut Meter<F>, file: &str) -> Result<(), String>
@@ -932,6 +972,17 @@ pub async fn download(sftp: &Arc<Sftp>, remote: &str, local_dir: &Path, replace:
 
 #[cfg(test)]
 pub(crate) mod tests {
+    #[tokio::test]
+    async fn gleichzeitig_und_in_reihenfolge() {
+        let slow = |ms: u64, v: u32| async move {
+            tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+            v
+        };
+        let t = std::time::Instant::now();
+        assert_eq!(super::join_all(vec![slow(60, 1), slow(10, 2), slow(30, 3)]).await, [1, 2, 3]);
+        assert!(t.elapsed() < std::time::Duration::from_millis(150), "gleichzeitig, nicht nacheinander");
+    }
+
     #[tokio::test]
     async fn budget_begrenzt_beim_streamen() {
         let mut m = super::Meter { done: 0, total: 0, last: std::time::Instant::now(), report: |_| {} };

@@ -5,6 +5,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
+import { SerializeAddon } from "@xterm/addon-serialize";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import "@xterm/xterm/css/xterm.css";
@@ -66,7 +68,15 @@ export function shellTab(ctx: TabCtx): TabHandle {
   term.unicode.activeVersion = "11";
   // Adressen auf dem Server selbst (localhost:3000 …) öffnet der Türöffner über SSH, alles andere der Browser.
   term.loadAddon(new WebLinksAddon((ev, uri) => (ev.ctrlKey || ev.metaKey) && (!local && localAddress(uri) ? void door(uri) : /^https?:\/\//.test(uri) && void openUrl(uri))));
+  const serialize = new SerializeAddon();
+  term.loadAddon(serialize);
   term.open(host);
+  // GPU-Zeichnung (schneller bei viel Ausgabe); ohne WebGL oder nach Verlust des Kontexts zurück zum Standard.
+  try {
+    const gl = new WebglAddon();
+    gl.onContextLoss(() => gl.dispose());
+    term.loadAddon(gl);
+  } catch {}
   if (isTouch()) touchScroll(host);
   // Rollbalken nur zeigen, wenn es Verlauf gibt (sonst stand er als volle Leiste rechts).
   const scrollbarState = () => host.classList.toggle("no-scroll", term.buffer.active.baseY === 0);
@@ -473,14 +483,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
   void connect();
 
   let handedOff = false;
-  /** Sichtbarer Text samt Verlauf (letzte 2000 Zeilen) für die Übergabe; Farben gehen dabei verloren. */
-  const bufferText = () => {
-    const b = term.buffer.active;
-    const lines: string[] = [];
-    for (let i = Math.max(0, b.length - 2000); i < b.length; i++) lines.push(b.getLine(i)?.translateToString(true) ?? "");
-    while (lines.length && !lines[lines.length - 1]) lines.pop();
-    return lines.join("\r\n");
-  };
+  /** Sichtbarer Inhalt samt Verlauf (letzte 2000 Zeilen) für die Übergabe, mit Farben und Attributen. */
+  const bufferText = () => serialize.serialize({ scrollback: 2000 });
   return {
     reconnect() {
       if (sid) api.shellClose(sid); // schliesst auch die Türen

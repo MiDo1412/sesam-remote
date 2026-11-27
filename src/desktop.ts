@@ -24,6 +24,15 @@ import { dropFiles } from "./dropfiles";
 type Mode = "fit" | "scale" | "native";
 type Key = Pick<KeyboardEvent, "code" | "key">;
 
+/** Kleiner LRU-Speicher für Zeigerbilder (Schlüssel: Hotspot, Grösse, Prüfsumme der Pixel). */
+const cursorCache = new Map<string, string>();
+/** FNV-1a über die Pixel: schnell und reicht, um gleiche Zeiger zu erkennen. */
+function cursorHash(px: Uint8ClampedArray) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < px.length; i++) h = Math.imul(h ^ px[i], 0x01000193);
+  return (h >>> 0).toString(36);
+}
+
 /** Desktop über VNC oder RDP als Tab; Anzeige, Modi und Eingabe-Logik sind gemeinsam. */
 export function desktopTab(ctx: TabCtx): TabHandle {
   const c = ctx.conn;
@@ -594,19 +603,20 @@ export function desktopTab(ctx: TabCtx): TabHandle {
   };
 
   // ---------- Bild vom Server ----------
-  const onFrame = (buf: ArrayBuffer) => {
-    const v = new DataView(buf);
-    const text = () => new TextDecoder().decode(new Uint8Array(buf, 1));
+  // Bilddaten ohne Kopie: `v` kann ein Ausschnitt eines grösseren Puffers sein, darum alles relativ zu `o`.
+  const onFrame = (v: DataView) => {
+    const [buf, o] = [v.buffer as ArrayBuffer, v.byteOffset];
+    const text = () => new TextDecoder().decode(new Uint8Array(buf, o + 1, v.byteLength - 1));
     switch (v.getUint8(0)) {
       case 7: {
         // Ein Bild: alle geänderten Rechtecke, danach bestätigen, damit das nächste kommt.
         if (!gotImage && status.textContent?.startsWith(NO_IMAGE)) status.textContent = "";
         gotImage = true;
         stats.frames++;
-        stats.bytes += buf.byteLength;
+        stats.bytes += v.byteLength;
         for (let i = 0, at = 3, n = v.getUint16(1); i < n; i++) {
           const [x, y, w, h] = [v.getUint16(at), v.getUint16(at + 2), v.getUint16(at + 4), v.getUint16(at + 6)];
-          g.putImageData(new ImageData(new Uint8ClampedArray(buf, at + 8, w * h * 4), w, h), x, y);
+          g.putImageData(new ImageData(new Uint8ClampedArray(buf, o + at + 8, w * h * 4), w, h), x, y);
           at += 8 + w * h * 4;
         }
         if (sid) api.desktopAck(sid).catch(() => {});
@@ -633,10 +643,20 @@ export function desktopTab(ctx: TabCtx): TabHandle {
           canvas.style.cursor = hx === 1 ? "default" : "none";
           break;
         }
-        const c2 = document.createElement("canvas");
-        [c2.width, c2.height] = [w, h];
-        c2.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(buf, 9, w * h * 4), w, h), 0, 0);
-        canvas.style.cursor = `url(${c2.toDataURL()}) ${hx} ${hy}, default`;
+        // Gleiche Zeiger kommen immer wieder (Textcursor, Pfeil): Data-URL merken statt neu zu zeichnen.
+        const px = new Uint8ClampedArray(buf, o + 9, w * h * 4);
+        const key = `${hx},${hy},${w},${h},${cursorHash(px)}`;
+        let url = cursorCache.get(key);
+        if (url) cursorCache.delete(key);
+        else {
+          const c2 = document.createElement("canvas");
+          [c2.width, c2.height] = [w, h];
+          c2.getContext("2d")!.putImageData(new ImageData(px, w, h), 0, 0);
+          url = c2.toDataURL();
+          if (cursorCache.size >= 16) cursorCache.delete(cursorCache.keys().next().value!);
+        }
+        cursorCache.set(key, url); // zuletzt benutzt ans Ende (LRU)
+        canvas.style.cursor = `url(${url}) ${hx} ${hy}, default`;
         break;
       }
     }

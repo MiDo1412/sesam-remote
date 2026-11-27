@@ -136,18 +136,18 @@ export const filesProtocol = (c: Connection): "ssh" | "ftp" | null =>
 export const ftpLabel = (c: Connection) => (c.ftpSecurity === "none" ? "FTP (unverschlüsselt)" : "FTPS");
 
 /** Kanal-Nachrichten mit Bilddaten: kleine kommen als ArrayBuffer, grosse (über den IPC-Abruf) teils als
- *  Bytefeld (Uint8Array oder number[]). Ohne Umwandlung warf `new DataView` und kein Bild erschien. */
-export function asArrayBuffer(m: unknown): ArrayBuffer {
-  if (m instanceof ArrayBuffer) return m;
-  if (ArrayBuffer.isView(m)) return m.buffer.slice(m.byteOffset, m.byteOffset + m.byteLength) as ArrayBuffer;
-  if (Array.isArray(m)) return new Uint8Array(m).buffer;
+ *  Bytefeld (Uint8Array oder number[]). Als DataView ohne Kopie (bei Bytefeldern über deren Ausschnitt). */
+export function asDataView(m: unknown): DataView {
+  if (m instanceof ArrayBuffer) return new DataView(m);
+  if (ArrayBuffer.isView(m)) return new DataView(m.buffer, m.byteOffset, m.byteLength);
+  if (Array.isArray(m)) return new DataView(new Uint8Array(m).buffer);
   throw new Error(`Unerwartete Bilddaten: ${Object.prototype.toString.call(m)}`);
 }
 
 // Selbstprüfung im Entwicklungsbuild.
 if (import.meta.env.DEV) {
   const v = new Uint8Array([9, 1, 2, 3]).subarray(1);
-  console.assert(new Uint8Array(asArrayBuffer(v))[0] === 1 && asArrayBuffer([0, 5]).byteLength === 2 && asArrayBuffer(new ArrayBuffer(3)).byteLength === 3, "asArrayBuffer");
+  console.assert(asDataView(v).getUint8(0) === 1 && asDataView(v).byteLength === 3 && asDataView([0, 5]).byteLength === 2 && asDataView(new ArrayBuffer(3)).byteLength === 3, "asDataView");
 }
 
 // Wie titlebar.ts isMobile (hier ohne Import, damit api.ts unabhängig bleibt).
@@ -201,9 +201,9 @@ export const api = {
     ch.onmessage = onEvent;
     return invoke<void>("shell_attach", { sid, onEvent: ch });
   },
-  desktopAttach: (sid: string, onFrame: (buf: ArrayBuffer) => void) => {
+  desktopAttach: (sid: string, onFrame: (v: DataView) => void) => {
     const ch = new Channel<ArrayBuffer>();
-    ch.onmessage = (m) => onFrame(asArrayBuffer(m));
+    ch.onmessage = (m) => onFrame(asDataView(m));
     return invoke<void>("desktop_attach", { sid, onEvent: ch });
   },
   /** Lokales Terminal (PTY) mit einem Profil starten; Schreiben/Grösse/Schliessen wie bei der SSH-Shell. */
@@ -224,9 +224,9 @@ export const api = {
   shellClose: (sid: string) => invoke<void>("shell_close", { sid }),
   /** Binärrahmen: 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis, 6 Mauszeiger (siehe lib.rs `frame`). */
   /** remember: bestätigten Fingerabdruck speichern (sonst nur diese Verbindung). */
-  vncOpen: (id: string, trust: string | null, remember: boolean, onFrame: (buf: ArrayBuffer) => void) => {
+  vncOpen: (id: string, trust: string | null, remember: boolean, onFrame: (v: DataView) => void) => {
     const ch = new Channel<ArrayBuffer>();
-    ch.onmessage = (m) => onFrame(asArrayBuffer(m));
+    ch.onmessage = (m) => onFrame(asDataView(m));
     return invoke<string>("vnc_open", { id, trust, remember, onEvent: ch });
   },
   desktopAck: (sid: string) => invoke<void>("desktop_ack", { sid }),
@@ -240,9 +240,9 @@ export const api = {
   vncSetSize: (sid: string, width: number, height: number) => invoke<boolean>("vnc_set_size", { sid, width, height }),
   vncClipboardSync: (sid: string) => invoke<void>("vnc_clipboard_sync", { sid }),
   vncClose: (sid: string) => invoke<void>("vnc_close", { sid }),
-  rdpOpen: (id: string, trust: string | null, remember: boolean, width: number, height: number, onFrame: (buf: ArrayBuffer) => void) => {
+  rdpOpen: (id: string, trust: string | null, remember: boolean, width: number, height: number, onFrame: (v: DataView) => void) => {
     const ch = new Channel<ArrayBuffer>();
-    ch.onmessage = (m) => onFrame(asArrayBuffer(m));
+    ch.onmessage = (m) => onFrame(asDataView(m));
     return invoke<string>("rdp_open", { id, trust, remember, width, height, scale: displayScale(), onEvent: ch });
   },
   rdpPointer: (sid: string, x: number, y: number, buttons: number) => invoke<void>("rdp_pointer", { sid, x, y, buttons }),
