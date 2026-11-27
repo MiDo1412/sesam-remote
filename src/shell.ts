@@ -72,7 +72,10 @@ export function shellTab(ctx: TabCtx): TabHandle {
   term.loadAddon(serialize);
   term.open(host);
   // GPU-Zeichnung (schneller bei viel Ausgabe); ohne WebGL oder nach Verlust des Kontexts zurück zum Standard.
-  try {
+  // Nur in Chromium (WebView2 unter Windows): in WebKit (macOS, iPad, Linux) sprang die Schrift beim Markieren
+  // und der Cursor am «$» war verzerrt (Glyphen aus dem Canvas anders gross als gemessen).
+  const chromium = /Chrome\/|Edg\//.test(navigator.userAgent);
+  if (chromium) try {
     const gl = new WebglAddon();
     gl.onContextLoss(() => gl.dispose());
     term.loadAddon(gl);
