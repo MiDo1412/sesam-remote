@@ -205,7 +205,8 @@ header.toolbar, header.session-bar, .session-head, .session-id, .tools { user-se
 header.toolbar .win-controls { position: absolute; right: 0; top: 0; bottom: 0; }
 .win-btn { width: 46px; height: 100%; padding: 0; border-radius: 0; background: transparent; color: inherit; }
 .win-btn svg { display: block; }
-.win-btn:hover:not(:disabled) { background: var(--fill); }
+.win-btn:hover:not(:disabled), .win-btn.hover { background: var(--fill); }
+.win-btn.down { background: var(--fill-strong); }
 .win-btn.close:hover:not(:disabled) { background: #c42b1c; color: #fff; }
 .win-btn:active:not(:disabled) { transform: none; }
 .win-btn.more { width: 40px; margin: var(--s-1) 0; height: auto; border-radius: var(--r-row); }

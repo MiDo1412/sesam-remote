@@ -73,6 +73,7 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
     else actions.help(arg);
   };
 
+  const maxBtns: HTMLElement[] = [];
   for (const h of bars) {
     // Rechts: Minimieren, Maximieren/Wiederherstellen, Schliessen (Glyphen wie Windows 11).
     const ctl = document.createElement("div");
@@ -103,6 +104,27 @@ export function initTitlebar(actions: { command(c: string): void; tool(t: string
     };
     void sync();
     void win.onResized(sync);
+    maxBtns.push(max);
+  }
+
+  // Windows 11: Andocklayouts beim Darüberfahren (src-tauri/src/snap.rs). Über dem sichtbaren Knopf liegt ein
+  // natives Kindfenster; die Maus kommt dort nicht in der Webansicht an, Hover und Drücken meldet Rust.
+  if (navigator.userAgent.includes("Windows")) {
+    let last = "";
+    const place = () => {
+      const r = maxBtns.find((b) => b.offsetParent !== null)?.getBoundingClientRect();
+      const d = devicePixelRatio;
+      const [x, y] = r ? [Math.round(r.left * d), Math.round(r.top * d)] : [0, 0];
+      const [w, h] = r && r.width ? [Math.round(r.right * d) - x, Math.round(r.bottom * d) - y] : [0, 0];
+      const key = `${x},${y},${w},${h}`;
+      if (key !== last) void invoke("snap_button", { x, y, w, h }).then(() => (last = key), () => {});
+    };
+    const ro = new ResizeObserver(place);
+    for (const b of maxBtns) ro.observe(b);
+    addEventListener("resize", place);
+    void win.listen<string>("snap-button", (e) => {
+      for (const b of maxBtns) for (const c of ["hover", "down"]) b.classList.toggle(c, e.payload === c);
+    });
   }
 
   // Alt allein öffnet das Menü wie in Windows-Apps. Nicht, solange das Remote-Bild den Fokus hat (Alt gehört dann nach drüben).

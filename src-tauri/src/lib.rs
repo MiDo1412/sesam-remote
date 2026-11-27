@@ -32,6 +32,8 @@ mod scp;
 #[cfg(target_os = "macos")]
 mod sfsymbol;
 mod sftp;
+#[cfg(windows)]
+mod snap;
 mod ssh;
 mod sync;
 mod vault;
@@ -311,6 +313,7 @@ pub fn run() {
             clip_read,
             clip_write,
             ui_material,
+            snap_button,
             stage_file,
             folder_pick,
             folder_open,

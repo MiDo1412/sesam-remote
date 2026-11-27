@@ -169,6 +169,15 @@ pub(crate) fn ui_material(window: tauri::WebviewWindow) -> UiMaterial {
     }
 }
 
+/// Lage des eigenen Maximieren-Knopfs in physischen Pixeln (Andocklayouts, src/snap.rs); andere Systeme: nichts.
+#[tauri::command]
+pub(crate) fn snap_button(window: tauri::WebviewWindow, x: i32, y: i32, w: i32, h: i32) {
+    #[cfg(windows)]
+    crate::snap::place(window, x, y, w, h);
+    #[cfg(not(windows))]
+    let _ = (window, x, y, w, h);
+}
+
 /// «Beenden» aus dem eigenen Menü (Windows/Linux).
 #[tauri::command]
 pub(crate) fn app_exit(app: AppHandle) {
