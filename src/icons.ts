@@ -13,6 +13,7 @@ import fChevronLeft from "@fluentui/svg-icons/icons/chevron_left_24_regular.svg?
 import fArrowMaximize from "@fluentui/svg-icons/icons/arrow_maximize_20_regular.svg?raw";
 import fArrowRight from "@fluentui/svg-icons/icons/arrow_right_20_regular.svg?raw";
 import fArrowSwap from "@fluentui/svg-icons/icons/arrow_swap_20_regular.svg?raw";
+import fArrowDown from "@fluentui/svg-icons/icons/arrow_down_20_regular.svg?raw";
 import fArrowUp from "@fluentui/svg-icons/icons/arrow_up_20_regular.svg?raw";
 import fArrowUpload from "@fluentui/svg-icons/icons/arrow_upload_20_regular.svg?raw";
 import fCamera from "@fluentui/svg-icons/icons/camera_20_regular.svg?raw";
@@ -73,6 +74,7 @@ export const ICON = {
   navBack: fl(fChevronLeft, 22), // iPhone: Zurück-Taste wie in iOS
   forward: fl(fArrowRight),
   up: fl(fArrowUp),
+  down: fl(fArrowDown),
   compare: fl(fArrowSwap),
   home: fl(fHome),
   detach: fl(fOpen),

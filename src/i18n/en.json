@@ -1572,5 +1572,13 @@
  "Das Zertifikat von «{}» ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn das Zertifikat auf dem Server erneuert wurde.": "The certificate of «{}» is not the same as last time. This could be an attack. Only continue if the certificate was renewed on the server.",
  "Sesam meldet sich mit «{}» an der gewählten Verbindung an und trennt gleich wieder.": "Sesam signs in to the selected connection with «{}» and disconnects right away.",
  "«{}» hat weder SSH noch FTP; dort lässt sich der Zugang nicht testen.": "«{}» has neither SSH nor FTP, so the sign-in cannot be tested there.",
- "«{}» zeigt dieses Zertifikat. Vergleiche den Fingerabdruck mit dem Server, bevor du ihm vertraust.": "«{}» presents this certificate. Compare the fingerprint with the server before you trust it."
+ "«{}» zeigt dieses Zertifikat. Vergleiche den Fingerabdruck mit dem Server, bevor du ihm vertraust.": "«{}» presents this certificate. Compare the fingerprint with the server before you trust it.",
+ "Achtung: Was du tippst, geht auch an {} weitere SSH-Shell(s) (lokale Terminals nicht).": "Caution: what you type also goes to {} other SSH shell(s) (not to local terminals).",
+ "Eingabe geht an alle SSH-Shells.": "Input goes to all SSH shells.",
+ "Im Verlauf suchen": "Search history",
+ "Nicht gefunden": "Not found",
+ "Suche schliessen": "Close search",
+ "Weiter oben": "Previous match",
+ "Weiter unten": "Next match",
+ "{} von {}": "{} of {}"
 }

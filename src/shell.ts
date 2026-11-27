@@ -26,7 +26,7 @@ const FONT = "'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', Menlo, Cons
 
 /** SSH-Shell als Tab. */
 /** Alle offenen Shells in diesem Fenster (für «An alle Shells senden»). */
-const allShells = new Set<{ send: (d: string) => unknown; name: string }>();
+const allShells = new Set<{ send: (d: string) => unknown; name: string; local: boolean }>();
 
 export function shellTab(ctx: TabCtx): TabHandle {
   const c = ctx.conn;
@@ -107,11 +107,13 @@ export function shellTab(ctx: TabCtx): TabHandle {
   const ro = new ResizeObserver(refit);
   ro.observe(host);
   // «An alle Shells senden»: Eingabe geht zusätzlich an alle anderen offenen Shells (wie Broadcast im Windows Terminal).
-  const me = { send, name: c.name };
+  // Lokale Terminals bleiben aussen vor: ein Befehl für die Server soll nie auf diesem Rechner laufen.
+  const me = { send, name: c.name, local: !!local };
   allShells.add(me);
+  const targets = () => [...allShells].filter((s) => s !== me && !s.local);
   term.onData((d) => {
     send(d);
-    if (broadcast) for (const s of allShells) if (s !== me) s.send(d);
+    if (broadcast) for (const s of targets()) s.send(d);
   });
 
   // Einstellungen wirken sofort auf offene Shells.
@@ -247,19 +249,54 @@ export function shellTab(ctx: TabCtx): TabHandle {
     const t = termSettings();
     saveTermSettings({ ...t, fontSize: Math.max(8, Math.min(32, t.fontSize + d)) });
   };
-  const find = async () => {
-    const q = await askText("Suchen", "Text im Verlauf der Shell", "Suchen");
-    if (q) search.findPrevious(q, { caseSensitive: false });
+  // Suchleiste über dem Terminal (bleibt offen): Enter sucht nach oben, Umschalt+Enter nach unten, Esc schliesst.
+  const findBar = Object.assign(document.createElement("div"), { className: "term-find", hidden: true });
+  const findInput = Object.assign(document.createElement("input"), { type: "search", placeholder: "Im Verlauf suchen", spellcheck: false });
+  findInput.setAttribute("aria-label", "Im Verlauf suchen");
+  const findCount = Object.assign(document.createElement("span"), { className: "note" });
+  const findOpts = { caseSensitive: false, decorations: { matchOverviewRuler: "#888", activeMatchColorOverviewRuler: "#f80", activeMatchBorder: "#f80" } };
+  const findGo = (up: boolean) => findInput.value && (up ? search.findPrevious(findInput.value, findOpts) : search.findNext(findInput.value, findOpts));
+  search.onDidChangeResults(({ resultIndex, resultCount }) => (findCount.textContent = !findInput.value ? "" : resultCount ? `${resultIndex + 1} von ${resultCount}` : "Nicht gefunden"));
+  const closeFind = () => {
+    findBar.hidden = true;
+    search.clearDecorations();
+    findCount.textContent = "";
     term.focus();
+  };
+  findInput.oninput = () => (findInput.value ? findGo(true) : (search.clearDecorations(), (findCount.textContent = "")));
+  findInput.onkeydown = (e) => {
+    if (e.key === "Enter") (e.preventDefault(), findGo(!e.shiftKey));
+    else if (e.key === "Escape") (e.preventDefault(), e.stopPropagation(), closeFind());
+  };
+  findBar.append(
+    findInput,
+    findCount,
+    toolButton(ICON.up, "Weiter oben", () => findGo(true), { compact: true }),
+    toolButton(ICON.down, "Weiter unten", () => findGo(false), { compact: true }),
+    toolButton(ICON.close, "Suche schliessen", closeFind, { compact: true }),
+  );
+  host.before(findBar);
+  const find = () => {
+    findBar.hidden = false;
+    findInput.focus();
+    findInput.select();
   };
   let broadcast = false;
   const broadcastBtn: HTMLButtonElement = toolButton(ICON.span, "An alle Shells senden", () => {
     broadcast = !broadcast;
     broadcastBtn.classList.toggle("on", broadcast);
     broadcastBtn.setAttribute("aria-pressed", String(broadcast));
-    status.textContent = broadcast ? `Eingabe geht an alle offenen Shells (${allShells.size}).` : "";
+    ctx.pane.classList.toggle("broadcasting", broadcast);
+    broadcastBanner.hidden = !broadcast;
+    broadcastBanner.textContent = `Achtung: Was du tippst, geht auch an ${targets().length} weitere SSH-Shell(s) (lokale Terminals nicht).`;
+    status.textContent = broadcast ? "Eingabe geht an alle SSH-Shells." : "";
     term.focus();
   }, { secondary: true });
+  const broadcastBanner = Object.assign(document.createElement("div"), { className: "broadcast-banner", hidden: true });
+  broadcastBanner.setAttribute("role", "alert");
+  host.before(broadcastBanner);
+  // Im lokalen Terminal gibt es nichts zu verteilen.
+  broadcastBtn.hidden = !!local;
   // Textbausteine je Verbindung (lokal gespeichert, keine Passwörter hinein).
   const snipKey = `sesam.snippets.${c.id.startsWith("local:") ? "local" : c.id}`;
   const snippets = async () => {

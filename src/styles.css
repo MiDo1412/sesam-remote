@@ -589,6 +589,14 @@ body.mobile .pane-head { --h-ctl: 30px; }
 .terminal .xterm-viewport::-webkit-scrollbar { display: none; }
 .terminal .xterm-scrollable-element > .scrollbar.vertical > .slider { left: 4px !important; width: 6px !important; border-radius: 3px; }
 .terminal.no-scroll .xterm-scrollable-element > .scrollbar.vertical { display: none; } /* nichts zum Zurückrollen */
+/* Suchleiste über dem Terminal (Strg+Umschalt+F) */
+.term-find { display: flex; align-items: center; gap: var(--s-2); padding: 6px var(--s-3); background: var(--card); color: var(--text); }
+.term-find[hidden], .broadcast-banner[hidden] { display: none; }
+.term-find input { flex: 1; min-width: 0; max-width: 360px; }
+.term-find .note { min-width: 7em; font-variant-numeric: tabular-nums; }
+/* «An alle Shells senden»: roter Rahmen und Hinweis, solange es an ist */
+.broadcasting { box-shadow: inset 0 0 0 2px var(--danger); }
+.broadcast-banner { padding: 6px var(--s-3); background: var(--danger); color: #fff; font-weight: 600; }
 /* Remote-Bild (Inhalt, immer deckend) */
 .desktop { position: relative; flex: 1; min-height: 0; overflow: hidden; display: grid; place-items: center; background: var(--remote-bg); }
 .desktop.native { overflow: auto; place-items: start; }
