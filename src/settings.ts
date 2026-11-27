@@ -5,6 +5,7 @@ import { ICON } from "./icons";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { saveTermSettings, termSettings } from "./termthemes";
 import { schemeGallery } from "./schemegallery";
@@ -163,6 +164,8 @@ export async function openSettings(tab = "general") {
   $("about-download").onclick = () => openLink(LINKS.download);
   $("about-issue").onclick = () => openLink(LINKS.issue(""));
   $("about-privacy").onclick = () => openLink(LINKS.privacy);
+  $("about-sponsor").hidden = isMobile;
+  $("about-sponsor").onclick = () => openLink(LINKS.sponsor);
   $("settings-version").textContent = __VERSION_LABEL__ || (await getVersion().catch(() => ""));
   void renderUpdate();
   if (!isPhone || tab !== "general") show(tab);
@@ -221,6 +224,8 @@ export const LINKS = {
   privacy: `${WEBSITE}/datenschutz.html`,
   /** Neues Issue mit vorbereitetem Titel, z. B. zur gerade gelesenen Anleitung. */
   issue: (title: string) => `${REPO}/issues/new?title=${encodeURIComponent(title)}`,
+  /** GitHub Sponsors. Nicht auf iPad/iPhone: Spendenaufrufe dürfen dort nur anerkannte Hilfswerke (App Review 3.2.1). */
+  sponsor: "https://github.com/sponsors/MiDo1412",
 };
 export const openLink = (url: string | Promise<string>) => void Promise.resolve(url).then((u) => openUrl(u)).catch(() => {});
 export const openWebsite = () => openLink(WEBSITE);
@@ -242,6 +247,17 @@ function updateLine(s: UpdateStatus): string {
   if (s.error) return `Update-Prüfung nicht möglich: ${s.error}`;
   if (!s.auto) return s.locked ? "Updates verteilt die IT (Richtlinie dieses Computers)." : "Automatisch aktualisieren ist aus.";
   return `Sesam ist aktuell (${s.current}).`;
+}
+
+/** Hauptfenster: Hinweis, sobald ein Update heruntergeladen ist (sonst installiert es beim Beenden). */
+export function updateNotice() {
+  void listen<string>("update-ready", ({ payload: v }) => {
+    $("update-notice-text").textContent = `Update ${v} ist bereit.`;
+    $("update-notice").hidden = false;
+  });
+  $("update-notice-later").onclick = () => ($("update-notice").hidden = true);
+  $<HTMLButtonElement>("update-notice-restart").onclick = () =>
+    void invoke("update_install").catch((e) => ($("update-notice-text").textContent = `Installation nicht möglich: ${e}`));
 }
 
 async function renderUpdate(s?: UpdateStatus) {

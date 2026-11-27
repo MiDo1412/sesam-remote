@@ -455,7 +455,7 @@
           <img src="/sesam-icon.svg" alt="" width="72" height="72" />
           <h2>Sesam Remote</h2>
           <p>Version <span id="settings-version"></span></p>
-          <p class="about-links"><button type="button" class="link" id="about-news">Was ist neu in dieser Version</button><button type="button" class="link" id="about-download">Sesam auf deinen anderen Geräten</button><button type="button" class="link" id="about-issue">Fehler melden oder Idee teilen</button><button type="button" class="link" id="about-privacy">Datenschutz</button></p>
+          <p class="about-links"><button type="button" class="link" id="about-news">Was ist neu in dieser Version</button><button type="button" class="link" id="about-download">Sesam auf deinen anderen Geräten</button><button type="button" class="link" id="about-issue">Fehler melden oder Idee teilen</button><button type="button" class="link" id="about-privacy">Datenschutz</button><button type="button" class="link" id="about-sponsor">Sesam unterstützen</button></p>
           <div class="update-box" id="update-box" hidden>
             <p class="note" id="update-line" aria-live="polite"></p>
             <label class="check"><input type="checkbox" id="update-auto" /> <span>Automatisch aktualisieren</span></label>
@@ -489,5 +489,11 @@
         </div>
       </form>
     </dialog>
+
+    <div class="update-notice" id="update-notice" role="status" hidden>
+      <span id="update-notice-text"></span>
+      <button type="button" id="update-notice-restart" class="primary">Jetzt neu starten</button>
+      <button type="button" id="update-notice-later">Später</button>
+    </div>
   </body>
 </html>

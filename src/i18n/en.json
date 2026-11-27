@@ -1641,5 +1641,9 @@
  "RDP-Mikrofon: Format {} nicht unterstützt": "RDP microphone: format {} not supported",
  "RDP-Mikrofon: kein Eingang": "RDP microphone: no input",
  "Zwischenablage: Bild vom Server nicht lesbar": "Clipboard: image from the server not readable",
- "Zwischenablage: Bild vom Server nicht übernommen": "Clipboard: image from the server not taken over"
+ "Zwischenablage: Bild vom Server nicht übernommen": "Clipboard: image from the server not taken over",
+ "Jetzt neu starten": "Restart Now",
+ "Sesam unterstützen": "Support Sesam",
+ "Später": "Later",
+ "Update {} ist bereit.": "Update {} is ready."
 }

@@ -40,8 +40,8 @@ msiexec /x "Sesam Remote_26.11.2_x64_de-DE.msi" /qn /norestart
 ## Automatische Updates
 
 Sesam aktualisiert sich selbst (`docs/release.md`). Bei einer MSI-Installation im Programme-Ordner braucht das
-Administratorrechte; ohne Richtlinie zeigt Sesam dann nur «Update … ist verfügbar» und installiert erst nach
-Klick auf «Jetzt installieren». Soll Intune die Versionen bestimmen, automatische Updates ausschalten:
+Administratorrechte: Administratoren installiert Sesam beim Beenden (Windows fragt einmal), Standardbenutzern
+zeigt es nur «Update … ist verfügbar». Soll Intune die Versionen bestimmen, automatische Updates ausschalten:
 
 ```bat
 msiexec /i "Sesam Remote_26.11.2_x64_de-DE.msi" AUTOUPDATE=0 /qn /norestart

@@ -48,6 +48,8 @@ Beim Anlegen klopft Sesam an die üblichen Ports und schaltet ein, was antwortet
 
 Was auf welchem System geht und warum: [docs/plattformen.md](docs/plattformen.md).
 
+Sesam ist kostenlos. Wer die Arbeit unterstützen möchte: [GitHub Sponsors](https://github.com/sponsors/MiDo1412).
+
 ## Sicherheit und Datenschutz
 
 - Kein Konto, kein Cloud-Dienst, keine Telemetrie. Sesam verbindet sich direkt mit deinen Rechnern.

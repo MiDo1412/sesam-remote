@@ -4,8 +4,8 @@
 //!
 //! Wie installiert wird, hängt von der Art der Installation ab:
 //! - macOS-App, AppImage, portable Fassungen: still beim Beenden, nächster Start ist neu.
-//! - Windows-MSI (Programme-Ordner, braucht Administratorrechte): nur anzeigen; «Jetzt installieren» fragt einmal
-//!   nach Rechten. Mit der Richtlinie `HKLM\Software\Policies\Sesam Remote\AutoUpdate = 0` (MSI-Eigenschaft
+//! - Windows-Installer: ebenfalls beim Beenden; im Programme-Ordner fragt Windows dabei einmal nach Rechten (nur
+//!   wenn der Benutzer Administrator ist, sonst nur anzeigen). Mit der Richtlinie `HKLM\Software\Policies\Sesam Remote\AutoUpdate = 0` (MSI-Eigenschaft
 //!   `AUTOUPDATE=0`, docs/intune.md) ganz aus, Intune verteilt die Versionen.
 //! - Linux-Paket (.deb): nur anzeigen, die Paketverwaltung aktualisiert.
 
@@ -16,7 +16,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager, Runtime};
 
 /// Wie lange zwischen zwei Prüfungen im Hintergrund.
-const EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+const EVERY: Duration = Duration::from_secs(60 * 60);
 /// Erste Prüfung nach dem Start (die App soll erst in Ruhe starten).
 const FIRST: Duration = Duration::from_secs(45);
 
@@ -143,8 +143,19 @@ pub fn install_kind(exe: &Path, portable: bool, appimage: bool) -> Install {
             _ => Install::Manual,
         };
     }
-    // Windows-MSI und Linux-Pakete brauchen Rechte bzw. die Paketverwaltung.
+    // Windows-Installer beim Beenden, wenn der Ordner beschreibbar ist oder der Benutzer Rechte bekommen kann (fragt
+    // dann einmal); sonst (Standardbenutzer, IT verteilt) nur melden. Linux-Pakete aktualisiert die Paketverwaltung.
+    if cfg!(windows) && (exe.parent().is_some_and(writable) || is_admin()) {
+        return Install::OnQuit;
+    }
     Install::Manual
+}
+
+fn is_admin() -> bool {
+    #[cfg(windows)]
+    return unsafe { windows::Win32::UI::Shell::IsUserAnAdmin() }.as_bool();
+    #[cfg(not(windows))]
+    false
 }
 
 fn writable(dir: &Path) -> bool {
@@ -223,6 +234,8 @@ pub async fn check<R: Runtime>(app: &AppHandle<R>, manual: bool) -> Result<(), S
                     drop(bytes);
                     s.ready = Some(u.version.clone());
                     tracing::info!(version = %u.version, "Update heruntergeladen, wird beim Beenden installiert");
+                    use tauri::Emitter;
+                    let _ = app.emit("update-ready", &u.version);
                     *st.pending.lock().unwrap() = Some((u, Some(stored)));
                 }
             }
@@ -360,8 +373,8 @@ mod tests {
         assert_eq!(install_kind(&exe, false, false), Install::OnQuit, "beschreibbarer Ordner");
         #[cfg(target_os = "macos")]
         assert_eq!(install_kind(Path::new("/System/Applications/X.app/Contents/MacOS/x"), false, false), Install::Manual);
-        #[cfg(not(target_os = "macos"))]
-        assert_eq!(install_kind(Path::new("C:/Program Files/Sesam Remote/sesam-remote.exe"), false, false), Install::Manual);
+        #[cfg(not(any(target_os = "macos", windows)))]
+        assert_eq!(install_kind(Path::new("/usr/bin/sesam-remote"), false, false), Install::Manual);
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 }

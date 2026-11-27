@@ -15,7 +15,7 @@ import { clipHistory, initClipHistory } from "./cliphistory";
 import { initTitlebar, isMac, isMobile, isPhone, keyLabel } from "./titlebar";
 import { explainRdpError, fetchPorts } from "./ubuntu";
 import { initTerminal, openTerminal } from "./terminal";
-import { appSettings, applyAppearance, LINKS, openLink, openSettings, openWebsite, settingsWindow } from "./settings";
+import { appSettings, applyAppearance, LINKS, openLink, openSettings, openWebsite, settingsWindow, updateNotice } from "./settings";
 import { openFirstAid, serviceOf, type Service } from "./firstaid";
 import { unlockDesktop } from "./unlock";
 import { openPermissions } from "./permissions";
@@ -1217,6 +1217,7 @@ document.querySelector<HTMLElement>("main > section.list")!.addEventListener("co
 if (!detachedWindow && !settingsWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 // Dock-Menü (macOS): Klick kommt als Link direkt von der App, ohne Umweg über das System.
 if (!detachedWindow && !settingsWindow) listen<string>("link", (e) => handleLink(e.payload));
+if (!detachedWindow && !settingsWindow && !isMobile) updateNotice();
 // Abgleich über einen Ordner (Einstellungen › Zugangsdaten): beim Start, kurz nach Änderungen und alle 5 Minuten.
 let syncTimer = 0;
 const syncSoon = (ms = 8000) => {

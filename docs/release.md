@@ -59,12 +59,13 @@ Freiwillig (Rückfall, falls GitHub einmal wegfällt): `test-build/release/<Vers
 
 ## Wie die App aktualisiert
 
-- Prüft 45 s nach dem Start und dann alle 6 Stunden, lädt still herunter, prüft die Signatur und installiert
+- Prüft 45 s nach dem Start und dann jede Stunde, lädt still herunter, prüft die Signatur und installiert
   beim Beenden; der nächste Start ist neu. Keine Fenster, keine Unterbrechung einer Sitzung.
 - Einstellungen › Über Sesam: «Sesam ist aktuell (…)» bzw. «Update … wird beim nächsten Start installiert»,
-  Schalter «Automatisch aktualisieren» (Vorgabe an), «Jetzt suchen».
-- Windows-MSI im Programme-Ordner: braucht Administratorrechte, darum nur Hinweis und «Jetzt installieren»;
-  mit `AUTOUPDATE=0` bzw. der Richtlinie ganz aus (`docs/intune.md`).
+  Schalter «Automatisch aktualisieren» (Vorgabe an), «Jetzt suchen». Ist ein Update heruntergeladen, zeigt das
+  Hauptfenster unten einen Hinweis mit «Jetzt neu starten» (sonst beim Beenden).
+- Windows-MSI im Programme-Ordner: ebenfalls beim Beenden, Windows fragt dabei einmal nach Administratorrechten.
+  Für Standardbenutzer ohne Rechte nur Hinweis; mit `AUTOUPDATE=0` bzw. der Richtlinie ganz aus (`docs/intune.md`).
 - Portabel (Windows, macOS, AppImage): ersetzt sich an Ort und Stelle.
 - iPad: App Store.
 - Nur neuere Versionen; die Signatur bindet die Version (kein Zurückstufen über eine gefälschte latest.json).
