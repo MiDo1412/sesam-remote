@@ -157,9 +157,15 @@ pub(crate) async fn conn_diagnose(path: State<'_, LibraryPath>, id: String, serv
             }
             Err(e) => send(step("login", login, Some(false), e, "creds")),
         },
-        "rdp" => match rdp_check(path, id, None, Some(false)).await {
+        "rdp" | "vnc" | "ftp" => match match service.as_str() {
+            "rdp" => rdp_check(path, id, None, Some(false)).await,
+            "vnc" => vnc_login(&path, &c, None, Some(false)).await.map(drop),
+            _ => ftp_open(&path, &c, None, false).await.map(drop),
+        } {
             Ok(()) => {
-                send(step("cert", "Zertifikat", Some(true), "Bekannt oder gültig.", ""));
+                if service == "rdp" {
+                    send(step("cert", "Zertifikat", Some(true), "Bekannt oder gültig.", ""));
+                }
                 send(step("login", login, Some(true), "Anmeldung angenommen.", ""));
             }
             Err(e) if e.starts_with(vnc::tls::CERT_UNKNOWN) => {
@@ -466,14 +472,28 @@ pub(crate) fn cred_used(cid: &str) {
     }
 }
 
-/// Zugang testen: mit diesen Zugangsdaten über SSH an einer Verbindung anmelden, die sie nutzt, und gleich wieder trennen.
+/// Zugang testen: mit diesen Zugangsdaten an einer Verbindung anmelden, die sie nutzt, und gleich wieder trennen.
+/// Der Dienst folgt der Zuweisung: RDP- bzw. VNC-Zugangsdaten über RDP bzw. VNC, sonst SSH, ohne SSH über FTP.
+/// `trust` ist je nach Dienst der Hostschlüssel (SSH) oder das Zertifikat (RDP, VNC, FTPS); es wird gemerkt.
 #[tauri::command]
-pub(crate) async fn cred_test(path: State<'_, LibraryPath>, connection: String, trust: Option<String>) -> Result<String, String> {
+pub(crate) async fn cred_test(path: State<'_, LibraryPath>, connection: String, credential: Option<String>, trust: Option<String>) -> Result<String, String> {
     let c = find(&path, &connection)?;
-    if c.ssh_port.is_none() {
-        return Err(format!("«{}» hat kein SSH; testen geht vorerst nur über SSH.", c.name));
-    }
-    let h = ssh::connect(&ssh_target(&c, trust)?).await?;
-    let _ = h.disconnect(russh::Disconnect::ByApplication, "", "de").await;
-    Ok(format!("Anmeldung an «{}» erfolgreich.", c.name))
+    let is = |x: &Option<String>| credential.is_some() && x == &credential;
+    let via = if is(&c.rdp_credential_id) {
+        rdp_check(path.clone(), connection, trust, Some(true)).await?;
+        "RDP"
+    } else if is(&c.vnc_credential_id) {
+        let (_stream, _init, _tunnel) = vnc_login(&path, &c, trust, Some(true)).await?;
+        "VNC"
+    } else if c.ssh_port.is_some() {
+        let h = ssh::connect(&ssh_target(&c, trust)?).await?;
+        let _ = h.disconnect(russh::Disconnect::ByApplication, "", "de").await;
+        "SSH"
+    } else if c.ftp_port.is_some() {
+        drop(ftp_open(&path, &c, trust, true).await?);
+        "FTP"
+    } else {
+        return Err(format!("«{}» hat weder SSH noch FTP; dort lässt sich der Zugang nicht testen.", c.name));
+    };
+    Ok(format!("Anmeldung an «{}» über {via} erfolgreich.", c.name))
 }

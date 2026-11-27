@@ -55,21 +55,12 @@ pub(crate) fn frame(kind: u8, nums: &[u16], tail: &[u8]) -> InvokeResponseBody {
     InvokeResponseBody::Raw(b)
 }
 
-#[tauri::command]
-pub(crate) async fn vnc_open(
-    app: AppHandle,
-    path: State<'_, LibraryPath>,
-    desktops: State<'_, Desktops>,
-    id: String,
-    trust: Option<String>,
-    remember: Option<bool>,
-    on_event: Channel<InvokeResponseBody>,
-) -> Result<String, String> {
-    let c = find(&path, &id)?;
+/// Verbinden und anmelden (direkt oder durch den SSH-Tunnel), mit Zertifikat-Pinning wie beim Öffnen.
+pub(crate) async fn vnc_login(path: &LibraryPath, c: &Connection, trust: Option<String>, remember: Option<bool>) -> Result<(vnc::Stream, vnc::ServerInit, TunnelGuard), String> {
     let port = c.vnc_port.ok_or("Desktop (VNC) ist für diese Verbindung ausgeschaltet")?;
-    let password = login_secret(&c, Kind::Password)?;
+    let password = login_secret(c, Kind::Password)?;
     let vnc_password = match &c.vnc_credential_id {
-        Some(cid) => cred_login(&path, cid)?.1,
+        Some(cid) => cred_login(path, cid)?.1,
         None => vault::get(&c.id, Kind::VncPassword)?,
     };
     let pins_path = path.0.with_file_name("known_certs.json");
@@ -82,8 +73,8 @@ pub(crate) async fn vnc_open(
     };
     let login = vnc::Login { host: &c.address, user: &c.user, password: password.as_deref(), vnc_password: vnc_password.as_deref(), cert };
     let timeout = std::time::Duration::from_secs(15);
-    let (via_host, via_port, tunnel) = desktop_via_ssh(&c, port).await?;
-    let mut tunnel = TunnelGuard(tunnel);
+    let (via_host, via_port, tunnel) = desktop_via_ssh(c, port).await?;
+    let tunnel = TunnelGuard(tunnel);
     let stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect((via_host.as_str(), via_port)))
         .await
         .map_err(|_| "Zeitüberschreitung beim Verbinden".to_string())?
@@ -96,6 +87,21 @@ pub(crate) async fn vnc_open(
     if let Some(fp) = trust.filter(|fp| remember.unwrap_or(true) && login.cert.seen.lock().unwrap().as_ref() == Some(fp)) {
         let _ = save_pins(&pins_path, &pin_key, Some(fp));
     }
+    Ok((stream, init, tunnel))
+}
+
+#[tauri::command]
+pub(crate) async fn vnc_open(
+    app: AppHandle,
+    path: State<'_, LibraryPath>,
+    desktops: State<'_, Desktops>,
+    id: String,
+    trust: Option<String>,
+    remember: Option<bool>,
+    on_event: Channel<InvokeResponseBody>,
+) -> Result<String, String> {
+    let c = find(&path, &id)?;
+    let (stream, init, mut tunnel) = vnc_login(&path, &c, trust, remember).await?;
 
     let downloads = app.path().download_dir().unwrap_or_else(|_| std::env::temp_dir());
     let share = Arc::new(ClipShare::new(c.clone(), downloads));

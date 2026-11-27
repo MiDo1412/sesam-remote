@@ -172,7 +172,7 @@ export const api = {
   credPublicKey: (id: string) => invoke<string>("cred_public_key", { id }),
   credInstallKey: (id: string, connection: string, trust: string | null) => invoke<string>("cred_install_key", { id, connection, trust }),
   credReveal: (id: string) => invoke<string>("cred_reveal", { id }),
-  credTest: (connection: string, trust: string | null) => invoke<string>("cred_test", { connection, trust }),
+  credTest: (connection: string, credential: string, trust: string | null) => invoke<string>("cred_test", { connection, credential, trust }),
   backupExport: (file: string, password: string) => invoke<string>("backup_export", { file, password }),
   backupPreview: (file: string, password: string) =>
     invoke<{ newConnections: string[]; knownConnections: string[]; newCredentials: string[]; knownCredentials: string[]; withForwards: string[]; withSharedFolder: string[] }>("backup_preview", { file, password }),

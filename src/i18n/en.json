@@ -1567,5 +1567,10 @@
  "Anmeldung abgebrochen.": "Sign-in cancelled.",
  "Anmeldung an {}@{}": "Sign in to {}@{}",
  "Rückfrage": "Prompt from server",
- "Anmelden": "Sign in"
+ "Anmelden": "Sign in",
+ "Anmeldung an «{}» über {} erfolgreich.": "Signed in to «{}» via {}.",
+ "Das Zertifikat von «{}» ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn das Zertifikat auf dem Server erneuert wurde.": "The certificate of «{}» is not the same as last time. This could be an attack. Only continue if the certificate was renewed on the server.",
+ "Sesam meldet sich mit «{}» an der gewählten Verbindung an und trennt gleich wieder.": "Sesam signs in to the selected connection with «{}» and disconnects right away.",
+ "«{}» hat weder SSH noch FTP; dort lässt sich der Zugang nicht testen.": "«{}» has neither SSH nor FTP, so the sign-in cannot be tested there.",
+ "«{}» zeigt dieses Zertifikat. Vergleiche den Fingerabdruck mit dem Server, bevor du ihm vertraust.": "«{}» presents this certificate. Compare the fingerprint with the server before you trust it."
 }

@@ -1,6 +1,6 @@
 /** Gespeicherte Zugangsdaten: Liste in den Einstellungen, Bearbeiten-Dialog, Auswahl im Verbindungs-Sheet. */
 import { locale, tr } from "./i18n";
-import { api, HOSTKEY_UNKNOWN, type Connection, type Cred } from "./api";
+import { api, CERT_CHANGED, CERT_UNKNOWN, HOSTKEY_UNKNOWN, type Connection, type Cred } from "./api";
 import { ask, askHostKey, askPassword, tell } from "./ui";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openMenu } from "./menu";
@@ -90,19 +90,33 @@ async function credMenu(anchor: HTMLElement, c: Cred, users: string[]) {
   }
 }
 
-/** Verbindung wählen (nur solche, die diese Zugangsdaten nutzen), dann über SSH anmelden und gleich wieder trennen. */
+/** Verbindung wählen (nur solche, die diese Zugangsdaten nutzen), dann anmelden und gleich wieder trennen:
+ *  über RDP oder VNC, wenn sie dort zugewiesen sind, sonst über SSH (ohne SSH über FTP). */
 async function testCred(c: Cred) {
   const conns = (await api.list()).filter((x) => [x.credentialId, x.rdpCredentialId, x.vncCredentialId].includes(c.id));
-  const id = await pickConnection(conns, "Zugang testen", `Sesam meldet sich mit «${c.name}» an der gewählten Verbindung an (über SSH) und trennt gleich wieder.`, "Testen");
+  const id = await pickConnection(conns, "Zugang testen", `Sesam meldet sich mit «${c.name}» an der gewählten Verbindung an und trennt gleich wieder.`, "Testen");
   if (!id) return;
   const name = conns.find((x) => x.id === id)?.name ?? "";
   let trust: string | null = null;
   for (;;) {
     try {
-      return tell("Zugang funktioniert", await api.credTest(id, trust));
+      return tell("Zugang funktioniert", await api.credTest(id, c.id, trust));
     } catch (e) {
-      if (trust === null && String(e).startsWith(HOSTKEY_UNKNOWN) && (trust = await askHostKey(name, String(e)))) continue;
-      return tell("Anmeldung fehlgeschlagen", String(e));
+      const msg = String(e);
+      if (trust === null && msg.startsWith(HOSTKEY_UNKNOWN) && (trust = await askHostKey(name, msg))) continue;
+      const changed = msg.startsWith(CERT_CHANGED);
+      if (trust === null && (changed || msg.startsWith(CERT_UNKNOWN))) {
+        const fp = msg.slice((changed ? CERT_CHANGED : CERT_UNKNOWN).length);
+        const text = changed
+          ? `Das Zertifikat von «${name}» ist nicht mehr dasselbe wie beim letzten Mal. Das kann ein Angriff sein. Nur fortfahren, wenn das Zertifikat auf dem Server erneuert wurde.`
+          : `«${name}» zeigt dieses Zertifikat. Vergleiche den Fingerabdruck mit dem Server, bevor du ihm vertraust.`;
+        if (await ask(changed ? "Zertifikat hat sich geändert" : "Unbekanntes Zertifikat", `${text}\n\nSHA-256\n${fp.replace(/^SHA256:/, "").toLowerCase()}`, changed ? "Neuem Zertifikat vertrauen" : "Vertrauen und prüfen")) {
+          trust = fp;
+          continue;
+        }
+        return;
+      }
+      return tell("Anmeldung fehlgeschlagen", msg);
     }
   }
 }
