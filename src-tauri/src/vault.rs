@@ -111,10 +111,7 @@ static EPHEMERAL: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap
 
 /// Geheimnis im Speicher mit Nullen überschreiben, bevor es freigegeben wird (Nullbytes sind gültiges UTF-8).
 fn wipe(mut s: String) {
-    // SAFETY: nur Nullen, das bleibt gültiges UTF-8.
-    for b in unsafe { s.as_bytes_mut() } {
-        unsafe { std::ptr::write_volatile(b, 0) };
-    }
+    zeroize::Zeroize::zeroize(&mut s);
 }
 
 pub fn set_ephemeral(id: &str, kind: Kind, secret: &str) {

@@ -1563,5 +1563,9 @@
  "Achtung, mit Port-Weiterleitungen: {}": "Caution, with port forwarding: {}",
  "Achtung, gibt einen lokalen Ordner frei: {}": "Caution, shares a local folder: {}",
  "Mark-of-the-Web nicht gesetzt": "Mark-of-the-Web not set",
- "Quarantäne-Markierung nicht gesetzt": "Quarantine flag not set"
+ "Quarantäne-Markierung nicht gesetzt": "Quarantine flag not set",
+ "Anmeldung abgebrochen.": "Sign-in cancelled.",
+ "Anmeldung an {}@{}": "Sign in to {}@{}",
+ "Rückfrage": "Prompt from server",
+ "Anmelden": "Sign in"
 }

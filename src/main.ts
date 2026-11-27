@@ -7,7 +7,7 @@ import { shellTab } from "./shell";
 import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
 import { detachedWindow, detachToken, initTabs, jumpCommands, openTab, runTool, setLibrary, showLibrary, showSession, takeOver } from "./tabs";
-import { ask, choose, tell } from "./ui";
+import { ask, askPassword, askText, choose, tell } from "./ui";
 import { openHelp, topicFor, topics } from "./help";
 import { connectionCommands, initPalette } from "./palette";
 import { clipHistory, initClipHistory } from "./cliphistory";
@@ -1212,6 +1212,20 @@ document.querySelector<HTMLElement>("main > section.list")!.addEventListener("co
 if (!detachedWindow && !settingsWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 // Dock-Menü (macOS): Klick kommt als Link direkt von der App, ohne Umweg über das System.
 if (!detachedWindow && !settingsWindow) listen<string>("link", (e) => handleLink(e.payload));
+// Rückfrage des SSH-Servers (keyboard-interactive): Einmalcode, PIN oder Passwort, je Frage ein Dialog.
+interface SshAsk { id: number; host: string; user: string; name: string; instructions: string; prompts: [string, boolean][] }
+if (!detachedWindow && !settingsWindow)
+  listen<SshAsk>("ssh-prompt", async ({ payload: a }) => {
+    const answers: string[] = [];
+    for (const [prompt, echo] of a.prompts) {
+      const text = [a.instructions.trim(), prompt.trim()].filter(Boolean).join("\n\n");
+      const title = a.name.trim() || `Anmeldung an ${a.user}@${a.host}`;
+      const v = echo ? await askText(title, text, "Anmelden") : await askPassword(title, text, "Anmelden");
+      if (v === null) return void api.sshPromptAnswer(a.id, null);
+      answers.push(v);
+    }
+    void api.sshPromptAnswer(a.id, answers);
+  });
 for (const b of document.querySelectorAll<HTMLElement>("[data-help]")) {
   // Gleiches Fragezeichen wie bei den Feldern; beim RDP-Block die Anleitung zum gewählten Betriebssystem.
   if (b.classList.contains("help-btn")) b.innerHTML = ICON.question;

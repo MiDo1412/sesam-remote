@@ -222,3 +222,9 @@ pub(crate) async fn shell_close(shells: State<'_, ssh::Shells>, sid: String) -> 
     }
     Ok(())
 }
+
+/// Antwort auf eine Rückfrage des SSH-Servers (Einmalcode usw.), `None` = abgebrochen.
+#[tauri::command]
+pub(crate) fn ssh_prompt_answer(id: u64, answers: Option<Vec<String>>) {
+    ssh::answer(id, answers);
+}

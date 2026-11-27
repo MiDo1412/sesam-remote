@@ -307,7 +307,7 @@ pub(crate) fn backup_preview(path: State<LibraryPath>, file: String, password: S
 /// Zusammenführen: nur Neues kommt dazu (samt Geheimnissen), Bestehendes bleibt wie es ist.
 #[tauri::command]
 pub(crate) fn backup_import(path: State<LibraryPath>, file: String, password: String) -> Result<String, String> {
-    let c = backup_read(&file, &password)?;
+    let mut c = backup_read(&file, &password)?;
     let _g = LIBRARY_LOCK.lock().unwrap();
     let mut conns = library::load(&path.0)?;
     let mut creds = creds::load(&creds_path(&path))?;
@@ -317,7 +317,7 @@ pub(crate) fn backup_import(path: State<LibraryPath>, file: String, password: St
     // Zugangsdaten zuerst: neue Verbindungen dürfen nur auf Zugangsdaten zeigen, die mit derselben Sicherung neu
     // dazukommen. Sonst könnte eine fremde Sicherung vorhandene Passwörter an ihren Host schicken lassen
     // (security-review-2026-11-11, S-08).
-    for cr in c.credentials {
+    for cr in std::mem::take(&mut c.credentials) {
         creds::validate(&cr)?;
         if !creds.iter().any(|x| x.id == cr.id) {
             fresh_ids.insert(creds::vault_id(&cr.id));
@@ -328,7 +328,7 @@ pub(crate) fn backup_import(path: State<LibraryPath>, file: String, password: St
     }
     let mut unlinked = 0;
     let fresh_conns = fresh_conn_ids(&c.connections, &conns);
-    for v in c.connections {
+    for v in std::mem::take(&mut c.connections) {
         let mut conn: Connection = serde_json::from_value(v).map_err(|e| format!("Verbindung nicht lesbar: {e}"))?;
         conn.validate()?;
         // Verbindungen und Zugangsdaten teilen sich den Schlüsselbund («cred-<id>»): solche IDs nie als Verbindung.
@@ -339,16 +339,16 @@ pub(crate) fn backup_import(path: State<LibraryPath>, file: String, password: St
             added.0 += 1;
         }
     }
-    for (id, kind, secret) in c.secrets {
-        if let (true, Some((k, _))) = (fresh_ids.contains(&id), SECRET_KINDS.iter().find(|(_, n)| *n == kind)) {
+    for (id, kind, secret) in &c.secrets {
+        if let (true, Some((k, _))) = (fresh_ids.contains(id), SECRET_KINDS.iter().find(|(_, n)| n == kind)) {
             // Nie ein vorhandenes Geheimnis ersetzen.
-            if vault::get(&id, *k)?.is_none() {
-                vault::set(&id, *k, &secret)?;
+            if vault::get(id, *k)?.is_none() {
+                vault::set(id, *k, secret)?;
             }
         }
     }
     let mut groups = library::load_groups(&groups_path(&path))?;
-    for g in c.groups {
+    for g in std::mem::take(&mut c.groups) {
         if !groups.iter().any(|x| x.name == g.name) {
             groups.push(g);
         }

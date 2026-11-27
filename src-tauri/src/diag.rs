@@ -47,7 +47,11 @@ pub fn add_secret(s: &str) {
 pub fn redact(line: &str) -> String {
     let mut out = line.to_string();
     for s in SECRETS.lock().unwrap().iter() {
-        out = out.replace(s.as_str(), "***");
+        if out.contains(s.as_str()) {
+            let clean = out.replace(s.as_str(), "***");
+            zeroize::Zeroize::zeroize(&mut out);
+            out = clean;
+        }
     }
     out
 }
@@ -68,6 +72,8 @@ impl Write for LineWriter {
 impl Drop for LineWriter {
     fn drop(&mut self) {
         let line = redact(&String::from_utf8_lossy(&self.0));
+        // Die ungefilterte Zeile kann ein Geheimnis enthalten.
+        zeroize::Zeroize::zeroize(&mut self.0);
         if let Some(f) = FILE.lock().unwrap().as_mut() {
             f.write(line.as_bytes(), RUN_MAX);
         }

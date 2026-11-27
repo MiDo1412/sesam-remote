@@ -220,6 +220,7 @@ export const api = {
     return invoke<string>("term_open", { profile: { command: profile.command, args: profile.args, cwd: profile.cwd ?? null, env: profile.env ?? {} }, cols, rows, onEvent: ch });
   },
   shellWrite: (sid: string, data: Uint8Array) => invoke<void>("shell_write", { sid, data: Array.from(data) }),
+  sshPromptAnswer: (id: number, answers: string[] | null) => invoke<void>("ssh_prompt_answer", { id, answers }),
   shellResize: (sid: string, cols: number, rows: number) => invoke<void>("shell_resize", { sid, cols, rows }),
   shellClose: (sid: string) => invoke<void>("shell_close", { sid }),
   /** Binärrahmen: 0 Rechteck, 1 Grösse, 3 Ende, 4 Glocke, 5 Hinweis, 6 Mauszeiger (siehe lib.rs `frame`). */

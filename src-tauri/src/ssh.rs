@@ -281,6 +281,13 @@ pub struct Target {
     pub jump: Option<Box<Target>>,
 }
 
+impl Drop for Target {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.password);
+        zeroize::Zeroize::zeroize(&mut self.key);
+    }
+}
+
 /// Verbindungsoptionen pro Eintrag der Bibliothek.
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Options {
@@ -371,33 +378,130 @@ async fn agent() -> Result<Agent, String> {
     a.map_err(|e| format!("Kein SSH-Agent erreichbar (Pageant oder OpenSSH-Agent): {e}"))
 }
 
-/// Alle Schlüssel des Agenten durchprobieren. `false`, wenn keiner passt oder kein Agent läuft.
-async fn agent_auth(h: &mut Handle<Client>, user: &str) -> bool {
+/// Höchstens so viele Agent-Schlüssel anbieten: OpenSSH trennt nach `MaxAuthTries` (Standard 6) Fehlversuchen,
+/// und Schlüssel oder Passwort brauchen danach noch einen Versuch.
+const AGENT_MAX: usize = 4;
+
+/// Schlüssel des Agenten durchprobieren. `false`, wenn keiner passt oder kein Agent läuft. russh fragt pro Schlüssel
+/// zuerst ohne Signatur (`publickey` ohne Unterschrift, Antwort `PK_OK`); der Agent signiert nur, was der Server nimmt.
+async fn agent_auth(h: &mut Handle<Client>, user: &str) -> Result<(), Option<russh::MethodSet>> {
     let mut a = match agent().await {
         Ok(a) => a,
         Err(e) => {
             tracing::info!("{e}");
-            return false;
+            return Err(None);
         }
     };
-    let Ok(ids) = a.request_identities().await else { return false };
+    let Ok(ids) = a.request_identities().await else { return Err(None) };
     let hash = h.best_supported_rsa_hash().await.ok().flatten().flatten();
-    for id in ids {
-        let keys::agent::AgentIdentity::PublicKey { key, .. } = id else { continue };
-        if let Ok(r) = h.authenticate_publickey_with(user, key, hash, &mut a).await
-            && r.success()
-        {
-            return true;
+    let keys = ids.into_iter().filter_map(|id| match id {
+        keys::agent::AgentIdentity::PublicKey { key, .. } => Some(key),
+        _ => None,
+    });
+    let mut left = None;
+    for key in keys.take(AGENT_MAX) {
+        match h.authenticate_publickey_with(user, key, hash, &mut a).await {
+            Ok(r) if r.success() => return Ok(()),
+            Ok(client::AuthResult::Failure { remaining_methods, .. }) => {
+                // Server nimmt keine Schlüssel (mehr) an: weitere Versuche kosten nur MaxAuthTries.
+                let stop = !remaining_methods.contains(&russh::MethodKind::PublicKey);
+                left = Some(remaining_methods);
+                if stop {
+                    break;
+                }
+            }
+            _ => {}
         }
     }
-    false
+    Err(left)
+}
+
+/// Rückfrage des Servers (keyboard-interactive) an die Oberfläche; `run()` setzt `ASK` (Ereignis «ssh-prompt»),
+/// die Antwort kommt über `ssh_prompt_answer` zurück.
+#[derive(Clone, Serialize)]
+pub struct Ask {
+    pub id: u64,
+    pub host: String,
+    pub user: String,
+    pub name: String,
+    pub instructions: String,
+    /// (Text, sichtbar tippen)
+    pub prompts: Vec<(String, bool)>,
+}
+
+pub static ASK: std::sync::OnceLock<Box<dyn Fn(Ask) + Send + Sync>> = std::sync::OnceLock::new();
+static WAITING: std::sync::LazyLock<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Option<Vec<String>>>>>> = std::sync::LazyLock::new(Default::default);
+
+/// Antwort der Oberfläche; `None` = abgebrochen.
+pub fn answer(id: u64, answers: Option<Vec<String>>) {
+    if let Some(tx) = WAITING.lock().unwrap().remove(&id) {
+        let _ = tx.send(answers);
+    }
+}
+
+async fn ask_ui(mut a: Ask) -> Option<Vec<String>> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let show = ASK.get()?;
+    a.id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    WAITING.lock().unwrap().insert(a.id, tx);
+    let id = a.id;
+    show(a);
+    let r = tokio::time::timeout(std::time::Duration::from_secs(300), rx).await;
+    WAITING.lock().unwrap().remove(&id);
+    r.ok().and_then(|r| r.ok()).flatten()
+}
+
+/// Verdeckte Frage nach dem Passwort (nicht nach einem Code): darf das gespeicherte Passwort bekommen.
+fn is_password_prompt(p: &str) -> bool {
+    let p = p.to_lowercase();
+    ["password", "passwort", "kennwort", "mot de passe", "passwd"].iter().any(|w| p.contains(w))
+        && !["code", "otp", "token", "verification", "einmal", "pin"].iter().any(|w| p.contains(w))
+}
+
+/// keyboard-interactive bis zum Ergebnis. `None`, wenn der Server es gar nicht anbietet (keine Frage kam).
+async fn keyboard_interactive(h: &mut Handle<Client>, t: &Target) -> Result<Option<bool>, String> {
+    use client::KeyboardInteractiveAuthResponse as R;
+    let e = |e: russh::Error| e.to_string();
+    let mut r = h.authenticate_keyboard_interactive_start(&t.user, None).await.map_err(e)?;
+    let mut stored = t.password.as_deref();
+    let mut asked = false;
+    // Server dürfen beliebig viele Runden schicken; nach 10 ist Schluss.
+    for _ in 0..10 {
+        let R::InfoRequest { name, instructions, prompts } = r else { break };
+        asked = true;
+        let answers = match prompts.as_slice() {
+            [] => Vec::new(),
+            [p] if !p.echo && is_password_prompt(&p.prompt) && stored.is_some() => vec![stored.take().unwrap_or_default().to_string()],
+            _ => {
+                let prompts = prompts.into_iter().map(|p| (p.prompt, p.echo)).collect();
+                ask_ui(Ask { id: 0, host: t.host.clone(), user: t.user.clone(), name, instructions, prompts }).await.ok_or("Anmeldung abgebrochen.")?
+            }
+        };
+        r = h.authenticate_keyboard_interactive_respond(answers).await.map_err(e)?;
+    }
+    Ok(match r {
+        R::Success => Some(true),
+        _ if asked => Some(false),
+        _ => None,
+    })
 }
 
 async fn authenticate(h: &mut Handle<Client>, t: &Target) -> Result<(), String> {
     let mut tried = Vec::new();
+    // Was der Server nach dem letzten Fehlversuch noch anbietet.
+    let mut left: Option<russh::MethodSet> = None;
+    let note = |r: client::AuthResult, left: &mut Option<russh::MethodSet>| match r {
+        client::AuthResult::Success => true,
+        client::AuthResult::Failure { remaining_methods, .. } => {
+            *left = Some(remaining_methods);
+            false
+        }
+    };
     if t.opts.agent {
-        if agent_auth(h, &t.user).await {
-            return Ok(());
+        match agent_auth(h, &t.user).await {
+            Ok(()) => return Ok(()),
+            Err(m) => left = m.or(left),
         }
         tried.push("SSH-Agent");
     }
@@ -411,15 +515,26 @@ async fn authenticate(h: &mut Handle<Client>, t: &Target) -> Result<(), String> 
             .authenticate_publickey(&t.user, PrivateKeyWithHashAlg::new(Arc::new(pk), hash))
             .await
             .map_err(|e| e.to_string())?;
-        if r.success() {
+        if note(r, &mut left) {
             return Ok(());
         }
     }
-    if let Some(pw) = &t.password {
+    if let Some(pw) = &t.password
+        && left.as_ref().is_none_or(|m| m.contains(&russh::MethodKind::Password))
+    {
         tried.push("Passwort");
         let r = h.authenticate_password(&t.user, pw).await.map_err(|e| e.to_string())?;
-        if r.success() {
+        if note(r, &mut left) {
             return Ok(());
+        }
+    }
+    // PAM mit Einmalcode (2FA/TOTP), auch als zweiter Schritt nach Schlüssel oder Passwort; ohne gespeicherte
+    // Zugangsdaten fragt der Server so oft das Passwort selbst ab.
+    if left.as_ref().map_or(tried.is_empty(), |m| m.contains(&russh::MethodKind::KeyboardInteractive)) {
+        match keyboard_interactive(h, t).await? {
+            Some(true) => return Ok(()),
+            Some(false) => tried.push("Rückfrage"),
+            None => {}
         }
     }
     tracing::info!(user = %t.user, tried = ?tried, "SSH-Anmeldung abgelehnt");
@@ -635,6 +750,40 @@ impl Shell {
 
 #[cfg(test)]
 mod tests {
+    /// Gegen einen sshd mit nur keyboard-interactive (PAM), `SESAM_TEST_KBD=host:port:benutzer:passwort`: gespeichertes
+    /// Passwort geht in die Passwortfrage, ohne Passwort fragt die Oberfläche (hier: Antwort aus dem Test).
+    #[tokio::test]
+    #[ignore]
+    async fn echter_server_keyboard_interactive() {
+        let v = std::env::var("SESAM_TEST_KBD").expect("SESAM_TEST_KBD");
+        let p: Vec<String> = v.splitn(4, ':').map(String::from).collect();
+        let pw = p[3].clone();
+        let _ = super::ASK.set(Box::new(move |a| {
+            let reply = if a.prompts.iter().any(|(t, _)| t.contains("assword")) { Some(vec![pw.clone()]) } else { None };
+            tokio::spawn(async move { super::answer(a.id, reply) });
+        }));
+        let mut t = super::Target { host: p[0].clone(), port: p[1].parse().unwrap(), user: p[2].clone(), password: Some(p[3].clone()), key: None, trusted: None, opts: Default::default(), forwards: Vec::new(), jump: None };
+        if let Err(e) = super::connect(&t).await {
+            t.trusted = Some(e.rsplit('|').next().unwrap().to_string());
+        }
+        super::connect(&t).await.expect("gespeichertes Passwort");
+        t.password = None;
+        super::connect(&t).await.expect("Passwort über die Rückfrage");
+        t.password = Some("falsch".into());
+        let e = super::connect(&t).await.err().expect("falsches Passwort");
+        assert!(e.contains("abgelehnt") || e.contains("abgebrochen"), "{e}");
+    }
+
+    #[test]
+    fn passwortfrage_von_codefrage_trennen() {
+        for p in ["Password: ", "(mike@host) Password:", "Passwort: ", "Kennwort:"] {
+            assert!(super::is_password_prompt(p), "{p}");
+        }
+        for p in ["Verification code: ", "One-time password (OTP): ", "Enter PIN for token:", "Einmalcode:"] {
+            assert!(!super::is_password_prompt(p), "{p}");
+        }
+    }
+
     use super::*;
 
     #[test]

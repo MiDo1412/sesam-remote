@@ -86,6 +86,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            let h = app.handle().clone();
+            let _ = ssh::ASK.set(Box::new(move |a| {
+                let _ = h.emit("ssh-prompt", a);
+            }));
             // Menüs und eigene Titelleiste gibt es nur auf dem Desktop (iPadOS: Vollbild-App ohne Menüleiste).
             #[cfg(desktop)]
             {
@@ -258,6 +262,7 @@ pub fn run() {
             group_delete,
             shell_open,
             shell_write,
+            ssh_prompt_answer,
             shell_resize,
             shell_probe,
             shell_held_list,

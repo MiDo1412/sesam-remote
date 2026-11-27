@@ -41,6 +41,8 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["ring",
 sha2 = "0.10"
 # VNC Tight-JPEG auf allen Systemen: reines Rust (MIT/Apache-2.0/Zlib), keine C-Bibliothek
 zune-jpeg = "0.5"
+# Geheimnisse im Speicher nach Gebrauch mit Nullen überschreiben (MIT/Apache-2.0).
+zeroize = "1"
 # Zertifikatskette gegen den Speicher des Systems (auch iPad); kommt ohnehin mit dem Updater (reqwest)
 rustls-platform-verifier = "0.7"
 russh-sftp = "3"

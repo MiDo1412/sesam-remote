@@ -60,6 +60,12 @@ pub struct Target {
     pub gateway: Option<Gateway>,
 }
 
+impl Drop for Target {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.password);
+    }
+}
+
 /// RD-Gateway (MS-TSGU, HTTPS/WebSocket). Benutzer als `DOMÄNE\benutzer` oder `benutzer@domain.tld`.
 #[derive(Clone)]
 pub struct Gateway {
@@ -67,6 +73,12 @@ pub struct Gateway {
     pub endpoint: String,
     pub user: String,
     pub password: String,
+}
+
+impl Drop for Gateway {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.password);
+    }
 }
 
 pub type ClipFactory = Arc<Mutex<Box<dyn CliprdrBackendFactory + Send>>>;
