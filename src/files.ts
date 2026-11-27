@@ -14,6 +14,7 @@ import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from ".
 import { localNetworkText } from "./ubuntu";
 
 import { askPerms } from "./files/perms";
+import { editText } from "./files/editor";
 import { el, fileKind, formatDate, formatSize, permText, type Pane, type Side, type SortKey } from "./files/format";
 
 export { formatSize };
@@ -1352,6 +1353,38 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     }
   }
 
+  /** Textdatei vom Server im eingebauten Editor: laden, bearbeiten, Änderungen ansehen, hochladen (alte Fassung in den
+   *  Papierkorb wie beim Ersetzen). Höchstens 1 MB und nur UTF-8. */
+  async function editInline(e: Entry) {
+    const rp = panes.remote;
+    if (!sid || !rp.listing) return;
+    if (e.size > 1_000_000) return tell("Zu gross für den Editor", "Der eingebaute Editor ist für Konfigurationsdateien bis 1 MB gedacht.");
+    const remoteDir = rp.listing.path;
+    const remote = join(rp, e.name);
+    try {
+      status.textContent = `Öffne «${e.name}» …`;
+      const local = await fetchRemote(remote, await api.localTemp(`editor-${Date.now().toString(36)}`));
+      const bytes = await api.localRead(local, 1_000_001);
+      status.textContent = "";
+      let text: string;
+      try {
+        text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      } catch {
+        return tell("Keine Textdatei", `«${e.name}» ist keine Textdatei (UTF-8). Zum Ansehen die Vorschau nehmen.`);
+      }
+      const opened = e.modified;
+      await editText(remote, text, async (next) => {
+        const now = (await api.sftpList(sid!, remoteDir)).entries.find((x) => x.name === e.name);
+        if (now && now.modified !== opened && !(await ask(`«${e.name}» hat sich auf dem Server geändert`, "Seit dem Öffnen hat jemand die Datei auf dem Server geändert. Deine Fassung trotzdem hochladen? Die andere kommt in den Papierkorb.", "Hochladen"))) throw "abgebrochen";
+        await api.saveBytes(local, new TextEncoder().encode(next));
+        start(true, local, remoteDir, e.name, true, () => rp.listing?.path === remoteDir && void load(rp, remoteDir));
+      });
+    } catch (err) {
+      status.textContent = "";
+      tell("Nicht geöffnet", String(err));
+    }
+  }
+
   /** Ordnergrösse auf Wunsch: Server über du, lokal durch Aufsummieren (höchstens 20000 Einträge). */
   const dirSizes = new Map<string, number>();
   async function folderSize(p: Pane, name: string) {
@@ -1542,6 +1575,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       );
       if (remote) items.push({ value: "chmod", label: ftp ? "Rechte ändern …" : "Berechtigungen …", icon: ICON.permissions, disabled: !one || scp });
       if (!e.dir) items.push({ value: "preview", label: "Vorschau", icon: ICON.eye, shortcut: "Leertaste", disabled: !one });
+      if (!e.dir && remote) items.push({ value: "editor", label: "In Sesam bearbeiten", icon: ICON.rename, disabled: !one || !sid || e.size > 1_000_000 });
       if (!e.dir && remote && !isMobile) items.push({ value: "edit", label: "Bearbeiten (Standardprogramm)", icon: ICON.rename, disabled: !one || !sid });
       if (e.dir) items.push({ value: "size", label: "Grösse berechnen", icon: ICON.folder });
       items.push({ value: "copy", label: "Pfad kopieren", icon: ICON.copy });
@@ -1564,6 +1598,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     if (v === "all") setSelection(p, new Set(rowNames(p)));
     if (v === "preview") preview(p);
     if (v === "edit" && e) editRemote(e);
+    if (v === "editor" && e) void editInline(e);
     if (v === "size") for (const n of p.selected) folderSize(p, n);
   }
 

@@ -286,6 +286,7 @@ export const api = {
   localList: (path: string) => invoke<Listing>("local_list", { path }),
   localHome: () => invoke<string>("local_home"),
   localRead: (path: string, max: number) => invoke<ArrayBuffer>("local_read", { path, max }),
+  saveBytes: (path: string, data: Uint8Array) => invoke<void>("save_bytes", { path, data: Array.from(data) }),
   localTemp: (sub: string) => invoke<string>("local_temp", { sub }),
   localOpen: (path: string) => invoke<void>("local_open", { path }),
   folderPick: () => invoke<{ path: string; bookmark: string } | null>("folder_pick"),

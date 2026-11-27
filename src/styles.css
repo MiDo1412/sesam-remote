@@ -908,3 +908,15 @@ body.mobile dialog:not(#settings) { translate: calc((var(--sa-l) - var(--sa-r)) 
 /* Importieren: Auswahl der gefundenen Verbindungen */
 .import-list { display: grid; gap: var(--s-1); max-height: 50vh; overflow: auto; margin: var(--s-3) 0; }
 .import-list .note { margin-left: auto; text-align: right; }
+/* Eingebauter Editor (Dateien › In Sesam bearbeiten) mit Änderungsansicht */
+dialog.text-editor { width: min(960px, calc(100vw - 32px)); height: min(720px, calc(100vh - 32px)); display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-5); box-sizing: border-box; }
+dialog.text-editor h2 { margin: 0; overflow-wrap: anywhere; }
+dialog.text-editor:not([open]) { display: none; }
+dialog.text-editor textarea, dialog.text-editor .text-diff { flex: 1; min-height: 0; resize: none; font-size: 13px; line-height: 1.45; tab-size: 4; white-space: pre; overflow: auto; margin: 0; }
+dialog.text-editor .text-diff[hidden], dialog.text-editor textarea[hidden] { display: none; }
+.text-diff { padding: var(--s-2) var(--s-3); background: var(--surface); border-radius: 8px; }
+.text-diff > span { display: block; min-height: 1.45em; }
+.text-diff .add { background: color-mix(in srgb, var(--ok) 18%, transparent); }
+.text-diff .del { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.text-diff .gap { color: var(--muted); }
+dialog.text-editor .actions .note { margin-right: auto; }

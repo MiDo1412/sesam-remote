@@ -1597,5 +1597,19 @@
  "Übernommen": "Imported",
  "Keine Remotedesktop-Datei (es fehlt «full address»)": "Not a Remote Desktop file («full address» is missing)",
  "Netzwerksuche nicht möglich: {}": "Network search not possible: {}",
- "Die Netzwerksuche gibt es auf diesem Gerät nicht.": "Network search is not available on this device."
+ "Die Netzwerksuche gibt es auf diesem Gerät nicht.": "Network search is not available on this device.",
+ "Der eingebaute Editor ist für Konfigurationsdateien bis 1 MB gedacht.": "The built-in editor is meant for configuration files up to 1 MB.",
+ "In Sesam bearbeiten": "Edit in Sesam",
+ "Keine Textdatei": "Not a text file",
+ "Lädt hoch …": "Uploading …",
+ "Nicht gesichert: {}": "Not saved: {}",
+ "Verwerfen": "Discard",
+ "Was du geändert hast, geht verloren.": "Your changes will be lost.",
+ "Weiter bearbeiten": "Keep editing",
+ "Zu gross für den Editor": "Too large for the editor",
+ "{} Zeile(n) neu, {} entfernt": "{} line(s) added, {} removed",
+ "«{}» ist keine Textdatei (UTF-8). Zum Ansehen die Vorschau nehmen.": "«{}» is not a text file (UTF-8). Use the preview to look at it.",
+ "Änderungen ansehen": "Review changes",
+ "Änderungen verwerfen?": "Discard changes?",
+ "abgebrochen": "cancelled"
 }
