@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Behoben
+
+- **Markieren im Terminal (Mac, iPad, Linux):** Beim Markieren sprang die Schrift und wirkte fetter, der Cursor am Prompt sah verzerrt aus. Das Terminal zeichnet dort wieder wie vor 26.11.14; die schnellere GPU-Darstellung bleibt nur unter Windows.
+
 ## 26.11.14 — 2026-11-27
 
 Einmalcodes beim SSH-Login, Import aus OpenSSH und .rdp, Abgleich zwischen Geräten, Mikrofon über RDP und Updates, die sich selbst installieren.
