@@ -13,5 +13,8 @@
 	<!-- Text der macOS-Abfrage «Lokales Netzwerk» (Tauri übernimmt diese Datei ins App-Bundle) -->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Sesam verbindet sich mit Rechnern in deinem Netzwerk (SSH, RDP, VNC und Dateien).</string>
+	<!-- Text der Abfrage «Mikrofon» (RDP: Mikrofon weitergeben, src-tauri/src/rdpmic.rs) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sesam gibt das Mikrofon an den entfernten Rechner weiter, wenn du es für eine RDP-Verbindung einschaltest.</string>
 </dict>
 </plist>

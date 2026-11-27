@@ -65,6 +65,10 @@ ironrdp-mstsgu = { version = "0.1", features = ["rustls"] }
 url = "2"
 # Ton (nur PCM: ohne Opus/AAC keine C-Bibliotheken im Build)
 ironrdp-rdpsnd = "0.11"
+# Mikrofon an den Server (MS-RDPEAI, src/rdpmic.rs); Aufnahme über cpal wie die Tonausgabe (beide schon im Baum)
+ironrdp-rdpeai = "0.2"
+ironrdp-svc = "0.10"
+cpal = "0.17"
 ironrdp-rdpsnd-native = { version = "0.8", default-features = false }
 # Laufwerksfreigabe (ein lokaler Ordner) und Ordnerauswahl
 ironrdp-rdpdr = "0.9"

@@ -100,6 +100,7 @@ pub(crate) async fn rdp_check(path: State<'_, LibraryPath>, id: String, trust: O
         kdc: kdc::kdc_url(&c.rdp_kdc)?,
         no_ntlm: c.rdp_no_ntlm,
         gateway,
+        mic: None,
     };
     let seen: rdp::SeenCert = Default::default();
     rdp::check_login(t, seen.clone()).await?;

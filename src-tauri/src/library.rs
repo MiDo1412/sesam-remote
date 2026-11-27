@@ -36,6 +36,8 @@ pub struct Connection {
     pub shared_clipboard: bool,
     /// Ton des entfernten Rechners abspielen (RDP).
     pub play_audio: bool,
+    /// Mikrofon dieses Geräts an den Server weitergeben (nur RDP).
+    pub rdp_microphone: bool,
     /// Lokaler Ordner, der per RDP als Laufwerk erscheint (leer = aus).
     pub shared_folder: String,
     /// TLS-Zertifikat nicht prüfen (RDP/VNC). Unsicher, nur bewusst einschalten.
@@ -120,6 +122,7 @@ impl Default for Connection {
             touch_mode: String::new(),
             shared_clipboard: true,
             play_audio: true,
+            rdp_microphone: false,
             shared_folder: String::new(),
             skip_cert_check: false,
             os: String::new(),

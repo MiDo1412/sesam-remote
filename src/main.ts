@@ -884,6 +884,7 @@ const blank = (): Connection => ({
   orientation: "landscape",
   sharedClipboard: true,
   playAudio: true,
+  rdpMicrophone: false,
   os: "",
   customThumb: false,
   credentialId: null,
@@ -997,6 +998,7 @@ function edit(c: Connection | null, asNew = false) {
   showPwHint("pw", editing.hasPassword, "");
   f.sharedClipboard.checked = editing.sharedClipboard;
   f.playAudio.checked = editing.playAudio;
+  f.rdpMicrophone.checked = !!editing.rdpMicrophone;
   f.sharedFolder.value = editing.sharedFolder;
   f.skipCertCheck.checked = editing.skipCertCheck;
   f.sshTunnel.checked = !!editing.sshTunnel;
@@ -1144,6 +1146,7 @@ form.onsubmit = async (ev) => {
     user: s("user"),
     sharedClipboard: fd.get("sharedClipboard") !== null,
     playAudio: fd.get("playAudio") !== null,
+    rdpMicrophone: fd.get("rdpMicrophone") !== null,
     sharedFolder: s("sharedFolder"),
     skipCertCheck: fd.get("skipCertCheck") !== null,
     sshTunnel: fd.get("sshTunnel") !== null,

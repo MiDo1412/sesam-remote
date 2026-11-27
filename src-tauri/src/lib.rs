@@ -26,6 +26,7 @@ mod relay;
 mod rdp_redir;
 #[cfg(not(windows))]
 mod rdpclip;
+mod rdpmic;
 mod rdstls;
 mod scp;
 #[cfg(target_os = "macos")]

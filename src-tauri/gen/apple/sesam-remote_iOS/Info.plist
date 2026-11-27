@@ -66,5 +66,8 @@
 			<string>$(PRODUCT_BUNDLE_IDENTIFIER).sesam</string>
 		</dict>
 	</array>
+	<!-- Text der Abfrage «Mikrofon» (RDP: Mikrofon weitergeben, src-tauri/src/rdpmic.rs) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sesam gibt das Mikrofon an den entfernten Rechner weiter, wenn du es für eine RDP-Verbindung einschaltest.</string>
 </dict>
 </plist>

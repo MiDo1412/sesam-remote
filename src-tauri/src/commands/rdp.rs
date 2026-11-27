@@ -98,6 +98,7 @@ pub(crate) async fn rdp_open(
         kdc: kdc::kdc_url(&c.rdp_kdc)?,
         no_ntlm: c.rdp_no_ntlm,
         gateway,
+        mic: None,
     };
     let sid = new_sid(&c.id);
     touch(&path, &c.id);
@@ -105,6 +106,9 @@ pub(crate) async fn rdp_open(
     let mut target = target;
     if c.shared_clipboard {
         target.clipboard = rdp_clipboard(&app, sid.clone(), tx.clone()).await;
+    }
+    if c.rdp_microphone {
+        target.mic = Some(tx.clone());
     }
     let seen: rdp::SeenCert = Default::default();
     let on_event = relay::Relay::new(on_event);

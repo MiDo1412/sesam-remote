@@ -1635,5 +1635,11 @@
  "Passwort falsch": "Wrong password",
  "Passwort für den Abgleich": "Sync password",
  "Passwort für den Abgleich fehlt; bitte neu einrichten": "Sync password missing; please set up sync again",
- "Sesam legt eine verschlüsselte Datei in einen Ordner deiner Wahl (iCloud Drive, OneDrive, Nextcloud, Syncthing …) und gleicht Bibliothek und Zugangsdaten darüber ab. Auf jedem Gerät denselben Ordner und dasselbe Passwort wählen.": "Sesam puts an encrypted file into a folder of your choice (iCloud Drive, OneDrive, Nextcloud, Syncthing …) and syncs library and credentials through it. Choose the same folder and the same password on every device."
+ "Sesam legt eine verschlüsselte Datei in einen Ordner deiner Wahl (iCloud Drive, OneDrive, Nextcloud, Syncthing …) und gleicht Bibliothek und Zugangsdaten darüber ab. Auf jedem Gerät denselben Ordner und dasselbe Passwort wählen.": "Sesam puts an encrypted file into a folder of your choice (iCloud Drive, OneDrive, Nextcloud, Syncthing …) and syncs library and credentials through it. Choose the same folder and the same password on every device.",
+ "Mikrofon weitergeben": "Share microphone",
+ "Nur RDP: der entfernte Rechner hört dieses Mikrofon (z. B. für Teams)": "RDP only: the remote computer hears this microphone (e.g. for Teams)",
+ "RDP-Mikrofon: Format {} nicht unterstützt": "RDP microphone: format {} not supported",
+ "RDP-Mikrofon: kein Eingang": "RDP microphone: no input",
+ "Zwischenablage: Bild vom Server nicht lesbar": "Clipboard: image from the server not readable",
+ "Zwischenablage: Bild vom Server nicht übernommen": "Clipboard: image from the server not taken over"
 }

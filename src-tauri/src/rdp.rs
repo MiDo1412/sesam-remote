@@ -58,6 +58,8 @@ pub struct Target {
     pub no_ntlm: bool,
     /// Über ein RD-Gateway verbinden.
     pub gateway: Option<Gateway>,
+    /// Mikrofon weitergeben: Eingaben der Sitzung, über die der Mikrofon-Kanal sendet.
+    pub mic: Option<UnboundedSender<Input>>,
 }
 
 impl Drop for Target {
@@ -111,6 +113,8 @@ pub enum Input {
     Clipboard(ClipboardMessage),
     /// Die Oberfläche hat ein Bild gezeichnet.
     Ack,
+    /// Nachrichten eines dynamischen Kanals von ausserhalb der Schleife (Mikrofon, src/rdpmic.rs).
+    Dvc(Vec<ironrdp_svc::SvcMessage>),
 }
 
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
@@ -592,6 +596,9 @@ async fn connect_once(t: &Target, hop: &Hop, seen: &SeenCert) -> Result<(Connect
     let mut drdynvc = ironrdp_dvc::DrdynvcClient::new()
         .with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())))
         .with_dynamic_channel(GraphicsPipelineClient::new(Box::new(NoGfxCallbacks), crate::h264::decoder()));
+    if let Some(tx) = &t.mic {
+        drdynvc = drdynvc.with_dynamic_channel(crate::rdpmic::client(tx.clone()));
+    }
     if t.audio {
         // Neuere Server nehmen den dynamischen Kanal, ältere den statischen; je ein eigener Ausgang.
         drdynvc = drdynvc.with_dynamic_channel(ironrdp_rdpsnd::client::RdpsndDvc::new(Box::new(ironrdp_rdpsnd_native::cpal::RdpsndBackend::new())));
@@ -1231,6 +1238,13 @@ async fn active(
                         credit = (credit + 1).min(FRAMES_IN_FLIGHT);
                         Vec::new()
                     }
+                    Input::Dvc(msgs) => {
+                        let frame = stage.process_svc_processor_messages(ironrdp_svc::SvcProcessorMessages::<ironrdp_dvc::DrdynvcClient>::new(msgs)).map_err(err)?;
+                        if !frame.is_empty() {
+                            writer.write_all(&frame).await.map_err(|e| e.to_string())?;
+                        }
+                        continue;
+                    }
                     Input::Disconnect => continue, // oben behandelt
                     Input::ReleaseAll => {
                         let events = input.release_all();
@@ -1545,6 +1559,7 @@ mod tests {
             kdc: None,
             no_ntlm: false,
             gateway: None,
+            mic: None,
         };
         let mut hop = Hop::default();
         let pw: Vec<u8> = "einmal".encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
@@ -1655,6 +1670,7 @@ mod probe {
             kdc: None,
             no_ntlm: false,
             gateway: None,
+            mic: None,
         };
         // Grösse wie die App sie anfragt, z. B. SESAM_RDP_SIZE=720x1280 (Hochformat).
         let mut t = t;
@@ -1794,7 +1810,7 @@ mod probe {
         let t = Target {
             host: host.into(), server_name: host.into(), port: port.parse().unwrap(), user, domain, password: pw,
             expected_cert: std::env::var("SESAM_RDP_TRUST").ok().or_else(|| pins.get(&addr).cloned()), skip_cert_check: false, width: 1024, height: 768, scale: 100,
-            clipboard: None, audio: false, share: None, kdc: None, no_ntlm: false, gateway: None,
+            clipboard: None, audio: false, share: None, kdc: None, no_ntlm: false, gateway: None, mic: None,
         };
         println!("Ergebnis: {:?}", check_login(t, Default::default()).await);
     }
@@ -1822,6 +1838,7 @@ mod probe {
             kdc: None,
             no_ntlm: false,
             gateway: None,
+            mic: None,
         };
         for round in 1..=2 {
             let seen: SeenCert = Default::default();

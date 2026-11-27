@@ -22,6 +22,7 @@ export interface Connection {
   touchMode?: "touchpad" | "direct";
   sharedClipboard: boolean;
   playAudio: boolean;
+  rdpMicrophone: boolean;
   /** Zertifikat nicht prüfen (unsicher, nur für Tests). */
   skipCertCheck: boolean;
   os: "" | "ubuntu" | "linux" | "macos" | "windows" | "raspberry";

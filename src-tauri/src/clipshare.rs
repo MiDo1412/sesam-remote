@@ -50,6 +50,17 @@ pub fn set_text(t: &str) -> Result<(), String> {
     clipboard(|c| c.set_text(t)).map_err(|e| e.to_string())
 }
 
+/// Bild der Zwischenablage als (Breite, Höhe, RGBA), sonst `None`.
+#[cfg(desktop)]
+pub fn get_image() -> Option<(usize, usize, Vec<u8>)> {
+    clipboard(|c| c.get_image()).ok().map(|i| (i.width, i.height, i.bytes.into_owned()))
+}
+
+#[cfg(desktop)]
+pub fn set_image(width: usize, height: usize, rgba: Vec<u8>) -> Result<(), String> {
+    clipboard(|c| c.set_image(arboard::ImageData { width, height, bytes: rgba.into() })).map_err(|e| e.to_string())
+}
+
 /// Reihenfolge: Dateien, Text, Bild (z. B. kopiert Word Text *und* ein Bild davon).
 #[cfg(desktop)]
 pub fn read_local() -> Local {
