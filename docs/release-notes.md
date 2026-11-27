@@ -20,14 +20,11 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## 26.11.16 — 2026-11-27
 
+Zwei Korrekturen zu 26.11.14: Markieren im Terminal und Doppelklick in der Bibliothek. (26.11.15 wurde nicht veröffentlicht.)
+
 ### Behoben
 
 - **Doppelklick in der Bibliothek:** Bei einer Verbindung ohne Desktop öffnete ein Doppelklick (auch Enter, Aufwecken und Links von aussen) trotzdem den Desktop. Jetzt öffnet Sesam die Standardansicht nur, wenn es sie gibt, sonst Shell oder Dateien.
-
-## 26.11.15 — 2026-11-27
-
-### Behoben
-
 - **Markieren im Terminal (Mac, iPad, Linux):** Beim Markieren sprang die Schrift und wirkte fetter, der Cursor am Prompt sah verzerrt aus. Das Terminal zeichnet dort wieder wie vor 26.11.14; die schnellere GPU-Darstellung bleibt nur unter Windows.
 
 ## 26.11.14 — 2026-11-27
