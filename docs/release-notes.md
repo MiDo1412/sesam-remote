@@ -18,6 +18,8 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.15 — 2026-11-27
+
 ### Behoben
 
 - **Markieren im Terminal (Mac, iPad, Linux):** Beim Markieren sprang die Schrift und wirkte fetter, der Cursor am Prompt sah verzerrt aus. Das Terminal zeichnet dort wieder wie vor 26.11.14; die schnellere GPU-Darstellung bleibt nur unter Windows.
