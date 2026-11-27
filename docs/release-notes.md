@@ -18,6 +18,39 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+Einmalcodes beim SSH-Login, Import aus OpenSSH und .rdp, Abgleich zwischen Geräten, Mikrofon über RDP und Updates, die sich selbst installieren.
+
+### Neu
+
+- **SSH mit Einmalcode (2FA):** Fragt der Server beim Anmelden nach einem Code oder einer weiteren Antwort, zeigt Sesam die Frage in einem Dialog. Ein gespeichertes Passwort setzt Sesam nur bei der Passwortfrage ein, nie bei einer Codefrage.
+- **Importieren:** Verbindungen aus der OpenSSH-Konfiguration (`~/.ssh/config`) und aus `.rdp`-Dateien übernehmen, dazu Geräte im lokalen Netz finden (Bonjour). Im Menü Ablage, im Kontextmenü der Bibliothek und in der Befehlspalette. Die Netzwerksuche gibt es nicht auf iPad und iPhone.
+- **Abgleich zwischen Geräten:** Verbindungen, Gruppen und Zugangsdaten über einen Ordner deiner Wahl abgleichen (iCloud Drive, OneDrive, Nextcloud, Syncthing). Die Datei ist mit einem eigenen Passwort verschlüsselt. Ändern zwei Geräte denselben Eintrag, gewinnt die neuere Änderung. Auf Mac, Windows und Linux, noch nicht auf iPad und iPhone.
+- **Textdateien in Sesam bearbeiten:** In der Dateiansicht «In Sesam bearbeiten» öffnet Konfigurationsdateien direkt auf dem Server. Vor dem Hochladen zeigt Sesam die Änderungen Zeile für Zeile. Auch auf iPad und iPhone.
+- **Mikrofon über RDP:** Pro Verbindung einschaltbar (Vorgabe aus). Das System fragt beim ersten Mal nach dem Mikrofon.
+- **Windows Hello:** Unter Windows schützt Windows Hello «Passwort anzeigen» und das Exportieren der Sicherung, wie Touch ID auf dem Mac.
+- **Andocklayouts unter Windows 11:** Fährt die Maus über den Maximieren-Knopf, erscheint das Raster zum Andocken wie bei anderen Programmen.
+- **Sesam unterstützen:** Unter Einstellungen › Über Sesam führt ein Link zu GitHub Sponsors (nicht auf iPad und iPhone).
+
+### Verbessert
+
+- **Updates installieren sich selbst:** Sesam sucht jede Stunde nach Updates, lädt sie still herunter und installiert sie beim Beenden, jetzt auch bei der installierten Windows-Fassung (Windows fragt dabei einmal nach Administratorrechten). Ist ein Update bereit, erscheint unten ein Hinweis mit «Jetzt neu starten».
+- **Terminal:** Die Suche ist eine Leiste mit Trefferzahl und Pfeilen statt eines Dialogs. «An alle Shells senden» zeigt einen roten Rahmen und lässt lokale Terminals aus. Das Terminal zeichnet mit WebGL schneller.
+- **Zugang testen:** Der Test bei den Zugangsdaten prüft jetzt auch RDP, VNC und FTP, je nachdem wofür sie zugewiesen sind. Die Erste Hilfe prüft die VNC- und FTP-Anmeldung.
+- **Schneller:** VNC-Bilder im JPEG-Format laden auf allen Systemen, und SFTP-Ordner mit vielen Verknüpfungen öffnen schneller.
+- **Zwischenablage:** Bilder gehen jetzt auch auf dem Mac über RDP hin und zurück.
+- **Dateifenster:** Jede Seite hat eigene Knöpfe für Neuer Ordner, Neue Datei, Umbenennen und Löschen. Lokal Gelöschtes landet im Papierkorb des Systems (auf iPad und iPhone gibt es keinen, dort ist es weg).
+- **Terminal-Rollbalken und Rechtsklick:** Der weisse Streifen rechts ist weg, der Rollbalken erscheint nur mit Verlauf. Neu in Einstellungen › Shell: «Rechtsklick kopiert die Markierung».
+- **Einstellungen:** Schalter rechts statt einzelner Häkchen.
+
+### Behoben
+
+- **Designsuche im Terminal:** Tasteneingaben kamen im Suchfeld nicht an.
+- **Sicherheit und Stabilität:** Passwörter und Schlüssel werden im Arbeitsspeicher überschrieben, sobald Sesam sie nicht mehr braucht. Dazu mehrere kleinere Korrekturen aus einer Prüfung (Datenverlust, Plattformen, Übersetzungen).
+
+### Betrieb
+
+- **Windows-MSI über Intune:** Ohne Richtlinie installiert Sesam Updates jetzt bei Administratoren beim Beenden. Soll Intune die Versionen bestimmen, wie bisher `AUTOUPDATE=0` setzen (`docs/intune.md`).
+
 ## 26.11.13 — 2026-11-24
 
 SSH-Schlüssel von Azure, AWS und OpenSSL funktionieren jetzt, und die Schlüsseldatei lässt sich direkt wählen.
