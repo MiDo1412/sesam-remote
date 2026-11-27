@@ -360,7 +360,7 @@ fieldset { margin: 0; padding: var(--s-4); border: 0; border-radius: var(--r-car
 legend { float: left; grid-column: 1 / -1; font-weight: 600; padding: 0; }
 legend small { margin-left: 6px; }
 label.switch { flex-direction: row !important; align-items: center; padding-bottom: var(--s-2); }
-label.option { padding: var(--s-3) var(--s-4); border-radius: var(--r-card); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); flex-direction: row !important; align-items: flex-start; gap: 10px; color: var(--text) !important; }
+label.option { display: flex; padding: var(--s-3) var(--s-4); border-radius: var(--r-card); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); flex-direction: row !important; align-items: flex-start; gap: 10px; color: var(--text) !important; }
 label.option > span { flex: 1; }
 label.option b, label.option small { display: block; }
 label.option small { margin-top: 2px; }

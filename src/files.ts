@@ -1899,7 +1899,12 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   };
 
   // ---------- Verbinden ----------
+  // Knöpfe der Serverseite nur mit Verbindung; SCP kann nur Ordner anlegen.
+  const remoteActs = (on: boolean) => {
+    for (const b of panes.remote.root.querySelectorAll<HTMLButtonElement>("button.act:not(.act-more)")) b.disabled = !on || (scp && !b.classList.contains("act-mkdir"));
+  };
   const connect = async () => {
+  remoteActs(false);
   if (isMobile) {
     localRoot = await api.localHome().catch(() => "");
     void openPlaces();
@@ -1921,10 +1926,10 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       if (opened.scp) {
         ctx.setSub(`SCP über SSH · ${c.user}@${c.address}`);
         status.textContent = "Server ohne SFTP, Übertragung über SCP (eingeschränkt: kein Umbenennen/Löschen/Rechte)";
-        for (const b of panes.remote.root.querySelectorAll<HTMLButtonElement>(".act-rename, .act-delete, .act-touch")) b.disabled = true;
         scp = true;
       }
       ctx.setState("connected");
+      remoteActs(true);
       if (!opened.scp) void api.sftpTrashCleanup(opened.sid, trashDays()).catch(() => {}); // alte Einträge im Papierkorb
       await load(panes.remote, st?.remote ?? panes.remote.listing?.path ?? "");
     } catch (e) {
