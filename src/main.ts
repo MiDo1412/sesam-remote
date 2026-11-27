@@ -1214,6 +1214,23 @@ document.querySelector<HTMLElement>("main > section.list")!.addEventListener("co
 if (!detachedWindow && !settingsWindow) onOpenUrl((urls) => urls.forEach(handleLink)).catch(() => {});
 // Dock-Menü (macOS): Klick kommt als Link direkt von der App, ohne Umweg über das System.
 if (!detachedWindow && !settingsWindow) listen<string>("link", (e) => handleLink(e.payload));
+// Abgleich über einen Ordner (Einstellungen › Zugangsdaten): beim Start, kurz nach Änderungen und alle 5 Minuten.
+let syncTimer = 0;
+const syncSoon = (ms = 8000) => {
+  clearTimeout(syncTimer);
+  syncTimer = window.setTimeout(async () => {
+    try {
+      if ((await invoke<[string, boolean] | null>("sync_now"))?.[1]) void reload();
+    } catch (e) {
+      console.warn("Abgleich:", e);
+    }
+  }, ms);
+};
+if (!detachedWindow && !settingsWindow && !isMobile) {
+  syncSoon(1500);
+  for (const ev of ["sesam:library-changed", "sesam:creds-changed"]) addEventListener(ev, () => syncSoon());
+  setInterval(() => syncSoon(0), 5 * 60_000);
+}
 // Rückfrage des SSH-Servers (keyboard-interactive): Einmalcode, PIN oder Passwort, je Frage ein Dialog.
 interface SshAsk { id: number; host: string; user: string; name: string; instructions: string; prompts: [string, boolean][] }
 if (!detachedWindow && !settingsWindow)

@@ -5,6 +5,8 @@ import { ask, askHostKey, askPassword, tell } from "./ui";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openMenu } from "./menu";
 import { ICON } from "./icons";
+import { invoke } from "@tauri-apps/api/core";
+import { isMobile } from "./titlebar";
 
 const byId = (id: string) => document.getElementById(id)!;
 
@@ -202,6 +204,40 @@ export function initCreds() {
   $("cred-search").oninput = () => void renderCredList();
   $("cred-export").onclick = () => void exportBackup().catch((e) => tell("Nicht gesichert", String(e)));
   $("cred-import").onclick = () => void importBackup().catch((e) => tell("Nicht eingelesen", String(e)));
+  void initSync();
+}
+
+/** Abgleich über einen Ordner einrichten, auslösen, ausschalten (src-tauri/src/sync.rs). iPad/iPhone: noch nicht. */
+async function initSync() {
+  if (isMobile) return void ($("sync-block").hidden = true);
+  const state = $("sync-state");
+  const show = async (msg = "") => {
+    const folder = await invoke<string | null>("sync_status");
+    state.textContent = folder ? `Ordner: ${folder}${msg ? ` · ${msg}` : ""}` : msg || "Aus.";
+    $("sync-run").hidden = $("sync-off").hidden = !folder;
+    $("sync-setup").textContent = tr(folder ? "Anderer Ordner …" : "Ordner wählen …");
+  };
+  const run = async (f: () => Promise<string>) => {
+    try {
+      await show(await f());
+      changed();
+      dispatchEvent(new CustomEvent("sesam:library-changed"));
+    } catch (e) {
+      await show();
+      tell("Abgleich nicht möglich", String(e));
+    }
+  };
+  $("sync-setup").onclick = async () => {
+    const folder = await openDialog({ directory: true, multiple: false });
+    if (typeof folder !== "string") return;
+    const password = await askPassword("Passwort für den Abgleich", "Auf allen Geräten dasselbe Passwort (mindestens 8 Zeichen). Ohne dieses Passwort lässt sich die Datei im Ordner nicht öffnen.", "Weiter");
+    if (password) await run(() => invoke<string>("sync_setup", { folder, password }));
+  };
+  $("sync-run").onclick = () => void run(async () => (await invoke<[string, boolean] | null>("sync_now"))?.[0] ?? "");
+  $("sync-off").onclick = async () => {
+    if (await ask("Abgleich ausschalten?", "Dieses Gerät gleicht nicht mehr ab. Die Datei im Ordner und die anderen Geräte bleiben, wie sie sind.", "Ausschalten")) await run(() => invoke<string>("sync_setup", { folder: null, password: null }));
+  };
+  await show();
 }
 
 async function exportBackup() {

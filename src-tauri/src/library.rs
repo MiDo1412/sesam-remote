@@ -89,6 +89,8 @@ pub struct Connection {
     /// Agenten an den Server weiterreichen (nur mit `ssh_agent`).
     pub agent_forward: bool,
     pub last_used: Option<String>,
+    /// Zuletzt im Formular geändert (Sekunden seit 1970); entscheidet beim Abgleich, wenn beide Seiten geändert haben.
+    pub updated_at: Option<u64>,
     /// MAC-Adresse für Wake-on-LAN (selbst ermittelt, wenn der Rechner einmal erreichbar war, oder eingetragen).
     pub mac: String,
     /// Desktop (RDP/VNC) durch einen SSH-Tunnel: der Dienst muss nicht offen im Netz stehen.
@@ -149,6 +151,7 @@ impl Default for Connection {
             ssh_agent: false,
             agent_forward: false,
             last_used: None,
+            updated_at: None,
             mac: String::new(),
             ssh_tunnel: false,
             persist_shell: String::new(),

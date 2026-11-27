@@ -117,6 +117,7 @@ pub(crate) fn library_save(
             }
         }
     }
+    connection.updated_at = Some(now_secs());
     library::upsert(&mut items, connection.clone());
     library::save(&path.0, &items)?;
     Ok(connection)
@@ -229,6 +230,27 @@ pub(crate) fn groups_save(path: State<LibraryPath>, groups: Vec<library::Group>)
 pub(crate) const SECRET_KINDS: [(Kind, &str); 5] =
     [(Kind::Password, "password"), (Kind::VncPassword, "vnc"), (Kind::RdpPassword, "rdp"), (Kind::GatewayPassword, "gateway"), (Kind::SshKey, "sshkey")];
 
+/// Bibliothek, Gruppen und Zugangsdaten samt Geheimnissen (für Sicherung und Abgleich).
+pub(crate) fn local_contents(path: &LibraryPath) -> Result<backup::Contents, String> {
+    let conns = library::load(&path.0)?;
+    let creds = creds::load(&creds_path(path))?;
+    let mut secrets = Vec::new();
+    let ids = conns.iter().map(|c| c.id.clone()).chain(creds.iter().map(|c| creds::vault_id(&c.id)));
+    for id in ids {
+        for (k, name) in SECRET_KINDS {
+            if let Some(v) = vault::get(&id, k)? {
+                secrets.push((id.clone(), name.to_string(), v));
+            }
+        }
+    }
+    Ok(backup::Contents {
+        connections: conns.iter().map(|c| serde_json::to_value(c).map_err(|e| e.to_string())).collect::<Result<_, _>>()?,
+        groups: library::load_groups(&groups_path(path))?,
+        credentials: creds,
+        secrets,
+    })
+}
+
 /// Verschlüsselte Sicherung von Bibliothek, Gruppen und Zugangsdaten samt Geheimnissen in eine Datei schreiben.
 #[tauri::command]
 pub(crate) async fn backup_export(window: tauri::WebviewWindow, path: State<'_, LibraryPath>, file: String, password: String) -> Result<String, String> {
@@ -246,23 +268,7 @@ pub(crate) async fn backup_export(window: tauri::WebviewWindow, path: State<'_, 
         let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
         tauri::async_runtime::spawn_blocking(move || auth::hello(hwnd, "Sicherung mit allen Passwörtern erstellen")).await.map_err(|e| e.to_string())??;
     }
-    let conns = library::load(&path.0)?;
-    let creds = creds::load(&creds_path(&path))?;
-    let mut secrets = Vec::new();
-    let ids = conns.iter().map(|c| c.id.clone()).chain(creds.iter().map(|c| creds::vault_id(&c.id)));
-    for id in ids {
-        for (k, name) in SECRET_KINDS {
-            if let Some(v) = vault::get(&id, k)? {
-                secrets.push((id.clone(), name.to_string(), v));
-            }
-        }
-    }
-    let c = backup::Contents {
-        connections: conns.iter().map(|c| serde_json::to_value(c).map_err(|e| e.to_string())).collect::<Result<_, _>>()?,
-        groups: library::load_groups(&groups_path(&path))?,
-        credentials: creds,
-        secrets,
-    };
+    let c = local_contents(&path)?;
     let text = backup::encrypt(&c, &password)?;
     std::fs::write(&file, text).map_err(|e| format!("{file}: {e}"))?;
     Ok(format!("{} Verbindungen und {} Zugangsdaten gesichert.", c.connections.len(), c.credentials.len()))
@@ -440,6 +446,11 @@ pub(crate) fn touch(path: &LibraryPath, id: &str) {
     }
 }
 
+/// Sekunden seit 1970.
+pub(crate) fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
 pub(crate) fn new_sid(id: &str) -> String {
     format!("{id}-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())
 }
@@ -526,4 +537,98 @@ pub(crate) fn ssh_config_path() -> Option<String> {
 #[tauri::command]
 pub(crate) async fn discover_network() -> Result<Vec<import::Seen>, String> {
     tauri::async_runtime::spawn_blocking(|| import::discover(4)).await.map_err(|e| e.to_string())?
+}
+
+// ---------- Abgleich über einen Ordner (src/sync.rs) ----------
+
+const SYNC_VAULT: &str = "sesam-sync";
+
+fn sync_conf(path: &LibraryPath) -> PathBuf {
+    path.0.with_file_name("sync.json")
+}
+
+fn sync_folder(path: &LibraryPath) -> Option<PathBuf> {
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(sync_conf(path)).ok()?).ok()?;
+    v.get("folder")?.as_str().map(PathBuf::from)
+}
+
+/// Eingestellter Ordner für den Abgleich, sonst `None`.
+#[tauri::command]
+pub(crate) fn sync_status(path: State<LibraryPath>) -> Option<String> {
+    sync_folder(&path).map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Abgleich einrichten (`folder` + `password`, gleich auf allen Geräten) und gleich abgleichen, oder mit `None` ausschalten.
+#[tauri::command]
+pub(crate) async fn sync_setup(path: State<'_, LibraryPath>, folder: Option<String>, password: Option<String>) -> Result<String, String> {
+    let path = LibraryPath(path.0.clone());
+    tauri::async_runtime::spawn_blocking(move || sync_setup_blocking(&path, folder, password)).await.map_err(|e| e.to_string())?
+}
+
+fn sync_setup_blocking(path: &LibraryPath, folder: Option<String>, password: Option<String>) -> Result<String, String> {
+    let Some(folder) = folder else {
+        let _ = std::fs::remove_file(sync_conf(path));
+        let _ = std::fs::remove_file(path.0.with_file_name("sync-base.sesam"));
+        vault::delete(SYNC_VAULT, Kind::Password)?;
+        return Ok("Abgleich ausgeschaltet. Die Datei im Ordner bleibt liegen.".into());
+    };
+    let password = password.ok_or("Passwort fehlt")?;
+    diag::add_secret(&password);
+    if password.chars().count() < 8 {
+        return Err("Das Passwort braucht mindestens 8 Zeichen".into());
+    }
+    let (msg, _) = sync_apply(path, std::path::Path::new(&folder), &password)?;
+    vault::set(SYNC_VAULT, Kind::Password, &password)?;
+    std::fs::write(sync_conf(path), serde_json::json!({ "folder": folder }).to_string()).map_err(|e| e.to_string())?;
+    Ok(msg)
+}
+
+/// Jetzt abgleichen (beim Start und nach Änderungen von der Oberfläche aufgerufen). `None`, wenn nicht eingerichtet.
+#[tauri::command]
+pub(crate) async fn sync_now(path: State<'_, LibraryPath>) -> Result<Option<(String, bool)>, String> {
+    let path = LibraryPath(path.0.clone());
+    let Some(folder) = sync_folder(&path) else { return Ok(None) };
+    let password = vault::get(SYNC_VAULT, Kind::Password)?.ok_or("Passwort für den Abgleich fehlt; bitte neu einrichten")?;
+    diag::add_secret(&password);
+    tauri::async_runtime::spawn_blocking(move || sync_apply(&path, &folder, &password).map(Some)).await.map_err(|e| e.to_string())?
+}
+
+/// Abgleichen und das Ergebnis hier übernehmen: Bibliothek, Gruppen, Zugangsdaten, Geheimnisse im Schlüsselbund.
+/// Meldung und ob sich hier etwas geändert hat.
+fn sync_apply(path: &LibraryPath, folder: &std::path::Path, password: &str) -> Result<(String, bool), String> {
+    let _g = LIBRARY_LOCK.lock().unwrap();
+    let local = local_contents(path)?;
+    let merged = crate::sync::run(folder, &path.0.with_file_name("sync-base.sesam"), password, &local)?;
+    let conns: Vec<Connection> = merged.connections.iter().map(|v| serde_json::from_value(v.clone()).map_err(|e| format!("Verbindung nicht lesbar: {e}"))).collect::<Result<_, _>>()?;
+    for c in &conns {
+        c.validate()?;
+    }
+    for cr in &merged.credentials {
+        creds::validate(cr)?;
+    }
+    library::validate_groups(&merged.groups)?;
+    // Geheimnisse: setzen, was neu oder anders ist, löschen, was es nicht mehr gibt.
+    let mut changed = 0;
+    for (id, kind, v) in &merged.secrets {
+        let Some((k, _)) = SECRET_KINDS.iter().find(|(_, n)| n == kind) else { continue };
+        if !local.secrets.iter().any(|(i, n, x)| i == id && n == kind && x == v) {
+            vault::set(id, *k, v)?;
+            changed += 1;
+        }
+    }
+    for (id, kind, _) in &local.secrets {
+        if let Some((k, _)) = SECRET_KINDS.iter().find(|(_, n)| n == kind)
+            && !merged.secrets.iter().any(|(i, n, _)| i == id && n == kind)
+        {
+            vault::delete(id, *k)?;
+            changed += 1;
+        }
+    }
+    if merged.connections != local.connections || merged.credentials != local.credentials || merged.groups != local.groups {
+        changed += 1;
+        library::save(&path.0, &conns)?;
+        creds::save(&creds_path(path), &merged.credentials)?;
+        library::save(&groups_path(path), &merged.groups)?;
+    }
+    Ok(if changed > 0 { (format!("Abgeglichen: {} Verbindungen, {} Zugangsdaten.", conns.len(), merged.credentials.len()), true) } else { ("Abgeglichen, keine Änderungen.".into(), false) })
 }

@@ -437,6 +437,12 @@
           <div id="settings-cred-list" class="certs"></div>
           <div class="cred-actions"><button type="button" id="cred-new">Neue Zugangsdaten …</button><button type="button" id="cred-export">Sichern …</button><button type="button" id="cred-import">Einlesen …</button></div>
           <p class="note">«Sichern» schreibt Bibliothek und Zugangsdaten samt Passwörtern in eine mit deinem Passwort verschlüsselte Datei (.sesam). «Einlesen» zeigt zuerst, was dazukommt, und lässt Bestehendes unverändert.</p>
+          <div id="sync-block">
+            <h3>Abgleich zwischen Geräten</h3>
+            <p class="note">Sesam legt eine verschlüsselte Datei in einen Ordner deiner Wahl (iCloud Drive, OneDrive, Nextcloud, Syncthing …) und gleicht Bibliothek und Zugangsdaten darüber ab. Auf jedem Gerät denselben Ordner und dasselbe Passwort wählen.</p>
+            <p class="note" id="sync-state"></p>
+            <div class="cred-actions"><button type="button" id="sync-setup">Ordner wählen …</button><button type="button" id="sync-run" hidden>Jetzt abgleichen</button><button type="button" id="sync-off" hidden>Ausschalten</button></div>
+          </div>
         </section>
         <section class="settings-pane" id="settings-groups" hidden>
           <h2>Gruppen</h2>

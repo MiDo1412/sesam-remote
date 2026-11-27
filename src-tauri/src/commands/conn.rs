@@ -394,6 +394,7 @@ pub(crate) fn cred_save(path: State<LibraryPath>, mut cred: creds::Cred, passwor
             }
         }
     }
+    cred.updated_at = Some(now_secs());
     match all.iter_mut().find(|x| x.id == cred.id) {
         Some(x) => *x = cred.clone(),
         None => all.push(cred.clone()),

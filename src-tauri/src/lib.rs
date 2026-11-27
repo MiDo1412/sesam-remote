@@ -32,6 +32,7 @@ mod scp;
 mod sfsymbol;
 mod sftp;
 mod ssh;
+mod sync;
 mod vault;
 mod wake;
 mod vnc;
@@ -268,6 +269,9 @@ pub fn run() {
             import_file,
             ssh_config_path,
             discover_network,
+            sync_status,
+            sync_setup,
+            sync_now,
             shell_resize,
             shell_probe,
             shell_held_list,

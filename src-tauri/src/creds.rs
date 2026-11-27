@@ -14,6 +14,8 @@ pub struct Cred {
     pub has_key: bool,
     /// Zuletzt für eine Anmeldung benutzt (Sekunden seit 1970).
     pub last_used: Option<u64>,
+    /// Zuletzt geändert (Sekunden seit 1970), für den Abgleich (src/sync.rs).
+    pub updated_at: Option<u64>,
 }
 
 /// Tresor-ID der Geheimnisse eines Profils.
