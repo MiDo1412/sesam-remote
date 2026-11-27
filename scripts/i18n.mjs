@@ -27,7 +27,7 @@ function fragments(s) {
   return out;
 }
 function add(s) { for (const f of fragments(s)) { const t = f.replace(/\s+/g, " ").trim(); if (!isText(t.replaceAll(SUB, "x"))) continue; (t.includes(SUB) ? tpl : exact).add(t.replaceAll(SUB, "{}")); } }
-for (const f of readdirSync(root + "/src").filter((f) => f.endsWith(".ts"))) {
+for (const f of readdirSync(root + "/src", { recursive: true }).map(String).filter((f) => f.endsWith(".ts"))) {
   const sf = ts.createSourceFile(f, readFileSync(`${root}/src/${f}`, "utf8"), ts.ScriptTarget.Latest, true);
   const visit = (n) => {
     if (ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) return;

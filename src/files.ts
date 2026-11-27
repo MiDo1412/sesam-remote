@@ -3,7 +3,7 @@ import { locale, tr } from "./i18n";
 import { askConflict, type Choice } from "./conflict";
 import { showPreview } from "./preview";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNOWN, type Entry, type Listing, type Progress } from "./api";
+import { api, CERT_CHANGED, CERT_UNKNOWN, filesProtocol, ftpLabel, HOSTKEY_UNKNOWN, type Entry, type Progress } from "./api";
 import { ask, askHostKey, askPassword, askText, choose, tell } from "./ui";
 import { compareDirs, type Mark } from "./compare";
 import { openMenu, type MenuItem } from "./menu";
@@ -13,83 +13,12 @@ import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { localNetworkText } from "./ubuntu";
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-};
+import { askPerms } from "./files/perms";
+import { el, fileKind, formatDate, formatSize, permText, type Pane, type Side, type SortKey } from "./files/format";
 
-const num = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
-export function formatSize(n: number) {
-  if (n < 1024) return `${n} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let i = -1;
-  do {
-    n /= 1024;
-    i++;
-  } while (n >= 1024 && i < units.length - 1);
-  return `${num.format(n)} ${units[i]}`;
-}
-
-function formatDate(secs: number | null) {
-  if (secs === null) return "";
-  const d = new Date(secs * 1000);
-  const now = new Date();
-  const time = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-  if (d.toDateString() === now.toDateString()) return `${new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(0, "day")}, ${time}`;
-  return d.toLocaleDateString(locale, { day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() && { year: "numeric" }) });
-}
-
-type Side = "local" | "remote";
-
-type SortKey = "name" | "size" | "date";
-
-/** Dateityp grob nach Endung, für das Symbol in der Liste. */
-function fileKind(name: string, dir: boolean) {
-  if (dir) return "dir";
-  const ext = name.toLowerCase().split(".").pop() ?? "";
-  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "bmp"].includes(ext)) return "img";
-  if (["zip", "gz", "tgz", "xz", "bz2", "7z", "rar", "zst", "tar"].includes(ext)) return "zip";
-  if (["pdf"].includes(ext)) return "pdf";
-  if (["sh", "py", "js", "ts", "rs", "go", "c", "h", "json", "yml", "yaml", "toml", "conf", "ini", "md", "txt", "log", "html", "css"].includes(ext)) return "txt";
-  return "file";
-}
-
-interface Pane {
-  side: Side;
-  root: HTMLElement;
-  body: HTMLElement;
-  pathEl: HTMLElement;
-  listing: Listing | null;
-  selected: Set<string>;
-  /** Ausgangspunkt für Umschalt-Klick und die Zeile mit dem Tastatur-Fokus. */
-  anchor: string | null;
-  cursor: string | null;
-  /** Suche in Unterordnern: Treffer mit relativem Pfad; `token` bricht eine alte Suche ab. */
-  deepOn: boolean;
-  deep: Entry[] | null;
-  token: number;
-  /** iPad: Tippen wählt dazu/weg (Häkchen). */
-  selectMode: boolean;
-  /** Pfad-Trenner der Seite. */
-  sep: string;
-  sort: SortKey;
-  desc: boolean;
-  hidden: boolean;
-  filter: string;
-  /** Verlauf für Zurück/Vorwärts. */
-  back: string[];
-  fwd: string[];
-  nav: { back: HTMLButtonElement; fwd: HTMLButtonElement; up: HTMLButtonElement };
-}
+export { formatSize };
 
 /** Dateien (SFTP) als Tab. */
-/** 0o755 → «rwxr-xr-x» (mit d für Ordner). */
-function permText(m: number, dir: boolean) {
-  const r = [6, 3, 0].map((s) => ["r", "w", "x"].map((ch, i) => ((m >> (s + 2 - i)) & 1 ? ch : "-")).join("")).join("");
-  return (dir ? "d" : "-") + r;
-}
 
 export function filesTab(ctx: TabCtx): TabHandle {
   const c = ctx.conn;
@@ -1574,57 +1503,9 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     const path = join(p, e.name);
     const s = sid;
     const owner = await api.sftpOwner(s, path).catch(() => "");
-    const dlg = document.createElement("dialog");
-    dlg.className = "perms-dlg";
-    dlg.setAttribute("aria-labelledby", "perms-title");
-    const who = ["Besitzer", "Gruppe", "Andere"];
-    dlg.innerHTML = `<form class="sheet" method="dialog">
-        <h2 id="perms-title">Berechtigungen</h2>
-        <p class="note perms-path mono"></p>
-        <table class="perms-grid"><thead><tr><th></th><th>Lesen</th><th>Schreiben</th><th>Ausführen</th></tr></thead><tbody>${who
-          .map((w, i) => `<tr><th scope="row">${w}</th>${[4, 2, 1].map((b) => `<td><input type="checkbox" data-bit="${b << (3 * (2 - i))}" aria-label="${w}: ${b === 4 ? "Lesen" : b === 2 ? "Schreiben" : "Ausführen"}" /></td>`).join("")}</tr>`)
-          .join("")}</tbody></table>
-        <label class="row">Als Zahl<input name="octal" class="mono" inputmode="numeric" maxlength="4" size="5" /></label>
-        <label class="row">Besitzer:Gruppe<input name="owner" class="mono" autocomplete="off" spellcheck="false" placeholder="benutzer:gruppe" /></label>
-        <label class="row check"><input type="checkbox" name="recursive" />Auch für alles darin (rekursiv)</label>
-        <p class="note">Wo dein Benutzer keine Rechte hat, fragt Sesam, ob es mit Administratorrechten (sudo) wiederholen soll.</p>
-        <div class="row actions"><span></span><button type="button" class="perms-cancel">Abbrechen</button><button type="submit" class="primary">Übernehmen</button></div>
-      </form>`;
-    document.body.append(dlg);
-    dlg.querySelector(".perms-path")!.textContent = path;
-    const f = dlg.querySelector("form")!;
-    const bits = [...dlg.querySelectorAll<HTMLInputElement>("[data-bit]")];
-    const octal = f.elements.namedItem("octal") as HTMLInputElement;
-    const own = f.elements.namedItem("owner") as HTMLInputElement;
-    const rec = f.elements.namedItem("recursive") as HTMLInputElement;
-    rec.closest("label")!.hidden = !e.dir;
-    const start = e.perm ?? (e.dir ? 0o755 : 0o644);
-    const special = start & 0o7000;
-    const fromBits = () => bits.reduce((m, b) => m | (b.checked ? +b.dataset.bit! : 0), special);
-    const show = (m: number) => {
-      bits.forEach((b) => (b.checked = (m & +b.dataset.bit!) !== 0));
-      octal.value = m.toString(8).padStart(3, "0");
-    };
-    show(start);
-    own.value = owner;
-    bits.forEach((b) => (b.onchange = () => (octal.value = fromBits().toString(8).padStart(3, "0"))));
-    octal.oninput = () => /^[0-7]{3,4}$/.test(octal.value) && bits.forEach((b) => (b.checked = (parseInt(octal.value, 8) & +b.dataset.bit!) !== 0));
-    const ok = await new Promise<boolean>((resolve) => {
-      dlg.querySelector<HTMLButtonElement>(".perms-cancel")!.onclick = () => dlg.close();
-      f.onsubmit = (ev) => {
-        ev.preventDefault();
-        if (!/^[0-7]{3,4}$/.test(octal.value)) return octal.setCustomValidity("Drei oder vier Ziffern von 0 bis 7, z. B. 644"), f.reportValidity(), octal.setCustomValidity("");
-        resolve(true);
-        dlg.close();
-      };
-      dlg.onclose = () => resolve(false);
-      dlg.showModal();
-    });
-    dlg.remove();
-    if (!ok) return;
-    const mode = parseInt(octal.value, 8);
-    const newOwner = own.value.trim() && own.value.trim() !== owner ? own.value.trim() : null;
-    const recursive = e.dir && rec.checked;
+    const got = await askPerms(path, e, owner);
+    if (!got) return;
+    const { mode, start, newOwner, recursive } = got;
     if (mode === start && !newOwner && !recursive) return;
     try {
       if (await withSudo("Rechte ändern", (sudo, pw) => api.sftpSetPerms(s, path, mode, newOwner, recursive, sudo, pw))) await load(p, p.listing!.path);
