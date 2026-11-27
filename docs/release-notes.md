@@ -18,6 +18,8 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+## 26.11.14 — 2026-11-27
+
 Einmalcodes beim SSH-Login, Import aus OpenSSH und .rdp, Abgleich zwischen Geräten, Mikrofon über RDP und Updates, die sich selbst installieren.
 
 ### Neu
