@@ -1611,5 +1611,8 @@
  "«{}» ist keine Textdatei (UTF-8). Zum Ansehen die Vorschau nehmen.": "«{}» is not a text file (UTF-8). Use the preview to look at it.",
  "Änderungen ansehen": "Review changes",
  "Änderungen verwerfen?": "Discard changes?",
- "abgebrochen": "cancelled"
+ "abgebrochen": "cancelled",
+ "Passwort von «{}» anzeigen": "Show password of «{}»",
+ "Sicherung mit allen Passwörtern erstellen": "Create a backup with all passwords",
+ "Zum Anzeigen braucht es Windows Hello (Einstellungen › Konten › Anmeldeoptionen).": "Showing it requires Windows Hello (Settings › Accounts › Sign-in options)."
 }
