@@ -488,3 +488,35 @@ pub(crate) fn quick_register(path: State<LibraryPath>, mut connection: Connectio
     }
     Ok(id)
 }
+
+/// Verbindungen aus einer Datei vorschlagen: `.rdp` oder eine OpenSSH-Konfiguration. Gespeichert wird nichts.
+#[tauri::command]
+pub(crate) fn import_file(file: String) -> Result<Vec<import::Found>, String> {
+    let p = std::path::Path::new(&file);
+    let bytes = std::fs::read(p).map_err(|e| format!("Datei nicht lesbar: {e}"))?;
+    if bytes.len() > 1 << 20 {
+        return Err("Datei zu gross für eine Konfiguration".into());
+    }
+    if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("rdp")) {
+        let name = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        return Ok(vec![import::rdp_file(&bytes, &name)?]);
+    }
+    let home = std::env::home_dir().map(|h| h.to_string_lossy().into_owned()).unwrap_or_default();
+    let found = import::ssh_config(&String::from_utf8_lossy(&bytes), &home);
+    if found.is_empty() {
+        return Err("Keine Einträge gefunden (erwartet: .rdp-Datei oder SSH-Konfiguration mit «Host …»)".into());
+    }
+    Ok(found)
+}
+
+/// Pfad der eigenen SSH-Konfiguration, wenn es sie gibt.
+#[tauri::command]
+pub(crate) fn ssh_config_path() -> Option<String> {
+    std::env::home_dir().map(|h| h.join(".ssh").join("config")).filter(|p| p.is_file()).map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Geräte im lokalen Netz (Bonjour/mDNS) mit SSH, VNC oder RDP, vier Sekunden lang gesucht.
+#[tauri::command]
+pub(crate) async fn discover_network() -> Result<Vec<import::Seen>, String> {
+    tauri::async_runtime::spawn_blocking(|| import::discover(4)).await.map_err(|e| e.to_string())?
+}

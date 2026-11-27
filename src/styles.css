@@ -905,3 +905,6 @@ body.mobile:not(.phone) dialog { max-width: calc(100vw - 48px - var(--sa-l) - va
 body.mobile:not(.phone) #editor-form { width: min(800px, calc(100vw - 48px - var(--sa-l) - var(--sa-r))); }
 /* Ungleiche Ränder (Kamera nur auf einer Seite): Blätter in der Mitte des freien Bereichs, nicht des Bildschirms */
 body.mobile dialog:not(#settings) { translate: calc((var(--sa-l) - var(--sa-r)) / 2) 0; }
+/* Importieren: Auswahl der gefundenen Verbindungen */
+.import-list { display: grid; gap: var(--s-1); max-height: 50vh; overflow: auto; margin: var(--s-3) 0; }
+.import-list .note { margin-left: auto; text-align: right; }

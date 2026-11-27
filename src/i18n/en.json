@@ -1580,5 +1580,22 @@
  "Suche schliessen": "Close search",
  "Weiter oben": "Previous match",
  "Weiter unten": "Next match",
- "{} von {}": "{} of {}"
+ "{} von {}": "{} of {}",
+ "Aus meiner SSH-Konfiguration": "From my SSH configuration",
+ "Datei nicht lesbar: {}": "File not readable: {}",
+ "Datei wählen (.rdp oder SSH-Konfiguration) …": "Choose file (.rdp or SSH configuration) …",
+ "Datei zu gross für eine Konfiguration": "File too large for a configuration",
+ "Im Netzwerk gefunden": "Found on the network",
+ "Im Netzwerk suchen": "Search the network",
+ "Im lokalen Netz hat sich kein Gerät mit SSH, VNC oder RDP gemeldet (Bonjour/mDNS). Manche Geräte melden sich nicht von selbst; dann die Adresse von Hand eintragen.": "No device with SSH, VNC or RDP announced itself on the local network (Bonjour/mDNS). Some devices do not announce themselves; enter the address by hand instead.",
+ "Keine Einträge gefunden (erwartet: .rdp-Datei oder SSH-Konfiguration mit «Host …»)": "No entries found (expected: .rdp file or SSH configuration with «Host …»)",
+ "Verbindungen übernehmen": "Import connections",
+ "ssh config rdp netzwerk bonjour mdns suchen übernehmen": "ssh config rdp network bonjour mdns search import",
+ "{} Schlüsseldatei(en) liessen sich nicht lesen (fehlt oder mit Passphrase); bitte im Formular wählen.": "{} key file(s) could not be read (missing or protected by a passphrase); please choose them in the form.",
+ "{} Verbindung(en) in der Bibliothek.{}": "{} connection(s) in the library.{}",
+ "{} · schon in der Bibliothek": "{} · already in the library",
+ "Übernommen": "Imported",
+ "Keine Remotedesktop-Datei (es fehlt «full address»)": "Not a Remote Desktop file («full address» is missing)",
+ "Netzwerksuche nicht möglich: {}": "Network search not possible: {}",
+ "Die Netzwerksuche gibt es auf diesem Gerät nicht.": "Network search is not available on this device."
 }

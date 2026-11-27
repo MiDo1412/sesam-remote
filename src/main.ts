@@ -8,6 +8,7 @@ import { desktopTab } from "./desktop";
 import { filesTab } from "./files";
 import { detachedWindow, detachToken, initTabs, jumpCommands, openTab, runTool, setLibrary, showLibrary, showSession, takeOver } from "./tabs";
 import { ask, askPassword, askText, choose, tell } from "./ui";
+import { openImport } from "./importer";
 import { openHelp, topicFor, topics } from "./help";
 import { connectionCommands, initPalette } from "./palette";
 import { clipHistory, initClipHistory } from "./cliphistory";
@@ -1206,6 +1207,7 @@ document.querySelector<HTMLElement>("main > section.list")!.addEventListener("co
   const v = await openMenu(at, [
     { value: "new", label: "Neue Verbindung …" },
     { value: "quick", label: "Schnelle Verbindung …" },
+    { value: "import", label: "Importieren …" },
   ]).finally(() => at.remove());
   if (v) command(v);
 });
@@ -1269,6 +1271,7 @@ const palette = initPalette(() => [
   ...items.flatMap((c) => connectionCommands(c, open, { desktop: !!desktopProtocol(c), files: !!filesProtocol(c) })),
   { label: "Neue Verbindung …", keywords: "hinzufügen anlegen", run: () => $("new").click() },
   { label: "Schnelle Verbindung …", hint: keyLabel("Strg+K"), keywords: "einmalig quick", run: () => $("quick").click() },
+  { label: "Importieren …", keywords: "ssh config rdp netzwerk bonjour mdns suchen übernehmen", run: () => void openImport() },
   ...(isMobile ? [] : [{ label: "Neues Terminal", hint: keyLabel("Strg+T"), keywords: "shell konsole powershell", run: () => void openTerminal() }]),
   { label: "Einstellungen", hint: keyLabel("Strg+,"), keywords: "optionen", run: () => void openSettings() },
   { label: "Zugangsdaten …", keywords: "passwort schlüssel ssh-key verwaltung anmeldung", run: () => void openSettings("creds") },
@@ -1320,6 +1323,7 @@ const command = (cmd: string) => {
   else if (cmd === "terminal" && !isMobile) void openTerminal();
   else if (cmd === "new") edit(null);
   else if (cmd === "quick") quick.open();
+  else if (cmd === "import") void openImport();
   else if (cmd === "close") closeCommand();
 };
 /** ⌘W: Hat das Remote-Bild die Tastatur, gehört ⌘W dem Remotecomputer (⌘ ist schon gedrückt und dort angekommen);

@@ -6,6 +6,7 @@ mod creds;
 mod diag;
 mod folders;
 mod h264;
+mod import;
 mod jumps;
 mod kbhook;
 mod kdc;
@@ -119,6 +120,7 @@ pub fn run() {
                     .item(&MenuItemBuilder::with_id("cmd:new", "Neue Verbindung …").accelerator("CmdOrCtrl+N").build(app)?)
                     .item(&MenuItemBuilder::with_id("cmd:quick", "Schnelle Verbindung …").accelerator("CmdOrCtrl+K").build(app)?)
                     .item(&MenuItemBuilder::with_id("cmd:terminal", "Neues Terminal").accelerator("CmdOrCtrl+T").build(app)?)
+                    .item(&MenuItemBuilder::with_id("cmd:import", "Importieren …").build(app)?)
                     .separator()
                     // ⌘W wie in Safari: aktiven Tab schliessen, in der Bibliothek das Fenster (src/main.ts «close»)
                     .item(&MenuItemBuilder::with_id("cmd:close", "Schliessen").accelerator("CmdOrCtrl+W").build(app)?)
@@ -263,6 +265,9 @@ pub fn run() {
             shell_open,
             shell_write,
             ssh_prompt_answer,
+            import_file,
+            ssh_config_path,
+            discover_network,
             shell_resize,
             shell_probe,
             shell_held_list,

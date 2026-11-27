@@ -430,7 +430,8 @@ pub struct Ask {
 }
 
 pub static ASK: std::sync::OnceLock<Box<dyn Fn(Ask) + Send + Sync>> = std::sync::OnceLock::new();
-static WAITING: std::sync::LazyLock<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Option<Vec<String>>>>>> = std::sync::LazyLock::new(Default::default);
+type Reply = tokio::sync::oneshot::Sender<Option<Vec<String>>>;
+static WAITING: std::sync::LazyLock<Mutex<HashMap<u64, Reply>>> = std::sync::LazyLock::new(Default::default);
 
 /// Antwort der Oberfläche; `None` = abgebrochen.
 pub fn answer(id: u64, answers: Option<Vec<String>>) {
