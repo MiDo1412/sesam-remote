@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Behoben
+
+- **Doppelklick in der Bibliothek:** Bei einer Verbindung ohne Desktop öffnete ein Doppelklick (auch Enter, Aufwecken und Links von aussen) trotzdem den Desktop. Jetzt öffnet Sesam die Standardansicht nur, wenn es sie gibt, sonst Shell oder Dateien.
+
 ## 26.11.15 — 2026-11-27
 
 ### Behoben

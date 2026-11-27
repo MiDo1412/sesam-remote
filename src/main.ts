@@ -293,7 +293,7 @@ async function wakeAndOpen(c: Connection) {
       reachOf.set(c.id, ms);
       document.querySelector<HTMLDialogElement>("dialog[open]#ask")?.close();
       render();
-      return open(c, c.defaultView);
+      return open(c, mainView(c));
     }
   }
   tell("Keine Antwort", `${c.name} hat nach 2 Minuten nicht geantwortet. Ist Wake-on-LAN im BIOS/UEFI und in der Netzwerkkarte eingeschaltet, und ist der Rechner im selben Netz?`);
@@ -333,7 +333,7 @@ function openPicked(c: Connection) {
   if (isPhone) return;
   const first = performance.now() - lastPick.t < DOUBLE_MS * 2 ? items.find((x) => x.id === lastPick.id) : undefined;
   const target = first ?? c;
-  open(target, target.defaultView);
+  open(target, mainView(target));
 }
 
 function render() {
@@ -404,7 +404,7 @@ function render() {
       )
         .filter(([, , , on]) => on)
         .map(([view, icon, label]) => {
-          const b = el("button", { type: "button", class: `door${view === c.defaultView ? " default" : ""}`, title: `${label} öffnen${view === c.defaultView ? ` (${isMobile ? "Doppeltippen" : "Doppelklick"})` : ""}`, "aria-label": `${label} von ${c.name} öffnen` });
+          const b = el("button", { type: "button", class: `door${view === mainView(c) ? " default" : ""}`, title: `${label} öffnen${view === mainView(c) ? ` (${isMobile ? "Doppeltippen" : "Doppelklick"})` : ""}`, "aria-label": `${label} von ${c.name} öffnen` });
           b.innerHTML = icon;
           b.onclick = () => open(c, view);
           return b;
@@ -466,7 +466,7 @@ $("conn-rows").onkeydown = (e) => {
   if (i < 0 || !c) return;
   const j = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: shown.length - 1, PageDown: i + 10, PageUp: i - 10 }[e.key];
   if (j !== undefined) selected = shown[Math.max(0, Math.min(shown.length - 1, j))].id;
-  else if (e.key === "Enter") open(c, c.defaultView);
+  else if (e.key === "Enter") open(c, mainView(c));
   else if (e.key === " ") selected = c.id;
   else return;
   e.preventDefault();
@@ -610,7 +610,7 @@ function renderDetails() {
   const wake = reachOf.get(c.id) === null && !!c.mac;
   const has = { desktop: !!desktopProtocol(c), shell: !!c.sshPort, files: !!filesProtocol(c) };
   const VIEWS = ["desktop", "shell", "files"] as const;
-  const main = has[c.defaultView] ? c.defaultView : VIEWS.find((v) => has[v]) ?? "desktop";
+  const main = mainView(c);
   const door = (v: (typeof VIEWS)[number], big: boolean) => {
     const cls = big && !wake ? "primary" : "";
     if (v === "desktop" && !has.desktop && c.sshPort) return btn("Desktop freischalten …", cls, () => unlock(c));
@@ -816,12 +816,17 @@ function handleLink(url: string) {
     const view = (u.searchParams.get("view") ?? "") as Connection["defaultView"];
     const c = items.find((x) => x.id === id);
     if (!c) return tell("Verbindung nicht gefunden", "Die Verknüpfung zeigt auf eine Verbindung, die es nicht mehr gibt.");
-    open(c, ["desktop", "shell", "files"].includes(view) ? view : c.defaultView);
+    open(c, ["desktop", "shell", "files"].includes(view) ? view : mainView(c));
   } catch {
     /* kein gültiger Link */
   }
 }
 
+/** Standardansicht, sonst die erste, die die Verbindung hat (Desktop kann ausgeschaltet sein). */
+function mainView(c: Connection): Connection["defaultView"] {
+  const has = { desktop: !!desktopProtocol(c), shell: !!c.sshPort, files: !!filesProtocol(c) };
+  return has[c.defaultView] ? c.defaultView : (["desktop", "shell", "files"] as const).find((v) => has[v]) ?? "desktop";
+}
 function open(c: Connection, view: Connection["defaultView"]) {
   openTab(c, view);
 }
