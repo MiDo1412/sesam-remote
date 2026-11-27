@@ -1,4 +1,4 @@
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", windows))]
 mod auth;
 mod backup;
 mod clipshare;

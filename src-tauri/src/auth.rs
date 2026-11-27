@@ -1,7 +1,8 @@
-//! Bestätigung durch das System vor heiklen Aktionen (macOS, iPadOS: LocalAuthentication).
+//! Bestätigung durch das System vor heiklen Aktionen (macOS, iPadOS: LocalAuthentication; Windows: Windows Hello).
 
 /// Touch ID bzw. Face ID (oder das Passwort/der Code des Geräts) bestätigen lassen; `reason` steht im Systemdialog.
 /// Blockiert bis zur Antwort, darum nur ausserhalb des Hauptthreads aufrufen.
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub fn authenticate(reason: &str) -> Result<(), String> {
     use objc2::runtime::{AnyObject, Bool};
     use objc2::{class, msg_send, rc::Retained};
@@ -23,3 +24,24 @@ pub fn authenticate(reason: &str) -> Result<(), String> {
     }
 }
 
+
+/// Windows Hello (Gesicht, Fingerabdruck oder PIN), der Dialog gehört zum Fenster `hwnd`. `Ok(false)`, wenn Hello auf
+/// diesem Gerät nicht eingerichtet ist. Blockiert bis zur Antwort, darum nur ausserhalb des Hauptthreads aufrufen.
+#[cfg(windows)]
+pub fn hello(hwnd: isize, reason: &str) -> Result<bool, String> {
+    use windows::Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability};
+    use windows::Win32::System::WinRT::IUserConsentVerifierInterop;
+    let e = |e: windows::core::Error| format!("Windows Hello: {e}");
+    let available = UserConsentVerifier::CheckAvailabilityAsync().and_then(|o| o.join()).map_err(e)?;
+    if available != UserConsentVerifierAvailability::Available {
+        return Ok(false);
+    }
+    // Desktop-Apps brauchen die Interop-Variante mit Fenster, sonst erscheint der Dialog hinter der App.
+    let interop = windows::core::factory::<UserConsentVerifier, IUserConsentVerifierInterop>().map_err(e)?;
+    let op: windows_future::IAsyncOperation<UserConsentVerificationResult> =
+        unsafe { interop.RequestVerificationForWindowAsync(windows::Win32::Foundation::HWND(hwnd as *mut _), &windows::core::HSTRING::from(reason)) }.map_err(e)?;
+    match op.join().map_err(e)? {
+        UserConsentVerificationResult::Verified => Ok(true),
+        _ => Err("Nicht bestätigt".into()),
+    }
+}

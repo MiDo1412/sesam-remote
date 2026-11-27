@@ -6087,6 +6087,7 @@ dependencies = [
  "trash",
  "url",
  "windows",
+ "windows-future",
  "zeroize",
  "zune-jpeg",
 ]

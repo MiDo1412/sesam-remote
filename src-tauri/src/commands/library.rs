@@ -231,14 +231,21 @@ pub(crate) const SECRET_KINDS: [(Kind, &str); 5] =
 
 /// Verschlüsselte Sicherung von Bibliothek, Gruppen und Zugangsdaten samt Geheimnissen in eine Datei schreiben.
 #[tauri::command]
-pub(crate) async fn backup_export(path: State<'_, LibraryPath>, file: String, password: String) -> Result<String, String> {
+pub(crate) async fn backup_export(window: tauri::WebviewWindow, path: State<'_, LibraryPath>, file: String, password: String) -> Result<String, String> {
     diag::add_secret(&password);
+    let _ = &window;
     // Die Sicherung enthält alle Passwörter: dieselbe Bestätigung wie «Passwort anzeigen» (security-review-2026-11-11, S-07).
-    // shortcut: Windows und Linux noch ohne Bestätigung, bis Windows Hello eingebaut ist (docs/offene-punkte.md).
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     tauri::async_runtime::spawn_blocking(|| auth::authenticate("eine Sicherung mit allen Passwörtern erstellen"))
         .await
         .map_err(|e| e.to_string())??;
+    // shortcut: Windows ohne eingerichtetes Hello und Linux ohne Bestätigung (sonst ginge keine Sicherung); mit
+    // Windows-Anmeldedialog (CredUIPromptForWindowsCredentials) nachrüsten, falls das jemand braucht.
+    #[cfg(windows)]
+    {
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+        tauri::async_runtime::spawn_blocking(move || auth::hello(hwnd, "Sicherung mit allen Passwörtern erstellen")).await.map_err(|e| e.to_string())??;
+    }
     let conns = library::load(&path.0)?;
     let creds = creds::load(&creds_path(&path))?;
     let mut secrets = Vec::new();

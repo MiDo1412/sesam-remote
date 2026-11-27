@@ -322,15 +322,24 @@ pub(crate) async fn cred_install_key(path: State<'_, LibraryPath>, id: String, c
 
 /// Gespeichertes Passwort anzeigen bzw. kopieren: nur nach Touch ID/Face ID bzw. Passwort des Geräts.
 #[tauri::command]
-pub(crate) async fn cred_reveal(path: State<'_, LibraryPath>, id: String) -> Result<String, String> {
+pub(crate) async fn cred_reveal(window: tauri::WebviewWindow, path: State<'_, LibraryPath>, id: String) -> Result<String, String> {
     let cred = creds::load(&creds_path(&path))?.into_iter().find(|x| x.id == id).ok_or("Zugangsdaten nicht gefunden")?;
+    let _ = &window;
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         let reason = format!("das Passwort von «{}» anzeigen", cred.name);
         tauri::async_runtime::spawn_blocking(move || auth::authenticate(&reason)).await.map_err(|e| e.to_string())??;
     }
-    // shortcut: unter Windows noch ohne Windows Hello, darum dort gesperrt; mit Hello (UserConsentVerifier) freigeben.
-    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[cfg(windows)]
+    {
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+        let reason = format!("Passwort von «{}» anzeigen", cred.name);
+        if !tauri::async_runtime::spawn_blocking(move || auth::hello(hwnd, &reason)).await.map_err(|e| e.to_string())?? {
+            return Err("Zum Anzeigen braucht es Windows Hello (Einstellungen › Konten › Anmeldeoptionen).".into());
+        }
+    }
+    // Linux: kein einheitlicher Systemdialog zum Bestätigen, darum dort gesperrt.
+    #[cfg(not(any(target_os = "macos", target_os = "ios", windows)))]
     {
         let _ = &cred;
         return Err("Anzeigen ist auf diesem System noch nicht möglich".into());

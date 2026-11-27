@@ -27,7 +27,7 @@ eigene Unit-Tests auf diesem Rechner (keine Server im Netz, keine fremden Dienst
 | S-08 | Fremde Sicherung konnte vorhandene Zugangsdaten nutzen oder überschreiben | mittel | behoben, mit Test |
 | S-09 | SSH-Schlüssel anderen Typs sah aus wie ein neuer Server | mittel | entschärft (deutliche Warnung; bekannte Schlüsseltypen zuerst wie OpenSSH, seit 2026-11-27) |
 | S-06 | VNC-Zwischenablage holte beliebige Dateien und Ordner ungefragt | niedrig | entschärft (Grenzen, auch beim Streamen; Downloads höchstens 64 Ordnerebenen tief, seit 2026-11-27) |
-| S-07 | Sicherung mit allen Passwörtern ohne Touch ID | niedrig | behoben auf Mac/iPad; Windows/Linux offen |
+| S-07 | Sicherung mit allen Passwörtern ohne Touch ID | niedrig | behoben auf Mac/iPad, Windows mit Windows Hello; Linux offen |
 | S-10 | Server setzte die lokale Zwischenablage über das Terminal (OSC 52) ohne Bedingung | niedrig | behoben |
 | S-11 | VNC: unbegrenzte Bildgrösse (Speicher) | niedrig | behoben |
 | S-12 | Installer ohne vertrauenswürdige Signatur | – (braucht Klärung) | offen, Zertifikate fehlen |
@@ -103,7 +103,7 @@ Eine `file://`-Liste vom VNC-Server löste ein rekursives Herunterladen ohne Gre
 ### S-07 Sicherung ohne Bestätigung (niedrig, teilweise)
 
 Die Sicherung enthält alle Passwörter, verlangte aber keine Bestätigung wie «Passwort anzeigen». **Korrektur:**
-Touch ID bzw. Face ID auf Mac und iPad. **Offen:** Windows und Linux, bis Windows Hello eingebaut ist.
+Touch ID bzw. Face ID auf Mac und iPad, Windows Hello unter Windows (ohne eingerichtetes Hello ohne Bestätigung). **Offen:** Linux.
 
 ### S-10 OSC 52 (niedrig, behoben)
 
