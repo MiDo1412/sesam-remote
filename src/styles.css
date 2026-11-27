@@ -579,12 +579,16 @@ body.mobile .pane-head { --h-ctl: 30px; }
 /* Partner-Tab in der geteilten Ansicht: sichtbar, aber nicht aktiv */
 .tab.split-partner { color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong), inset 0 -2px 0 var(--tab-color, transparent); }
 /* Shell (Inhalt: Farbe vom Farbschema) */
-.terminal { flex: 1; min-height: 0; padding: var(--s-3) 14px; }
+/* Abstand am xterm-Element, nicht am Host: FitAddon zieht nur dessen Padding ab (border-box), sonst laufen Zeilen unter den Balken.
+   Rechts kein Abstand: der Rollbalken liegt am Fensterrand, xterm hält ihm 14px frei. */
+.terminal:not(.xterm) { flex: 1; min-height: 0; }
+.terminal.xterm { padding: var(--s-3) 0 var(--s-3) 14px; }
 .terminal .xterm, .terminal .xterm-viewport { background: transparent !important; }
-.terminal .xterm-viewport { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--term-fg, #888) 30%, transparent) transparent; }
-.terminal .xterm-viewport::-webkit-scrollbar { width: 10px; }
-.terminal .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
-.terminal .xterm-viewport::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--term-fg, #888) 30%, transparent); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+/* xterm 6 rollt selbst; der alte native Balken der .xterm-viewport erschien in WebKit als weisse Leiste. */
+.terminal .xterm-viewport { scrollbar-width: none; }
+.terminal .xterm-viewport::-webkit-scrollbar { display: none; }
+.terminal .xterm-scrollable-element > .scrollbar.vertical > .slider { left: 4px !important; width: 6px !important; border-radius: 3px; }
+.terminal.no-scroll .xterm-scrollable-element > .scrollbar.vertical { display: none; } /* nichts zum Zurückrollen */
 /* Remote-Bild (Inhalt, immer deckend) */
 .desktop { position: relative; flex: 1; min-height: 0; overflow: hidden; display: grid; place-items: center; background: var(--remote-bg); }
 .desktop.native { overflow: auto; place-items: start; }
@@ -611,7 +615,8 @@ body.mobile .fullscreen .fs-handle { display: block; position: absolute; top: 0;
 body.mobile .fullscreen .fs-handle::after { content: ""; position: absolute; left: 30px; right: 30px; top: var(--s-2); height: 5px; border-radius: var(--r-ctl); background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); }
 
 /* ---------- Dateifenster ---------- */
-.files { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--card); color: var(--text); }
+.files { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--card); color: var(--text); -webkit-user-select: none; user-select: none; }
+.files :is(input, textarea, pre) { -webkit-user-select: text; user-select: text; } /* ⌘A markiert sonst Überschriften als Text mit */
 .panes { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .pane:focus { outline: none; }
@@ -631,7 +636,13 @@ body.mobile .fullscreen .fs-handle::after { content: ""; position: absolute; lef
 .pane-tools { --h-ctl: var(--h-sm); display: flex; align-items: center; gap: var(--s-3); padding: 0 var(--s-3) 6px; font-size: 12px; color: var(--muted); }
 .pane-tools label { white-space: nowrap; display: inline-flex; align-items: center; gap: var(--s-1); }
 .pane-filter { flex: 1; min-width: 80px; max-width: 220px; font-size: 12px; }
-.pane-select { margin-left: auto; }
+.pane-acts { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.pane-acts button.act { width: var(--h-ctl); padding: 0; color: var(--accent); }
+.pane-acts button.act.danger { color: var(--danger); }
+.pane-acts button.act:disabled { color: var(--muted); }
+.pane-acts .act-more { display: none; }
+body.phone .pane-acts button.act { display: none; }
+body.phone .pane-acts button.act-more { display: inline-flex; }
 body.mobile .pane-tools { gap: 10px; overflow: hidden; }
 .pane-list { position: relative; flex: 1; min-height: 0; overflow: auto; }
 .pane table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }

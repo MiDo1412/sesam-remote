@@ -1420,6 +1420,19 @@ fn local_rename(path: String, name: String) -> Result<String, String> {
     sftp::local_rename(&path, &name)
 }
 
+#[tauri::command]
+fn local_touch(dir: String, name: String) -> Result<String, String> {
+    sftp::local_touch(&dir, &name)
+}
+
+/// Eigener Thread: der Papierkorb unter Windows braucht COM im Single-Thread-Modus.
+#[tauri::command]
+async fn local_trash(paths: Vec<String>) -> Result<(), String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || tx.send(sftp::local_trash(&paths)));
+    rx.await.map_err(|_| "Löschen abgebrochen".to_string())?
+}
+
 /// Profile des lokalen Terminals (installierte Shells und Interpreter).
 #[tauri::command]
 async fn term_profiles() -> Vec<profiles::Profile> {
@@ -2824,6 +2837,8 @@ pub fn run() {
             local_sha256,
             local_mkdir,
             local_rename,
+            local_touch,
+            local_trash,
             local_list,
             save_bytes,
             certs_list,

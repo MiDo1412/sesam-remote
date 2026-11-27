@@ -67,6 +67,11 @@ export function shellTab(ctx: TabCtx): TabHandle {
   term.loadAddon(new WebLinksAddon((ev, uri) => (ev.ctrlKey || ev.metaKey) && (!local && localAddress(uri) ? void door(uri) : /^https?:\/\//.test(uri) && void openUrl(uri))));
   term.open(host);
   if (isTouch()) touchScroll(host);
+  // Rollbalken nur zeigen, wenn es Verlauf gibt (sonst stand er als volle Leiste rechts).
+  const scrollbarState = () => host.classList.toggle("no-scroll", term.buffer.active.baseY === 0);
+  term.onWriteParsed(scrollbarState);
+  term.onResize(scrollbarState);
+  scrollbarState();
 
   let sid: string | null = null;
   const enc = new TextEncoder();
@@ -307,7 +312,10 @@ export function shellTab(ctx: TabCtx): TabHandle {
       },
     );
     pop.append(head, gallery);
-    pop.onkeydown = (e) => e.key === "Escape" && (e.stopPropagation(), closePop());
+    // Mit Klammern: ein on…-Handler, der `false` liefert, bricht die Taste ab (die Suche bekam darum keine Buchstaben).
+    pop.onkeydown = (e) => {
+      if (e.key === "Escape") (e.stopPropagation(), closePop());
+    };
     document.body.append(pop);
     const r = schemeBtn.getBoundingClientRect();
     pop.style.top = `${r.bottom + 6}px`;
@@ -341,6 +349,8 @@ export function shellTab(ctx: TabCtx): TabHandle {
     e.preventDefault();
     e.stopPropagation();
     const sel = term.hasSelection();
+    // Einstellung «Rechtsklick kopiert die Markierung» (wie PuTTY): sofort kopieren statt Menü.
+    if (sel && termSettings().rightClickCopy) return void (copy(), term.clearSelection());
     const v = await openMenu(host, [
       { value: "copy", label: "Kopieren", icon: ICON.copy, shortcut: keyLabel("Strg+Umschalt+C"), disabled: !sel },
       { value: "paste", label: "Einfügen", icon: ICON.typeClipboard, shortcut: keyLabel("Strg+Umschalt+V") },

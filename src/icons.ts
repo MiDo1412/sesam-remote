@@ -22,6 +22,8 @@ import fDelete from "@fluentui/svg-icons/icons/delete_20_regular.svg?raw";
 import fDesktop from "@fluentui/svg-icons/icons/desktop_20_regular.svg?raw";
 import fDismiss from "@fluentui/svg-icons/icons/dismiss_20_regular.svg?raw";
 import fEdit from "@fluentui/svg-icons/icons/edit_20_regular.svg?raw";
+import fRename from "@fluentui/svg-icons/icons/rename_20_regular.svg?raw";
+import fDocumentAdd from "@fluentui/svg-icons/icons/document_add_20_regular.svg?raw";
 import fFlash from "@fluentui/svg-icons/icons/flash_20_regular.svg?raw";
 import fFolder from "@fluentui/svg-icons/icons/folder_20_regular.svg?raw";
 import fFolderAdd from "@fluentui/svg-icons/icons/folder_add_20_regular.svg?raw";
@@ -92,6 +94,8 @@ export const ICON = {
   magnify: fl(fZoomIn),
   desktop: fl(fDesktop),
   rename: fl(fEdit),
+  renameItem: fl(fRename),
+  newFile: fl(fDocumentAdd),
   disconnect: fl(fPlugDisconnected),
   plus: fl(fAdd),
   shell: fl(fWindowConsole),
@@ -129,7 +133,7 @@ export const SF_SYMBOL: Partial<Record<keyof typeof ICON, string>> = {
   home: "house", detach: "macwindow.on.rectangle", span: "rectangle.split.3x1", screenshot: "camera", typeClipboard: "doc.on.clipboard",
   copy: "doc.on.doc", download: "arrow.down.circle", folder: "folder", newFolder: "folder.badge.plus", fullscreen: "arrow.up.left.and.arrow.down.right",
   globe: "globe", handTap: "hand.tap", keyboard: "keyboard", keyboardHide: "keyboard.chevron.compact.down", quick: "bolt", save: "square.and.arrow.down", search: "magnifyingglass",
-  magnify: "plus.magnifyingglass", desktop: "display", rename: "pencil", disconnect: "powerplug", plus: "plus", shell: "terminal",
+  magnify: "plus.magnifyingglass", desktop: "display", rename: "pencil", renameItem: "character.cursor.ibeam", newFile: "doc.badge.plus", disconnect: "powerplug", plus: "plus", shell: "terminal",
   font: "textformat", trash: "trash", upload: "arrow.up.circle", close: "xmark", minimize: "minus", splitRight: "rectangle.split.2x1",
   splitDown: "rectangle.split.1x2", screencast: "rectangle.on.rectangle", question: "questionmark.circle", viewGrid: "square.grid.2x2",
   viewList: "list.bullet", settings: "gearshape", pin: "pin", windowed: "arrow.down.right.and.arrow.up.left", more: "ellipsis",

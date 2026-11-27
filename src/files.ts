@@ -8,7 +8,7 @@ import { ask, askHostKey, askPassword, askText, choose, tell } from "./ui";
 import { compareDirs, type Mark } from "./compare";
 import { openMenu, type MenuItem } from "./menu";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { isMobile, isPhone } from "./titlebar";
+import { isMobile, isPhone, keyLabel } from "./titlebar";
 import { ICON } from "./icons";
 import { handoffDone, toolButton, toolSep, type TabCtx, type TabHandle } from "./tabs";
 import { localNetworkText } from "./ubuntu";
@@ -266,6 +266,7 @@ const openPlaces = () =>
     deepLabel.append(deepBox, document.createTextNode(" Unterordner"));
     deepLabel.title = "Filter durchsucht auch Unterordner (höchstens 5000 Einträge)";
     tools.append(filter, deepLabel, hidden);
+    const acts = el("span", "pane-acts");
     if (isMobile) {
       const selBtn = el("button", "plain pane-select", "Auswählen") as HTMLButtonElement;
       selBtn.type = "button";
@@ -275,8 +276,30 @@ const openPlaces = () =>
         selBtn.textContent = pane.selectMode ? "Fertig" : "Auswählen";
         if (!pane.selectMode) setSelection(pane, new Set());
       };
-      tools.append(selBtn);
+      acts.append(selBtn);
     }
+    // Werkzeugleiste je Seite: wirkt auf diese Seite (lokal wie auf dem Server). iPhone: ein «…» mit denselben Befehlen.
+    const act = (icon: string, label: string, hint: string, run: () => void, cls: string) => {
+      const b = el("button", `plain act ${cls}`) as HTMLButtonElement;
+      b.type = "button";
+      b.innerHTML = icon;
+      b.title = hint ? `${label} (${keyLabel(hint)})` : label;
+      b.setAttribute("aria-label", label);
+      b.onclick = () => (root.focus({ preventScroll: true }), run());
+      return b;
+    };
+    const ACTS: [string, string, string, () => void, string][] = [
+      [ICON.newFolder, "Neuer Ordner", "", () => void mkdir(pane), "act-mkdir"],
+      [ICON.newFile, "Neue Datei", "", () => void newFile(pane), "act-touch"],
+      [ICON.renameItem, "Umbenennen", "F2", () => void renameIn(pane), "act-rename"],
+      [ICON.trash, "Löschen", "Entf", () => void deleteIn(pane), "act-delete danger"],
+    ];
+    const more = act(ICON.more, "Weitere Aktionen", "", async () => {
+      const v = await openMenu(more, ACTS.map(([icon, label], i) => ({ value: String(i), label, icon, disabled: root.querySelector<HTMLButtonElement>(`.${ACTS[i][4].split(" ")[0]}`)!.disabled })));
+      if (v !== null) ACTS[Number(v)][3]();
+    }, "act-more");
+    acts.append(...ACTS.map(([i, l, h, r, cls]) => act(i, l, h, r, cls)), more);
+    tools.append(acts);
     const table = el("table");
     const thead = el("thead");
     const tr = el("tr");
@@ -705,8 +728,8 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       else if (e) activate(p, e);
       return true;
     }
-    if (ev.key === "F2") return p.side === "remote" ? renameRemote() : renameLocal(), true;
-    if (p.side === "remote" && (ev.key === "Delete" || (isMacUi && ev.metaKey && ev.key === "Backspace"))) return deleteRemote(), true;
+    if (ev.key === "F2") return renameIn(p), true;
+    if (ev.key === "Delete" || (isMacUi && ev.metaKey && ev.key === "Backspace")) return deleteIn(p), true;
     if (ev.key === "Escape" && p.selected.size) return setSelection(p, new Set()), true;
     if (ev.key === " " && !ev.metaKey && !ev.ctrlKey && !ev.altKey) return void preview(p), true;
     // Tippen springt zum ersten passenden Namen.
@@ -1462,18 +1485,37 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
     }
   };
 
-  async function newFile() {
-    const dir = panes.remote.listing?.path;
-    if (!sid || !dir) return;
-    const name = await askText("Neue Datei", `Leere Datei in ${dir} auf ${c.name}`, "Anlegen", "neu.txt");
+  async function newFile(p: Pane = panes.remote) {
+    const dir = p.listing?.path;
+    const remote = p.side === "remote";
+    if (!dir || (remote && (!sid || scp))) return;
+    const name = await askText("Neue Datei", remote ? `Leere Datei in ${dir} auf ${c.name}` : `Leere Datei in ${dir}`, "Anlegen", "neu.txt");
     if (!name) return;
     try {
-      const s = sid;
-      if (!(await withSudo("Datei anlegen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "touch", dir, name, pw) : api.sftpTouch(s, dir, name).then(() => {}))))) return;
-      await load(panes.remote, dir);
+      const s = sid!;
+      if (!remote) await api.localTouch(dir, name);
+      else if (!(await withSudo("Datei anlegen", (sudo, pw) => (sudo ? api.sftpSudoOp(s, "touch", dir, name, pw) : api.sftpTouch(s, dir, name).then(() => {}))))) return;
+      await load(p, dir);
     } catch (e) {
       tell("Datei nicht angelegt", String(e));
     }
+  }
+  const renameIn = (p: Pane) => (p.side === "remote" ? renameRemote() : renameLocal());
+  const deleteIn = (p: Pane) => (p.side === "remote" ? deleteRemote() : deleteLocal());
+
+  /** Lokal löschen: in den Papierkorb des Systems; iPad/iPhone kennen keinen, dort endgültig. */
+  async function deleteLocal() {
+    const p = panes.local;
+    const names = [...p.selected];
+    if (!p.listing || !names.length) return void (status.textContent = "Bitte links auswählen, was gelöscht werden soll.");
+    const what = names.length === 1 ? `«${names[0]}»` : `${names.length} Elemente`;
+    if (!(await ask(`${what} löschen?`, isMobile ? "Wird auf diesem Gerät endgültig gelöscht, ohne Rückgängig." : "Kommt in den Papierkorb und lässt sich von dort zurückholen.", "Löschen"))) return;
+    try {
+      await api.localTrash(names.map((n) => join(p, n)));
+    } catch (e) {
+      tell("Nicht gelöscht", String(e));
+    }
+    await load(p, p.listing.path);
   }
 
   async function renameLocal() {
@@ -1619,22 +1661,22 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       if (!e.dir && remote && !isMobile) items.push({ value: "edit", label: "Bearbeiten (Standardprogramm)", icon: ICON.rename, disabled: !one || !sid });
       if (e.dir) items.push({ value: "size", label: "Grösse berechnen", icon: ICON.folder });
       items.push({ value: "copy", label: "Pfad kopieren", icon: ICON.copy });
-      if (remote) items.push({ value: "delete", label: "Löschen", icon: ICON.trash, shortcut: "Entf", disabled: scp, separator: true });
+      items.push({ value: "delete", label: "Löschen", icon: ICON.trash, shortcut: "Entf", disabled: remote && scp, separator: true });
     }
     if (p.listing?.entries.length) items.push({ value: "all", label: "Alle auswählen", shortcut: isMacUi ? "⌘A" : "Strg+A", separator: !!e });
     if (p.listing?.path) {
       items.push({ value: "mkdir", label: "Neuer Ordner …", icon: ICON.newFolder, separator: !!e, disabled: remote && !sid });
-      if (remote) items.push({ value: "touch", label: "Neue Datei …", icon: ICON.plus, disabled: !sid || scp });
+      items.push({ value: "touch", label: "Neue Datei …", icon: ICON.plus, disabled: remote && (!sid || scp) });
     }
     if (!items.length) return;
     const v = await openMenu(anchor, items);
     if (v === "transfer") transfer(p, [...p.selected]);
-    if (v === "rename") remote ? renameRemote() : renameLocal();
+    if (v === "rename") renameIn(p);
     if (v === "chmod" && e) chmod(e);
     if (v === "copy") api.clipWrite([...p.selected].map((n) => join(p, n)).join("\n")).catch(() => {});
-    if (v === "delete") deleteRemote();
+    if (v === "delete") deleteIn(p);
     if (v === "mkdir") mkdir(p);
-    if (v === "touch") newFile();
+    if (v === "touch") newFile(p);
     if (v === "all") setSelection(p, new Set(rowNames(p)));
     if (v === "preview") preview(p);
     if (v === "edit" && e) editRemote(e);
@@ -1781,31 +1823,19 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
   };
   addEventListener("sesam:shell-cwd", onShellCwd);
 
-  const renameBtn = toolButton(ICON.rename, "Umbenennen", () => renameRemote(), { shortcut: "F2", compact: isPhone });
   const compareBtn = toolButton(ICON.compare, "Vergleichen", () => toggleCompare(), { text: true, shortcut: "linken und rechten Ordner", compact: isPhone });
   compareBtn.setAttribute("aria-pressed", "false");
-  const newFileBtn = toolButton(ICON.plus, "Neue Datei", () => newFile(), { compact: isPhone }); // iPhone: Seltenes im Menü «…»
-  const refreshBtn = toolButton(ICON.refresh, "Neu laden", () => {
-    for (const p of Object.values(panes)) if (p.listing) load(p, p.listing.path);
-  }, { compact: isPhone });
-  const trashBtn = toolButton(ICON.trash, "Löschen", () => deleteRemote(), { shortcut: "Entf", danger: true });
+  // Oben nur, was beide Seiten betrifft; Ordner, Datei, Umbenennen, Löschen, Neu laden stehen bei jeder Seite.
   ctx.toolbar.append(
     toolButton(ICON.upload, "Hochladen", () => (isMobile && !panes.local.selected.size ? void pickAndUpload() : transfer(panes.local, [...panes.local.selected])), { text: true }),
     toolButton(ICON.download, "Herunterladen", () => transfer(panes.remote, [...panes.remote.selected]), { text: true }),
     compareBtn,
-    toolSep(),
-    toolButton(ICON.newFolder, "Neuer Ordner", () => mkdir()),
-    newFileBtn,
-    renameBtn,
-    trashBtn,
-    refreshBtn,
     followBtn,
     toolSep(),
     toolButton(ICON.disconnect, "Trennen", () => ctx.closeSelf(), { text: true }),
   );
   // Seltenes nur auf dem iPhone ins Menü «…» (beim iPhone Duo je nach Zustand)
-  const phoneCompact = [renameBtn, compareBtn, newFileBtn, refreshBtn];
-  const onPhone = () => (hint(), phoneCompact.forEach((b) => b.classList.toggle("compactable", isPhone)));
+  const onPhone = () => (hint(), compareBtn.classList.toggle("compactable", isPhone));
   addEventListener("sesam:phone", onPhone);
 
   // ---------- Ziehen zwischen den Seiten ----------
@@ -1891,7 +1921,7 @@ Rechte: ${permText(e.perm, e.dir)} (${e.perm.toString(8).padStart(3, "0")})`;
       if (opened.scp) {
         ctx.setSub(`SCP über SSH · ${c.user}@${c.address}`);
         status.textContent = "Server ohne SFTP, Übertragung über SCP (eingeschränkt: kein Umbenennen/Löschen/Rechte)";
-        renameBtn.disabled = trashBtn.disabled = true;
+        for (const b of panes.remote.root.querySelectorAll<HTMLButtonElement>(".act-rename, .act-delete, .act-touch")) b.disabled = true;
         scp = true;
       }
       ctx.setState("connected");

@@ -1503,5 +1503,13 @@
  "Privater Schlüssel: OpenSSH, PEM (z. B. von Azure oder AWS) oder PuTTY (.ppk)": "Private key: OpenSSH, PEM (e.g. from Azure or AWS) or PuTTY (.ppk)",
  "Schlüssel einfügen oder Datei wählen …": "Paste Key or Choose File…",
  "Schlüssel ist zu gross (höchstens 16 KB)": "Key is too large (16 KB maximum)",
- "Tresor: Teil eines Schlüssels fehlt": "Vault: part of a key is missing"
+ "Tresor: Teil eines Schlüssels fehlt": "Vault: part of a key is missing",
+ "Bitte links auswählen, was gelöscht werden soll.": "Please select on the left what to delete.",
+ "Kommt in den Papierkorb und lässt sich von dort zurückholen.": "Moves to the Trash and can be restored from there.",
+ "Leere Datei in {}": "Empty file in {}",
+ "Löschen abgebrochen": "Delete cancelled",
+ "Maus": "Mouse",
+ "Rechtsklick kopiert die Markierung": "Right-Click Copies Selection",
+ "Wie in PuTTY: Ist Text markiert, kopiert ein Rechtsklick ihn sofort, ohne Menü. Ohne Markierung erscheint das Menü wie gewohnt.": "Like PuTTY: when text is selected, a right-click copies it right away, without a menu. Without a selection, the menu appears as usual.",
+ "Wird auf diesem Gerät endgültig gelöscht, ohne Rückgängig.": "Will be permanently deleted on this device, without undo."
 }

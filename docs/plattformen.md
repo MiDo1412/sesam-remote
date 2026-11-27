@@ -33,6 +33,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Erste Hilfe | ✓ | ✓ | ✓ | ✓ |
 | Desktop freischalten | ✓ | ✓ | ✓ | ✓ |
 | Türöffner (lokale Dienste über SSH) | ✓ | ✓ | ✓ | ✓ |
+| Rechtsklick kopiert die Markierung (Einstellungen › Shell, aus) | ✓ | ✓ | ✓ | ✓ mit Maus/Trackpad |
 | Gehaltene Shell (tmux, «Nahtlos») | ✓ | ✓ | ✓ | ✓ wichtig, weil iPadOS Verbindungen im Hintergrund trennt |
 | Geteilte Ansicht (zwei Sitzungen in einem Fenster) | ✓ «Geteilte Ansicht» | ✓ «Bereich teilen» | ✓ «Bereich teilen» | ✓ «Geteilte Ansicht», hochkant automatisch untereinander |
 | Durchreiche (Dateien auf Shell/Remote-Bild ziehen) | ✓ | ✓ | ✓ | ✓ aus «Dateien» (Split View, Slide Over) ziehen; nur Dateien, keine Ordner |
@@ -41,6 +42,7 @@ Windows und Linux: Stand aus dem Code; auf echten Geräten zuletzt nicht geprüf
 | Datei vom Server im Standardprogramm bearbeiten, beim Sichern hochladen | ✓ | ✓ | ✓ | ✗ kein Standardprogramm unter iPadOS |
 | Rückfrage vor dem Überschreiben, Ordner zusammenführen | ✓ | ✓ | ✓ | ✓ |
 | Papierkorb auf dem Server, Rückgängig | ✓ ⌘Z | ✓ Strg+Z | ✓ Strg+Z | ✓ (⌘Z mit Tastatur) |
+| Werkzeugleiste je Seite (Neuer Ordner, Neue Datei, Umbenennen, Löschen) | ✓ lokal in den Papierkorb | ✓ lokal in den Papierkorb | ✓ lokal in den Papierkorb (Freedesktop) | ✓ lokal endgültig (iPadOS hat keinen Papierkorb); iPhone: «…» je Seite |
 | Mit Administratorrechten (sudo auf dem Server) | ✓ | ✓ | ✓ | ✓ |
 
 ## Bedienung

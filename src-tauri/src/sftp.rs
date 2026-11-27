@@ -506,6 +506,35 @@ pub fn local_mkdir(dir: &str, name: &str) -> Result<String, String> {
     Ok(p.to_string_lossy().into_owned())
 }
 
+/// Lokal: leere Datei anlegen, ohne Vorhandenes zu überschreiben.
+pub fn local_touch(dir: &str, name: &str) -> Result<String, String> {
+    local_name(name)?;
+    let p = Path::new(dir).join(name);
+    std::fs::OpenOptions::new().write(true).create_new(true).open(&p).map_err(|e| format!("{}: {e}", p.display()))?;
+    Ok(p.to_string_lossy().into_owned())
+}
+
+/// Lokal löschen: Desktop in den Papierkorb des Systems (zurückholbar), iPad/iPhone endgültig (dort gibt es keinen).
+pub fn local_trash(paths: &[String]) -> Result<(), String> {
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        #[allow(unused_mut)]
+        let mut ctx = trash::TrashContext::default();
+        // Standard wäre über den Finder (AppleScript): das löste eine Automatisierungs-Abfrage von macOS aus.
+        #[cfg(target_os = "macos")]
+        trash::macos::TrashContextExtMacos::set_delete_method(&mut ctx, trash::macos::DeleteMethod::NsFileManager);
+        ctx.delete_all(paths).map_err(|e| e.to_string())
+    }
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        for p in paths.iter().map(Path::new) {
+            let r = if p.is_dir() { std::fs::remove_dir_all(p) } else { std::fs::remove_file(p) };
+            r.map_err(|e| format!("{}: {e}", p.display()))?;
+        }
+        Ok(())
+    }
+}
+
 /// Lokal: im selben Ordner umbenennen, ohne zu überschreiben.
 pub fn local_rename(path: &str, name: &str) -> Result<String, String> {
     local_name(name)?;
@@ -1259,6 +1288,8 @@ pub(crate) mod tests {
         assert!(local_mkdir(d, "..").is_err() && local_mkdir(d, "x\\y").is_err());
         local_rename(&a, "c").unwrap();
         assert!(dir.join("c").is_dir() && !dir.join("a").exists());
+        local_touch(d, "neu.txt").unwrap();
+        assert!(local_touch(d, "neu.txt").is_err(), "nie überschreiben");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

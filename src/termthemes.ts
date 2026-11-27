@@ -223,6 +223,8 @@ export interface TermSettings {
   theme: string;
   fontSize: number;
   fontFamily: string;
+  /** Rechtsklick kopiert markierten Text, ohne Menü (wie PuTTY). */
+  rightClickCopy?: boolean;
 }
 
 const KEY = "sesam.terminal";

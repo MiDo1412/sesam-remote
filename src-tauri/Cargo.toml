@@ -87,6 +87,8 @@ arboard = "3"
 portable-pty = "0.9"
 # Automatische Updates (src/update.rs): offizielles Tauri-Plugin, Signatur ed25519 (minisign) Pflicht
 tauri-plugin-updater = "2"
+# Löschen im Dateifenster (diese Seite): in den Papierkorb von Finder, Explorer bzw. Freedesktop statt endgültig
+trash = "5"
 
 # iPadOS: Schlüsselbund über den «protected»-Speicher (keyring 4 kennt iOS nur so, src/vault.rs); beide schon im Baum.
 [target.'cfg(target_os = "ios")'.dependencies]

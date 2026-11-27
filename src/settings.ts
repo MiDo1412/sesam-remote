@@ -144,6 +144,9 @@ export async function openSettings(tab = "general") {
   const fam = $<HTMLInputElement>("settings-fontfamily");
   fam.value = t.fontFamily;
   fam.onchange = () => saveTermSettings({ ...termSettings(), fontFamily: fam.value.trim() });
+  const rightCopy = $<HTMLInputElement>("settings-rightcopy");
+  rightCopy.checked = !!t.rightClickCopy;
+  rightCopy.onchange = () => saveTermSettings({ ...termSettings(), rightClickCopy: rightCopy.checked });
 
   // Über
   $("about-news").onclick = () => openLink(LINKS.news());
