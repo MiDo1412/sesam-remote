@@ -18,6 +18,10 @@ ist, was auf dem Branch `release` liegt; dorthin bringt es `node scripts/release
 
 ## In Arbeit
 
+### Behoben
+
+- **Dateifenster blieb leer:** In 26.11.16 öffnete sich das Dateifenster nur als leere Fläche. Es öffnet wieder normal.
+
 ## 26.11.16 — 2026-11-27
 
 Zwei Korrekturen zu 26.11.14: Markieren im Terminal und Doppelklick in der Bibliothek. (26.11.15 wurde nicht veröffentlicht.)

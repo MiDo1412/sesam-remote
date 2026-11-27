@@ -71,6 +71,7 @@ const openPlaces = () =>
     }
     savePlaces();
   })());
+  const observers: ResizeObserver[] = []; // in close() trennen, sonst halten sie die Ansicht fest
   const panes: Record<Side, Pane> = {
     local: makePane("local", localName, isWin ? "\\" : "/"),
     remote: makePane("remote", c.name, "/"),
@@ -152,7 +153,6 @@ const openPlaces = () =>
 
   let sid: string | null = null;
   let scp = false;
-  const observers: ResizeObserver[] = []; // in close() trennen, sonst halten sie die Ansicht fest
   const join = (p: Pane, name: string) => {
     const dir = p.listing!.path;
     return dir === "" ? name : dir.endsWith(p.sep) ? dir + name : dir + p.sep + name;
